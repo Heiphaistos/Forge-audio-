@@ -12,7 +12,7 @@ import { HttpError, isPublicUrl, clampInt, TtlCache } from './util.js';
 import { Accounts, Sessions, LoginLimiter } from './accounts.js';
 import { UserData } from './userdata.js';
 
-export const VERSION = '0.3.0';
+export const VERSION = '0.3.1';
 
 const IMAGE_HOSTS = /(^|\.)(ytimg\.com|ggpht\.com|googleusercontent\.com|sndcdn\.com|dmcdn\.net|dailymotion\.com|bcbits\.com|vimeocdn\.com|jtvnw\.net|scdn\.co|spotifycdn\.com|dzcdn\.net|mzstatic\.com)$/i;
 
@@ -42,7 +42,7 @@ function readCookie(header, name) {
  * @param {boolean|object} [opts.logger]
  */
 export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null, dataDir = null, accountsFile = null, logger = true } = {}) {
-  const app = Fastify({ logger, trustProxy: true, disableRequestLogging: true, bodyLimit: 10 * 1024 * 1024 });
+  const app = Fastify({ logger, trustProxy: 1, disableRequestLogging: true, bodyLimit: 10 * 1024 * 1024 });
   const accounts = new Accounts(accountsFile);
   const sessions = new Sessions(dataDir ? path.join(dataDir, 'sessions.json') : null);
   const limiter = new LoginLimiter();
