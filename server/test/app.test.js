@@ -198,3 +198,18 @@ test('accounts changed by the CLI apply without a restart', async () => {
   assert.equal(new Accounts(accountsFile).get('polo'), null);
   await app.close();
 });
+
+test('client IP and protocol come from the reverse proxy, not from the client', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'forge-'));
+  const accountsFile = path.join(dir, 'accounts.json');
+  await new Accounts(accountsFile).set('evan', 'Evan', generatePassword(80));
+  const app = make({ dataDir: dir, accountsFile });
+  // nginx appends the real client address to whatever the client sent.
+  const fail = (real) => app.inject({ method: 'POST', url: '/api/login', remoteAddress: '10.80.0.1', payload: { username: 'evan', password: 'x' }, headers: { 'x-forwarded-for': `${Math.random()}, ${real}`, 'x-forwarded-proto': 'https' } });
+  for (let i = 0; i < 8; i += 1) assert.equal((await fail('203.0.113.7')).statusCode, 401);
+  assert.equal((await fail('203.0.113.7')).statusCode, 429);
+  assert.equal((await fail('198.51.100.9')).statusCode, 401);
+  const out = await app.inject({ method: 'POST', url: '/api/logout', remoteAddress: '10.80.0.1', headers: { 'x-forwarded-proto': 'https' } });
+  assert.match(out.headers['set-cookie'], /; Secure/);
+  await app.close();
+});
