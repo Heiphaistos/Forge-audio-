@@ -11,10 +11,13 @@ COPY web web
 RUN npm run build && npm prune --omit=dev --omit=optional
 
 FROM node:22-bookworm-slim
+# Standalone yt-dlp build: bundles curl_cffi (impersonation, required by Dailymotion).
+# Owned by node so `docker exec forge-audio yt-dlp -U` can update it without a rebuild.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ffmpeg python3 ca-certificates curl \
-  && curl -fsSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
-  && chmod +x /usr/local/bin/yt-dlp \
+  && apt-get install -y --no-install-recommends ffmpeg ca-certificates curl \
+  && ARCH=$(dpkg --print-architecture) \
+  && curl -fsSL "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux$([ "$ARCH" = arm64 ] && echo _aarch64)" -o /usr/local/bin/yt-dlp \
+  && chmod +x /usr/local/bin/yt-dlp && chown node:node /usr/local/bin/yt-dlp \
   && apt-get purge -y curl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app/node_modules node_modules
