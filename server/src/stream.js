@@ -195,7 +195,9 @@ export class MediaService {
    */
   async download(request, reply, url, format) {
     const audio = await this.resolve(url, 'audio', format === 'video' ? 'mp4' : 'webm');
-    const base = safeFilename([audio.artist, audio.title].filter(Boolean).join(' - ') || 'forge-audio');
+    // YouTube titles often already start with the artist ("Daft Punk - Instant Crush"): don't repeat it.
+    const titleHasArtist = audio.artist && audio.title?.toLowerCase().startsWith(audio.artist.toLowerCase());
+    const base = safeFilename([titleHasArtist ? '' : audio.artist, audio.title].filter(Boolean).join(' - ') || 'forge-audio');
     const meta = ['-metadata', `title=${audio.title || ''}`, '-metadata', `artist=${audio.artist || ''}`];
     let proc;
     let filename;

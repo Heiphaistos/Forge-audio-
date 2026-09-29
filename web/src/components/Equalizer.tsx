@@ -2,6 +2,7 @@ import { X } from 'lucide-react';
 import { useEffect } from 'react';
 import { EQ_BANDS, EQ_PRESETS, engine } from '../audio/engine';
 import { useSettings, useUi } from '../store/ui';
+import { useEscape } from '../hooks';
 
 const label = (f: number) => (f >= 1000 ? `${f / 1000}k` : String(f));
 
@@ -11,6 +12,7 @@ export function Equalizer() {
   const { eqGains, eqPreset, eqEnabled, set } = useSettings();
 
   useEffect(() => { engine.setEq(eqGains, eqEnabled); }, [eqGains, eqEnabled]);
+  useEscape(open, () => setOpen(false));
 
   if (!open) return null;
   return (

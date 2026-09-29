@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useUi } from '../store/ui';
 import { useLibrary } from '../store/library';
 import { Mosaic } from './Cover';
+import { useEscape } from '../hooks';
 
 export function PlaylistPicker() {
   const tracks = useUi((s) => s.pickerTracks);
@@ -11,9 +12,10 @@ export function PlaylistPicker() {
   const playlists = useLibrary((s) => s.playlists);
   const { addToPlaylist, createPlaylist } = useLibrary.getState();
   const [name, setName] = useState('');
+  const close = () => { openPicker(null); setName(''); };
+  useEscape(!!tracks, close);
 
   if (!tracks) return null;
-  const close = () => { openPicker(null); setName(''); };
   const add = (id: string, plName: string) => {
     const n = addToPlaylist(id, tracks);
     toast(n ? `${n > 1 ? `${n} titres ajoutés` : 'Ajouté'} à « ${plName} »` : `Déjà dans « ${plName} »`, n ? 'success' : 'info');

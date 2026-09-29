@@ -4,6 +4,16 @@ import { usePlayer } from './store/player';
 import { useUi, useSettings, ACCENTS } from './store/ui';
 import { dominantColor } from './lib/color';
 
+/** Close a dialog or overlay with the Escape key while it is open. */
+export function useEscape(open: boolean, close: () => void) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, close]);
+}
+
 /** OS media keys / lock screen controls. */
 export function useMediaSession() {
   const track = usePlayer((s) => s.queue[s.index]);
