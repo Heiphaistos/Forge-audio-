@@ -1,0 +1,10 @@
+services:
+  forge-audio:
+    build: .
+    container_name: forge-audio
+    restart: unless-stopped
+    ports:
+      - "8787:8787"
+    environment:
+      # Mot de passe d'accès (fortement conseillé si le serveur est exposé sur Internet)
+      ACCESS_TOKEN: ${ACCESS_TOKEN:-}
