@@ -1,3 +1,4 @@
+import { detectService, pickBestMatch } from '../src/streaming.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseYtdlpJson, normalizeEntry, canonicalUrl, pickDirectFormat, ytdlpErrorMessage, sourceOf } from '../src/ytdlp.js';
@@ -100,4 +101,27 @@ test('upstreamRange bounds open-ended ranges', () => {
   assert.equal(upstreamRange('bytes=0-99'), 'bytes=0-99');
   assert.equal(upstreamRange('bytes=-500'), null);
   assert.equal(safeFilename('a/b:c?"d"'), 'a b c d');
+});
+
+test('detectService recognizes streaming links', () => {
+  assert.deepEqual(detectService('https://open.spotify.com/intl-fr/track/0DiWol3AO6WpXZgp0goxAV?si=x'),
+    { service: 'spotify', kind: 'track', id: '0DiWol3AO6WpXZgp0goxAV', url: 'https://open.spotify.com/track/0DiWol3AO6WpXZgp0goxAV' });
+  assert.equal(detectService('https://www.deezer.com/fr/album/302127').kind, 'album');
+  const apple = detectService('https://music.apple.com/fr/album/discovery/697194953?i=697195787');
+  assert.deepEqual([apple.service, apple.kind, apple.id], ['apple', 'song', '697195787']);
+  assert.equal(detectService('https://spotify.link/abc').kind, 'short');
+  assert.equal(detectService('https://tidal.com/browse/track/1').service, 'unsupported');
+  assert.equal(detectService('https://www.youtube.com/watch?v=abc'), null);
+  assert.equal(detectService('pas un lien'), null);
+});
+
+test('pickBestMatch prefers the closest duration and penalizes covers', () => {
+  const wanted = { title: 'One More Time', duration: 320 };
+  const best = pickBestMatch([
+    { title: 'One More Time (cover)', duration: 320 },
+    { title: 'Daft Punk - One More Time (Official Video)', duration: 322 },
+    { title: 'One More Time live', duration: 400, isLive: true },
+    { title: 'One More Time 1 hour', duration: 3600 },
+  ], wanted);
+  assert.equal(best.title, 'Daft Punk - One More Time (Official Video)');
 });

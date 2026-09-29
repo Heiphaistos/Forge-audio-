@@ -48,7 +48,7 @@ export function ImportBox() {
   return (
     <form className="import-box" onSubmit={submit}>
       <Link2 size={18} className="muted" />
-      <input className="grow" placeholder="Coller un lien : vidéo, playlist YouTube, SoundCloud, Dailymotion, Bandcamp…" value={url} onChange={(e) => setUrl(e.target.value)} />
+      <input className="grow" placeholder="Coller un lien : YouTube, Spotify, Deezer, Apple Music, SoundCloud, Dailymotion, Bandcamp…" value={url} onChange={(e) => setUrl(e.target.value)} />
       <button className="btn btn-primary btn-sm" disabled={loading || !url}>{loading ? <Loader2 size={16} className="spin" /> : 'Lire / Importer'}</button>
     </form>
   );

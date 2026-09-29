@@ -39,6 +39,9 @@ export const SOURCE_LABELS: Record<string, string> = {
   bandcamp: 'Bandcamp',
   vimeo: 'Vimeo',
   twitch: 'Twitch',
+  spotify: 'Spotify',
+  deezer: 'Deezer',
+  apple: 'Apple Music',
   local: 'Fichier local',
 };
 
@@ -50,6 +53,9 @@ export const SOURCE_COLORS: Record<string, string> = {
   bandcamp: '#1da0c3',
   vimeo: '#1ab7ea',
   twitch: '#9146ff',
+  spotify: '#1ed760',
+  deezer: '#a238ff',
+  apple: '#fa2d48',
   local: '#a3a3a3',
 };
 

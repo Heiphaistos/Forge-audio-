@@ -8,11 +8,12 @@ import { runYtdlp, buildListArgs, parseYtdlpJson } from './ytdlp.js';
 import { search, suggest, radio, SOURCES } from './search.js';
 import { MediaService } from './stream.js';
 import { findLyrics } from './lyrics.js';
+import { resolveStreamingLink, playableUrl } from './streaming.js';
 import { HttpError, isPublicUrl, clampInt, TtlCache } from './util.js';
 
-export const VERSION = '0.1.3';
+export const VERSION = '0.2.0';
 
-const IMAGE_HOSTS = /(^|\.)(ytimg\.com|ggpht\.com|googleusercontent\.com|sndcdn\.com|dmcdn\.net|dailymotion\.com|bcbits\.com|vimeocdn\.com|jtvnw\.net)$/i;
+const IMAGE_HOSTS = /(^|\.)(ytimg\.com|ggpht\.com|googleusercontent\.com|sndcdn\.com|dmcdn\.net|dailymotion\.com|bcbits\.com|vimeocdn\.com|jtvnw\.net|scdn\.co|spotifycdn\.com|dzcdn\.net|mzstatic\.com)$/i;
 
 function requirePublicUrl(url) {
   const u = String(url || '').trim();
@@ -103,6 +104,8 @@ export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null,
     const url = requirePublicUrl(request.query.url);
     const limit = clampInt(request.query.limit, 1, 500, 200);
     return listCache.wrap(`r|${limit}|${url}`, async () => {
+      const streaming = await resolveStreamingLink(url, { maxEntries: limit });
+      if (streaming) return streaming;
       const raw = await runYtdlp(ytdlp, buildListArgs(url, { maxEntries: limit }), { timeoutMs: 120_000 });
       const res = parseYtdlpJson(raw, { maxEntries: limit });
       if (!res.tracks.length) throw new HttpError('Aucune piste lisible à cette adresse', 404, 'NOT_FOUND');
@@ -112,25 +115,25 @@ export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null,
 
   app.get('/api/radio', async (request) => {
     const { url, title = '', author = '', source = 'youtube' } = request.query;
-    const track = { url: requirePublicUrl(url), title: String(title), author: String(author), source: String(source) };
+    const track = { url: await playableUrl(ytdlp, requirePublicUrl(url)), title: String(title), author: String(author), source: String(source) };
     const limit = clampInt(request.query.limit, 1, 50, 25);
     return listCache.wrap(`radio|${limit}|${track.url}`, async () => ({ tracks: await radio(ytdlp, track, { limit }) }));
   });
 
   app.get('/api/playback', async (request) => {
     const kind = request.query.kind === 'video' ? 'video' : 'audio';
-    return media.playback(requirePublicUrl(request.query.url), kind, request.query.pref);
+    return media.playback(await playableUrl(ytdlp, requirePublicUrl(request.query.url)), kind, request.query.pref);
   });
 
   app.get('/api/stream/:kind', async (request, reply) => {
     const kind = request.params.kind === 'video' ? 'video' : 'audio';
     const start = Math.max(0, Number(request.query.start) || 0);
-    return media.stream(request, reply, requirePublicUrl(request.query.url), kind, { start, pref: request.query.pref });
+    return media.stream(request, reply, await playableUrl(ytdlp, requirePublicUrl(request.query.url)), kind, { start, pref: request.query.pref });
   });
 
   app.get('/api/download', async (request, reply) => {
     const format = ['mp3', 'audio', 'video'].includes(request.query.format) ? request.query.format : 'mp3';
-    return media.download(request, reply, requirePublicUrl(request.query.url), format);
+    return media.download(request, reply, await playableUrl(ytdlp, requirePublicUrl(request.query.url)), format);
   });
 
   app.get('/api/lyrics', async (request) => {
