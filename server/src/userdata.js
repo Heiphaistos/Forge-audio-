@@ -1,0 +1,101 @@
+import path from 'node:path';
+import { HttpError } from './util.js';
+import { readJson, writeJsonAtomic, isValidUsername } from './accounts.js';
+
+/**
+ * Per-user library saved on the server: playlists (including imported Spotify / Deezer / YouTube
+ * playlists), liked tracks, history, play counts, settings and the play queue.
+ *
+ * Only metadata is stored. Tracks played from local files (blob: URLs) never reach the server:
+ * they are stripped here as well as in the client.
+ */
+
+export const MAX_BYTES = 8 * 1024 * 1024;
+const MAX_TRACKS_PER_LIST = 5000;
+const MAX_HISTORY = 1000;
+
+const TRACK_KEYS = ['id', 'title', 'url', 'duration', 'thumbnail', 'author', 'album', 'source', 'isLive'];
+
+function isRemoteTrack(t) {
+  return t && typeof t === 'object' && typeof t.url === 'string' && /^https?:\/\//i.test(t.url) && t.source !== 'local' && typeof t.title === 'string';
+}
+
+function cleanTrack(t) {
+  const out = {};
+  for (const k of TRACK_KEYS) if (t[k] !== undefined) out[k] = t[k];
+  out.title = String(out.title).slice(0, 300);
+  return out;
+}
+
+const tracks = (list, max = MAX_TRACKS_PER_LIST) => (Array.isArray(list) ? list.filter(isRemoteTrack).slice(0, max).map(cleanTrack) : []);
+
+/** Validate and strip a library document sent by a client. */
+export function sanitizeData(data) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new HttpError('Données invalides');
+  const lib = data.library && typeof data.library === 'object' ? data.library : {};
+  const out = {
+    library: {
+      playlists: (Array.isArray(lib.playlists) ? lib.playlists : []).filter((p) => p && typeof p.id === 'string' && typeof p.name === 'string').slice(0, 1000).map((p) => ({
+        id: p.id.slice(0, 64),
+        name: p.name.slice(0, 200),
+        description: String(p.description || '').slice(0, 2000),
+        cover: typeof p.cover === 'string' && /^https?:\/\//.test(p.cover) ? p.cover : null,
+        sourceUrl: typeof p.sourceUrl === 'string' && /^https?:\/\//.test(p.sourceUrl) ? p.sourceUrl : null,
+        tracks: tracks(p.tracks),
+        createdAt: Number(p.createdAt) || Date.now(),
+        updatedAt: Number(p.updatedAt) || Date.now(),
+      })),
+      deletedPlaylists: Object.fromEntries(Object.entries(lib.deletedPlaylists || {}).filter(([k, v]) => typeof k === 'string' && Number(v) > 0).slice(0, 5000)),
+      liked: tracks(lib.liked),
+      history: (Array.isArray(lib.history) ? lib.history : []).filter((h) => h && isRemoteTrack(h.track)).slice(0, MAX_HISTORY).map((h) => ({ track: cleanTrack(h.track), at: Number(h.at) || 0 })),
+      playCounts: Object.fromEntries(Object.entries(lib.playCounts || {}).filter(([k, v]) => /^https?:\/\//.test(k) && Number(v) > 0).slice(0, 20000).map(([k, v]) => [k, Math.floor(Number(v))])),
+    },
+    settings: data.settings && typeof data.settings === 'object' ? data.settings : {},
+    player: null,
+  };
+  const pl = data.player;
+  if (pl && typeof pl === 'object') {
+    const queue = tracks(pl.queue, 2000);
+    out.player = {
+      queue,
+      index: Math.min(Math.max(-1, Number(pl.index) || 0), queue.length - 1),
+      shuffle: !!pl.shuffle,
+      repeat: ['off', 'all', 'one'].includes(pl.repeat) ? pl.repeat : 'off',
+      volume: Math.min(1, Math.max(0, Number(pl.volume ?? 0.8))),
+      rate: Math.min(2, Math.max(0.5, Number(pl.rate) || 1)),
+      position: Math.max(0, Number(pl.position) || 0),
+    };
+  }
+  return out;
+}
+
+export class UserData {
+  constructor(dir) {
+    this.dir = dir;
+  }
+
+  file(username) {
+    if (!isValidUsername(username)) throw new HttpError('Utilisateur invalide', 400);
+    return path.join(this.dir, 'users', `${username}.json`);
+  }
+
+  get(username) {
+    return readJson(this.file(username), { rev: 0, updatedAt: null, data: null });
+  }
+
+  /** Save with optimistic concurrency: `baseRev` must match the stored revision. */
+  put(username, baseRev, data) {
+    const current = this.get(username);
+    if (Number(baseRev) !== current.rev) {
+      const err = new HttpError('Les données ont changé sur un autre appareil', 409, 'CONFLICT');
+      err.current = current;
+      throw err;
+    }
+    const clean = sanitizeData(data);
+    const doc = { rev: current.rev + 1, updatedAt: Date.now(), data: clean };
+    const size = Buffer.byteLength(JSON.stringify(doc));
+    if (size > MAX_BYTES) throw new HttpError('Bibliothèque trop volumineuse', 413, 'TOO_LARGE');
+    writeJsonAtomic(this.file(username), doc);
+    return { rev: doc.rev, updatedAt: doc.updatedAt };
+  }
+}

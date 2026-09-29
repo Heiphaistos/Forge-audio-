@@ -1,6 +1,5 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import crypto from 'node:crypto';
 import { Readable } from 'node:stream';
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
@@ -10,8 +9,10 @@ import { MediaService } from './stream.js';
 import { findLyrics } from './lyrics.js';
 import { resolveStreamingLink, playableUrl, withDrmFallback } from './streaming.js';
 import { HttpError, isPublicUrl, clampInt, TtlCache } from './util.js';
+import { Accounts, Sessions, LoginLimiter } from './accounts.js';
+import { UserData } from './userdata.js';
 
-export const VERSION = '0.2.2';
+export const VERSION = '0.3.0';
 
 const IMAGE_HOSTS = /(^|\.)(ytimg\.com|ggpht\.com|googleusercontent\.com|sndcdn\.com|dmcdn\.net|dailymotion\.com|bcbits\.com|vimeocdn\.com|jtvnw\.net|scdn\.co|spotifycdn\.com|dzcdn\.net|mzstatic\.com)$/i;
 
@@ -20,12 +21,6 @@ function requirePublicUrl(url) {
   if (!u) throw new HttpError('Paramètre url manquant');
   if (!isPublicUrl(u)) throw new HttpError('Adresse non autorisée : seules les URL publiques http(s) sont acceptées');
   return u;
-}
-
-function safeEqual(a, b) {
-  const ha = crypto.createHash('sha256').update(String(a)).digest();
-  const hb = crypto.createHash('sha256').update(String(b)).digest();
-  return crypto.timingSafeEqual(ha, hb);
 }
 
 function readCookie(header, name) {
@@ -42,43 +37,99 @@ function readCookie(header, name) {
  * @param {string} [opts.ytdlp] yt-dlp binary
  * @param {string} [opts.ffmpeg] ffmpeg binary
  * @param {string|null} [opts.webRoot] folder of the built web app (served with SPA fallback)
- * @param {string|null} [opts.accessToken] when set, the API requires this password
+ * @param {string|null} [opts.dataDir] where sessions and per-user libraries are saved (null: memory only)
+ * @param {string|null} [opts.accountsFile] accounts JSON; no account = single-user local mode without login
  * @param {boolean|object} [opts.logger]
  */
-export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null, accessToken = null, logger = true } = {}) {
-  const app = Fastify({ logger, trustProxy: true, disableRequestLogging: true });
+export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null, dataDir = null, accountsFile = null, logger = true } = {}) {
+  const app = Fastify({ logger, trustProxy: true, disableRequestLogging: true, bodyLimit: 10 * 1024 * 1024 });
+  const accounts = new Accounts(accountsFile);
+  const sessions = new Sessions(dataDir ? path.join(dataDir, 'sessions.json') : null);
+  const limiter = new LoginLimiter();
+  const userData = dataDir ? new UserData(dataDir) : null;
+  const LOCAL_USER = { username: 'local', displayName: 'Moi' };
   const media = new MediaService({ ytdlp, ffmpeg, log: app.log });
   const listCache = new TtlCache({ ttlMs: 10 * 60 * 1000, max: 300 });
 
   app.setErrorHandler((err, request, reply) => {
-    if (err.userFacing) return reply.code(err.status || 400).send({ error: err.message, code: err.code });
+    if (err.userFacing) return reply.code(err.status || 400).send({ error: err.message, code: err.code, ...(err.current ? { current: err.current } : {}) });
     if (err.validation) return reply.code(400).send({ error: err.message, code: 'BAD_REQUEST' });
     if (err.name === 'AbortError') return reply.code(499).send();
     request.log.error({ err }, 'Erreur serveur');
     return reply.code(500).send({ error: 'Erreur interne du serveur', code: 'INTERNAL' });
   });
 
-  // ---------- Optional password protection ----------
-  const authed = (request) => {
-    if (!accessToken) return true;
-    const given = request.headers['x-forge-token'] || readCookie(request.headers.cookie, 'forge_token');
-    return !!given && safeEqual(given, accessToken);
+  // ---------- Accounts ----------
+  const COOKIE = 'forge_session';
+
+  /** The signed-in user, or the implicit local user when no account is configured. */
+  const userOf = (request) => {
+    if (!accounts.enabled) return LOCAL_USER;
+    const s = sessions.get(readCookie(request.headers.cookie, COOKIE));
+    const u = s && accounts.get(s.username);
+    return u ? { username: u.username, displayName: u.displayName } : null;
   };
 
+  const PUBLIC = new Set(['/api/health', '/api/login', '/api/logout']);
   app.addHook('onRequest', async (request, reply) => {
     const p = request.url.split('?')[0];
-    if (!p.startsWith('/api/') || p === '/api/health' || p === '/api/login') return;
-    if (!authed(request)) return reply.code(401).send({ error: 'Mot de passe requis', code: 'AUTH_REQUIRED' });
+    if (!p.startsWith('/api/')) return;
+    request.user = userOf(request);
+    if (!request.user && !PUBLIC.has(p)) return reply.code(401).send({ error: 'Connexion requise', code: 'AUTH_REQUIRED' });
   });
 
-  app.post('/api/login', async (request, reply) => {
-    if (!accessToken) return { ok: true };
-    const token = request.body?.token;
-    if (!token || !safeEqual(token, accessToken)) throw new HttpError('Mot de passe incorrect', 401, 'AUTH_FAILED');
+  const cookie = (request, value, maxAge) => {
     const secure = request.protocol === 'https' ? '; Secure' : '';
-    reply.header('set-cookie', `forge_token=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=31536000${secure}`);
+    return `${COOKIE}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`;
+  };
+
+  app.post('/api/login', async (request, reply) => {
+    if (!accounts.enabled) return { ok: true, user: LOCAL_USER };
+    const wait = limiter.blocked(request.ip);
+    if (wait) throw new HttpError(`Trop de tentatives, réessayez dans ${wait} min`, 429, 'RATE_LIMITED');
+    const { username, password } = request.body || {};
+    const user = await accounts.authenticate(String(username || ''), String(password || ''));
+    if (!user) {
+      limiter.fail(request.ip);
+      throw new HttpError('Identifiant ou mot de passe incorrect', 401, 'AUTH_FAILED');
+    }
+    limiter.reset(request.ip);
+    const token = sessions.create(user.username);
+    reply.header('set-cookie', cookie(request, token, 180 * 24 * 3600));
+    return { ok: true, user };
+  });
+
+  app.post('/api/logout', async (request, reply) => {
+    sessions.destroy(readCookie(request.headers.cookie, COOKIE));
+    reply.header('set-cookie', cookie(request, '', 0));
     return { ok: true };
   });
+
+  app.get('/api/me', async (request) => ({ user: request.user, local: !accounts.enabled, sync: !!userData }));
+
+  // Library saved on the server (metadata only: local audio files never leave the device).
+  app.get('/api/me/data', async (request) => {
+    if (!userData) return { rev: 0, updatedAt: null, data: null };
+    return userData.get(request.user.username);
+  });
+
+  const saveData = async (request) => {
+    if (!userData) throw new HttpError('Sauvegarde serveur désactivée', 501, 'NO_STORAGE');
+    const { baseRev, data } = request.body || {};
+    try {
+      return userData.put(request.user.username, baseRev, data);
+    } catch (err) {
+      if (err.code === 'CONFLICT') {
+        const e = new HttpError(err.message, 409, 'CONFLICT');
+        e.current = err.current;
+        throw e;
+      }
+      throw err;
+    }
+  };
+  app.put('/api/me/data', saveData);
+  // sendBeacon (page closing) can only POST.
+  app.post('/api/me/data', saveData);
 
   // ---------- API ----------
   app.get('/api/health', async (request) => {
@@ -88,7 +139,7 @@ export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null,
     } catch {
       ytdlpVersion = null;
     }
-    return { ok: true, version: VERSION, ytdlp: ytdlpVersion, authRequired: !!accessToken, authenticated: authed(request), sources: SOURCES };
+    return { ok: true, version: VERSION, ytdlp: ytdlpVersion, authRequired: accounts.enabled, authenticated: !!request.user, user: request.user, sync: !!userData, sources: SOURCES };
   });
 
   app.get('/api/search', async (request) => {

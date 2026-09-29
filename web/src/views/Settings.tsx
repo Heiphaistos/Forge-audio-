@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CheckCircle2, XCircle, Github } from 'lucide-react';
+import { CheckCircle2, XCircle, Github, Loader2 } from 'lucide-react';
 import { ACCENTS, useSettings } from '../store/ui';
 import { useLibrary } from '../store/library';
 import { api, type Health } from '../lib/api';
@@ -20,6 +20,36 @@ export const SHORTCUTS: [string, string][] = [
   ['F', 'Lecteur plein écran'],
   ['Ctrl + K ou /', 'Rechercher'],
 ];
+
+/** Desktop app only: use the built-in local player or connect to a Forge Audio server (same account as the web). */
+function DesktopServer() {
+  const bridge = window.forgeDesktop;
+  const [current, setCurrent] = useState<string | null>(null);
+  const [url, setUrl] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => { bridge?.getServer().then((u) => { setCurrent(u); setUrl(u || ''); }).catch(() => {}); }, [bridge]);
+  if (!bridge) return null;
+  const apply = async (value: string | null) => {
+    setBusy(true);
+    setError(null);
+    try { await bridge.setServer(value); } catch (err) { setError((err as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')); setBusy(false); }
+  };
+  return (
+    <section className="settings-card">
+      <h2>Application de bureau</h2>
+      <p className="muted">
+        {current ? <>Connecté au serveur <b>{current}</b> : même compte et même bibliothèque que sur le web.</> : 'Lecteur local : la bibliothèque est enregistrée sur cet ordinateur.'}
+      </p>
+      <form className="row gap wrap" onSubmit={(e) => { e.preventDefault(); apply(url); }}>
+        <input className="input grow" placeholder="https://musique.mon-vps.fr" value={url} onChange={(e) => setUrl(e.target.value)} aria-label="Adresse du serveur" />
+        <button className="btn btn-primary" disabled={busy || !url.trim()}>{busy ? <Loader2 size={16} className="spin" /> : 'Se connecter au serveur'}</button>
+        {current && <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => apply(null)}>Revenir au lecteur local</button>}
+      </form>
+      {error && <p className="bad small">{error}</p>}
+    </section>
+  );
+}
 
 function Toggle({ checked, onChange, label, hint }: { checked: boolean; onChange: (v: boolean) => void; label: string; hint?: string }) {
   return (
@@ -75,6 +105,8 @@ export function Settings() {
         <Toggle checked={s.eqEnabled} onChange={(v) => s.set({ eqEnabled: v })} label="Égaliseur activé" hint={`Préréglage : ${s.eqPreset}`} />
       </section>
 
+      <DesktopServer />
+
       <section className="settings-card">
         <h2>Serveur</h2>
         {health ? (
@@ -91,13 +123,13 @@ export function Settings() {
 
       <section className="settings-card">
         <h2>Données</h2>
-        <p className="muted">{counts.p} playlists · {counts.l} titres likés · {counts.h} écoutes dans l'historique. Tout est enregistré localement sur cet appareil ; utilisez Exporter / Importer dans la Bibliothèque pour transférer vos données.</p>
+        <p className="muted">{counts.p} playlists · {counts.l} titres likés · {counts.h} écoutes dans l'historique. Tout est sauvegardé automatiquement sur le serveur et retrouvé à chaque connexion, sur tous vos appareils. Les fichiers audio locaux sont lus depuis votre appareil et ne sont jamais envoyés.</p>
         <button className="btn btn-ghost danger" onClick={() => {
-          if (confirm('Effacer toutes les données locales (playlists, likes, historique, réglages) ?')) {
+          if (confirm('Vider le cache de cet appareil ? Votre bibliothèque sauvegardée sur le serveur sera rechargée.')) {
             ['forge.library', 'forge.player', 'forge.settings', 'forge.position', 'forge.recentSearches'].forEach((k) => localStorage.removeItem(k));
             location.reload();
           }
-        }}>Réinitialiser Forge Audio</button>
+        }}>Vider le cache de cet appareil</button>
       </section>
 
       <section className="settings-card">

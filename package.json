@@ -1,6 +1,6 @@
 {
   "name": "forge-audio",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "private": true,
   "description": "Forge Audio — lecteur musical libre et sans pub (web + bureau) propulsé par yt-dlp",
   "workspaces": [
@@ -17,6 +17,7 @@
     "build": "npm run build --workspace web",
     "start": "npm start --workspace server",
     "test": "npm test --workspace server",
+    "accounts": "npm run accounts --workspace server --",
     "typecheck": "npm run typecheck --workspace web",
     "desktop:install": "npm install --prefix desktop",
     "desktop:dev": "npm run build && npm run dev --prefix desktop",

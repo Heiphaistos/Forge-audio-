@@ -17,51 +17,96 @@ export const EQ_PRESETS: Record<string, number[]> = {
 };
 
 type Listener = () => void;
+type MediaEventName = keyof HTMLMediaElementEventMap;
+
+const FADE_MS = 140;
 
 /**
- * Single audio element + Web Audio graph (10-band EQ → gain → analyser).
+ * Audio playback.
+ *
+ * By default the <audio> element plays straight to the system mixer: no Web Audio, no resampling,
+ * no extra thread. A running AudioContext keeps the sound card open (audible hiss/hum on many
+ * outputs) and its MediaElementSource bridge crackles and stutters as soon as the page is busy,
+ * so the effects chain (10-band EQ + analyser) is only built while the user actually uses it.
+ * Turning effects off swaps in a fresh element at the next track and closes the context.
+ *
  * Streams that are not seekable by HTTP Range (HLS sources transcoded by the server)
  * are restarted with `?start=` and tracked with an offset.
  */
 class AudioEngine {
-  readonly audio: HTMLAudioElement;
+  private el: HTMLAudioElement;
   private ctx: AudioContext | null = null;
   private filters: BiquadFilterNode[] = [];
   private gain: GainNode | null = null;
   analyser: AnalyserNode | null = null;
+  private wantEffects = false;
   private eq: number[] = EQ_PRESETS.Plat;
   private eqEnabled = true;
   private offset = 0;
   private playback: Playback | null = null;
   private track: Track | null = null;
   private loadToken = 0;
+  private volume = 1;
+  private fadeTimer: ReturnType<typeof setInterval> | undefined;
+  private idleTimer: ReturnType<typeof setTimeout> | undefined;
   private prefetched = new Map<string, { at: number; promise: Promise<Playback> }>();
   private listeners = new Set<Listener>();
+  private mediaListeners: [MediaEventName, EventListener][] = [];
 
   constructor() {
-    this.audio = new Audio();
-    this.audio.preload = 'auto';
-    this.audio.crossOrigin = 'anonymous';
-    // A running AudioContext keeps the sound card open: on many headphone jacks that is a constant hum/hiss.
-    // Suspend it as soon as nothing plays (short delay so pause → play stays instant), resume on play.
-    let idle: ReturnType<typeof setTimeout> | undefined;
-    const sleep = () => {
-      clearTimeout(idle);
-      idle = setTimeout(() => { if (this.audio.paused && this.ctx?.state === 'running') this.ctx.suspend().catch(() => {}); }, 1500);
-    };
-    for (const e of ['pause', 'ended', 'emptied', 'error']) this.audio.addEventListener(e, sleep);
-    this.audio.addEventListener('play', () => { clearTimeout(idle); if (this.ctx?.state === 'suspended') this.ctx.resume().catch(() => {}); });
+    this.el = this.createElement();
   }
 
-  /** Build the Web Audio graph (must happen after a user gesture). */
-  private ensureGraph() {
-    if (this.ctx) {
-      if (this.ctx.state === 'suspended') this.ctx.resume().catch(() => {});
-      return;
-    }
+  private createElement() {
+    const el = new Audio();
+    el.preload = 'auto';
+    el.crossOrigin = 'anonymous';
+    el.preservesPitch = true;
+    // Release the sound card shortly after playback stops (effects mode only; pure mode releases on its own).
+    const sleep = () => {
+      clearTimeout(this.idleTimer);
+      this.idleTimer = setTimeout(() => { if (el.paused && this.ctx?.state === 'running') this.ctx.suspend().catch(() => {}); }, 1500);
+    };
+    for (const e of ['pause', 'ended', 'emptied', 'error'] as const) el.addEventListener(e, sleep);
+    el.addEventListener('play', () => { clearTimeout(this.idleTimer); if (this.ctx?.state === 'suspended') this.ctx.resume().catch(() => {}); });
+    for (const [name, fn] of this.mediaListeners) el.addEventListener(name, fn);
+    return el;
+  }
+
+  /** The current media element (it can change when the effects chain is switched off). */
+  get audio() {
+    return this.el;
+  }
+
+  /** Listen to media events on whichever element is current. */
+  on(name: MediaEventName, fn: EventListener) {
+    this.mediaListeners.push([name, fn]);
+    this.el.addEventListener(name, fn);
+  }
+
+  get paused() {
+    return this.el.paused;
+  }
+
+  get hasSource() {
+    return !!this.el.getAttribute('src');
+  }
+
+  // ---------- effects chain ----------
+
+  /** Whether EQ / visualizer need the Web Audio chain. Enabling builds it now; disabling takes effect at the next track. */
+  setEffects(want: boolean) {
+    this.wantEffects = want;
+    if (want && !this.ctx && this.userActivated) this.buildGraph();
+    if (!want && this.ctx && this.el.paused) this.dropGraph();
+  }
+
+  private userActivated = false;
+
+  private buildGraph() {
     try {
       const ctx = new AudioContext({ latencyHint: 'playback' });
-      const source = ctx.createMediaElementSource(this.audio);
+      const source = ctx.createMediaElementSource(this.el);
       this.filters = EQ_BANDS.map((freq, i) => {
         const f = ctx.createBiquadFilter();
         f.type = i === 0 ? 'lowshelf' : i === EQ_BANDS.length - 1 ? 'highshelf' : 'peaking';
@@ -79,17 +124,50 @@ class AudioEngine {
       this.gain.connect(this.analyser);
       this.analyser.connect(ctx.destination);
       this.ctx = ctx;
-      this.applyEq();
+      this.applyEq(true);
+      if (this.el.paused) ctx.suspend().catch(() => {});
     } catch {
-      // Web Audio unavailable: plain <audio> playback still works.
+      this.ctx = null;
+      this.analyser = null;
     }
   }
 
-  private applyEq() {
-    this.filters.forEach((f, i) => { f.gain.value = this.eqEnabled ? this.eq[i] ?? 0 : 0; });
+  /** Close the context and move playback to a fresh element (a MediaElementSource cannot be detached). */
+  private dropGraph() {
+    const old = this.el;
+    const src = old.getAttribute('src');
+    const time = old.currentTime;
+    const rate = old.playbackRate;
+    const wasPlaying = !old.paused;
+    this.ctx?.close().catch(() => {});
+    this.ctx = null;
+    this.filters = [];
+    this.gain = null;
+    this.analyser = null;
+    for (const [name, fn] of this.mediaListeners) old.removeEventListener(name, fn);
+    old.pause();
+    old.removeAttribute('src');
+    old.load();
+    this.el = this.createElement();
+    this.el.volume = this.volume;
+    this.el.muted = old.muted;
+    this.el.playbackRate = rate;
+    if (src) {
+      this.el.src = src;
+      if (time > 0) this.el.addEventListener('loadedmetadata', () => { this.el.currentTime = time; }, { once: true });
+      if (wasPlaying) this.el.play().catch(() => {});
+    }
+  }
+
+  private applyEq(immediate = false) {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    // Smooth parameter changes: instant jumps produce audible "zipper" clicks.
+    const set = (p: AudioParam, v: number) => (immediate ? (p.value = v) : p.setTargetAtTime(v, now, 0.03));
+    this.filters.forEach((f, i) => set(f.gain, this.eqEnabled ? this.eq[i] ?? 0 : 0));
     // Keep headroom when boosting to avoid clipping.
     const maxBoost = this.eqEnabled ? Math.max(0, ...this.eq) : 0;
-    if (this.gain) this.gain.gain.value = Math.pow(10, -maxBoost / 2 / 20);
+    if (this.gain) set(this.gain.gain, Math.pow(10, -maxBoost / 20));
   }
 
   setEq(gains: number[], enabled = true) {
@@ -97,6 +175,8 @@ class AudioEngine {
     this.eqEnabled = enabled;
     this.applyEq();
   }
+
+  // ---------- state listeners ----------
 
   subscribe(fn: Listener) {
     this.listeners.add(fn);
@@ -106,6 +186,8 @@ class AudioEngine {
   private emit() {
     this.listeners.forEach((fn) => fn());
   }
+
+  // ---------- resolution ----------
 
   /** Resolve (with a short cache) how to play a track. */
   resolve(track: Track): Promise<Playback> {
@@ -129,11 +211,20 @@ class AudioEngine {
     this.prefetched.delete(track.url);
   }
 
+  // ---------- transport ----------
+
+  /** Called from user gestures: browsers only allow audio contexts after one. */
+  private activate() {
+    this.userActivated = true;
+    if (this.wantEffects && !this.ctx) this.buildGraph();
+    if (!this.wantEffects && this.ctx) this.dropGraph();
+  }
+
   /** Load a track; resolves once the source is set (playback may still be buffering). */
   async load(track: Track, { autoplay = true, startAt = 0 } = {}) {
     const token = ++this.loadToken;
-    this.ensureGraph();
-    this.audio.pause();
+    this.activate();
+    this.el.pause();
     this.track = track;
     this.playback = null;
     this.offset = 0;
@@ -149,44 +240,67 @@ class AudioEngine {
   private setSource(startAt: number) {
     const pb = this.playback;
     if (!pb) return;
-    const rate = this.audio.playbackRate;
+    const el = this.el;
+    const rate = el.playbackRate;
     if (pb.seekable) {
       this.offset = 0;
-      this.audio.src = pb.src;
-      if (startAt > 0) {
-        const seek = () => { this.audio.currentTime = startAt; };
-        this.audio.addEventListener('loadedmetadata', seek, { once: true });
-      }
+      el.src = pb.src;
+      if (startAt > 0) el.addEventListener('loadedmetadata', () => { el.currentTime = startAt; }, { once: true });
     } else {
       this.offset = pb.isLive ? 0 : startAt;
-      this.audio.src = startAt > 0 && !pb.isLive ? `${pb.src}&start=${Math.floor(startAt)}` : pb.src;
+      el.src = startAt > 0 && !pb.isLive ? `${pb.src}&start=${Math.floor(startAt)}` : pb.src;
     }
-    this.audio.playbackRate = rate;
-    this.audio.preservesPitch = true;
+    el.playbackRate = rate;
+  }
+
+  /** Ramp the element volume to avoid clicks on play / pause. */
+  private fade(to: number, done?: () => void) {
+    clearInterval(this.fadeTimer);
+    const el = this.el;
+    const from = el.volume;
+    const steps = Math.max(1, Math.round(FADE_MS / 16));
+    let i = 0;
+    this.fadeTimer = setInterval(() => {
+      i += 1;
+      el.volume = Math.max(0, Math.min(1, from + ((to - from) * i) / steps));
+      if (i >= steps) {
+        clearInterval(this.fadeTimer);
+        done?.();
+      }
+    }, 16);
   }
 
   async play() {
-    this.ensureGraph();
-    if (!this.audio.src && this.track) {
+    this.activate();
+    if (!this.el.getAttribute('src') && this.track) {
       await this.load(this.track, { autoplay: true });
       return;
     }
+    clearInterval(this.fadeTimer);
+    const fadeIn = this.el.currentTime > 0.2;
+    if (fadeIn) this.el.volume = 0;
     try {
-      await this.audio.play();
+      await this.el.play();
     } catch (err) {
+      this.el.volume = this.volume;
       if ((err as DOMException).name !== 'AbortError') throw err;
+      return;
     }
+    if (fadeIn) this.fade(this.volume); else this.el.volume = this.volume;
   }
 
   pause() {
-    this.audio.pause();
+    if (this.el.paused) return;
+    const el = this.el;
+    this.fade(0, () => { el.pause(); el.volume = this.volume; });
   }
 
   stop() {
     this.loadToken += 1;
-    this.audio.pause();
-    this.audio.removeAttribute('src');
-    this.audio.load();
+    clearInterval(this.fadeTimer);
+    this.el.pause();
+    this.el.removeAttribute('src');
+    this.el.load();
     this.track = null;
     this.playback = null;
     this.emit();
@@ -197,12 +311,12 @@ class AudioEngine {
   }
 
   get currentTime() {
-    return this.offset + (this.audio.currentTime || 0);
+    return this.offset + (this.el.currentTime || 0);
   }
 
   get duration(): number | null {
     if (this.playback?.isLive) return null;
-    if (this.playback?.seekable && Number.isFinite(this.audio.duration)) return this.audio.duration;
+    if (this.playback?.seekable && Number.isFinite(this.el.duration)) return this.el.duration;
     return this.playback?.duration ?? this.track?.duration ?? null;
   }
 
@@ -218,25 +332,27 @@ class AudioEngine {
     if (!this.playback || this.playback.isLive) return;
     const t = Math.max(0, Math.min(time, (this.duration ?? time) - 0.25));
     if (this.playback.seekable) {
-      this.audio.currentTime = t;
+      this.el.currentTime = t;
     } else {
-      const wasPlaying = !this.audio.paused;
+      const wasPlaying = !this.el.paused;
       this.setSource(t);
-      if (wasPlaying) this.audio.play().catch(() => {});
+      if (wasPlaying) this.el.play().catch(() => {});
     }
     this.emit();
   }
 
   setVolume(v: number) {
-    this.audio.volume = Math.max(0, Math.min(1, v));
+    this.volume = Math.max(0, Math.min(1, v));
+    clearInterval(this.fadeTimer);
+    this.el.volume = this.volume;
   }
 
   setMuted(m: boolean) {
-    this.audio.muted = m;
+    this.el.muted = m;
   }
 
   setRate(r: number) {
-    this.audio.playbackRate = r;
+    this.el.playbackRate = r;
   }
 }
 

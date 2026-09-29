@@ -5,6 +5,10 @@ services:
     restart: unless-stopped
     ports:
       - "8787:8787"
-    environment:
-      # Mot de passe d'accès (fortement conseillé si le serveur est exposé sur Internet)
-      ACCESS_TOKEN: ${ACCESS_TOKEN:-}
+    volumes:
+      # Comptes, sessions et bibliothèque de chaque utilisateur (playlists, historique, likes…).
+      # Aucun fichier audio n'y est stocké.
+      - forge-data:/app/data
+
+volumes:
+  forge-data:

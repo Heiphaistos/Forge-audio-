@@ -1,0 +1,24 @@
+{
+  "users": [
+    {
+      "username": "evan",
+      "displayName": "Evan",
+      "password": "scrypt$32768$8$1$MapLxcm6Q6gZnSKwYJhHKg==$0Do2CkBZfWxiY8TsqR/q6R6uJFkEknKXSvvlZvNkZoFx5k5WkWvLHddYV+zp1CymSX/jOs4P7L+G3+dgpidalw=="
+    },
+    {
+      "username": "tristan",
+      "displayName": "Tristan",
+      "password": "scrypt$32768$8$1$PjRYHAJBpQ98zqInDQuD8Q==$U9e/rOPAT/dARh4x4TQZwIstQMbm0l7g6aby0L3R+mRpljcrqtnwSxz964s0DKMOK/+otHqBc8NFPf/cat3xtA=="
+    },
+    {
+      "username": "polo",
+      "displayName": "Polo",
+      "password": "scrypt$32768$8$1$PfrZiSE5RFqJq9kerX70tw==$THgzbVWrRlk3R5pkLW4jHp3ZgYUbmsyZZOWUUKfUAHWdfs2plHoAEafePdPdK25DqrUSRleTsi5LjN1sdBC/pA=="
+    },
+    {
+      "username": "lohan",
+      "displayName": "Lohan",
+      "password": "scrypt$32768$8$1$8dTNi9uS2EcSIS5aitt3Vw==$DHSx08qXPIl7t46tt/FdZKyErW20ii+1bEJxQyedSrCc2fV/+65ACJ7vcNYm81zWgGWpFArl7c9B8VZwffdV9g=="
+    }
+  ]
+}

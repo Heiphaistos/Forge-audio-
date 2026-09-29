@@ -12,7 +12,8 @@ Disponible en **version web** (auto-hébergée) et en **application de bureau** 
 - **Radio / lecture automatique** : en fin de file, enchaîne sur des titres similaires (mix YouTube).
 - **Vidéo synchronisée** : affichez le clip (jusqu'en 1080p) sans couper le son, en plein écran.
 - **Paroles synchronisées** (LRCLIB) : cliquez une ligne pour y aller.
-- **Égaliseur 10 bandes** + 10 préréglages, **visualiseur** audio.
+- **Son propre** : lecture directe par le système, sans traitement ; l'**égaliseur 10 bandes** (10 préréglages) et le **visualiseur** ne s'activent que si vous les utilisez.
+- **Comptes et sauvegarde automatique** sur le serveur : playlists, likes, historique et file d'attente retrouvés sur tous vos appareils.
 - **Bibliothèque** : playlists (renommer, dupliquer, trier, filtrer, réordonner), titres likés, historique, les plus écoutés, export / import JSON, lecture de fichiers locaux.
 - **Téléchargements** : MP3 320 kbit/s tagué, audio original, vidéo MP4.
 - **Confort** : raccourcis clavier, touches multimédia du clavier / écran de verrouillage, couleurs dynamiques selon la pochette, 7 couleurs d'accent, interface mobile, installable en PWA.
@@ -30,6 +31,8 @@ Téléchargez la version pour votre système dans les [Releases](https://github.
 
 L'application embarque son serveur et ffmpeg ; **yt-dlp est téléchargé automatiquement** au premier lancement puis mis à jour tous les 3 jours. En version portable Windows, les données sont rangées dans `ForgeAudio-data` à côté de l'exécutable.
 
+**Connexion au serveur** : dans *Paramètres → Application de bureau*, entrez l'adresse de votre serveur (ex. `https://musique.mon-vps.fr`) pour utiliser le même compte et la même bibliothèque que sur le web. Sans serveur, l'application fonctionne seule et sauvegarde la bibliothèque sur l'ordinateur.
+
 > macOS : l'application n'est pas signée ; au premier lancement faites clic droit → **Ouvrir**.
 
 ### Publier une nouvelle version
@@ -45,9 +48,29 @@ Le workflow **Applications de bureau** construit Windows, macOS (Intel + Apple S
 ### Docker (recommandé)
 
 ```bash
-ACCESS_TOKEN="un-mot-de-passe" docker compose up -d --build
+docker compose up -d --build
 # → http://localhost:8787
 ```
+
+Les comptes, les sessions et la bibliothèque de chaque utilisateur sont dans le volume `forge-data` (`/app/data`) : ils survivent aux mises à jour (`git pull && docker compose up -d --build`).
+
+## 👤 Comptes et sauvegarde
+
+- La version web demande une **connexion**. Les comptes livrés sont **evan**, **tristan**, **polo** et **lohan**. Les mots de passe (80 caractères : majuscules, minuscules, chiffres, symboles) ont été remis à part : le dépôt ne contient que leurs empreintes scrypt (`server/accounts.json`, copié dans le volume au premier démarrage).
+- **Tout est sauvegardé automatiquement sur le serveur**, pour chaque compte : playlists (y compris les imports Spotify, Deezer, Apple Music, YouTube, SoundCloud), titres likés, historique, titres les plus écoutés, file d'attente et position, réglages (égaliseur, couleurs…). On retrouve tout en se reconnectant, sur n'importe quel appareil ; si deux appareils modifient en même temps, les changements sont fusionnés.
+- **Aucune musique n'est stockée sur le serveur.** Les fichiers audio ouverts depuis l'ordinateur (« Fichiers locaux ») sont lus directement par le navigateur et ne sont jamais envoyés.
+- Protection : mots de passe hachés (scrypt), cookie de session `HttpOnly`, blocage après 8 échecs en 15 min.
+
+Gérer les comptes (sur le serveur) :
+
+```bash
+docker exec -it forge-audio node server/src/accounts-cli.js list
+docker exec -it forge-audio node server/src/accounts-cli.js add prenom Prénom   # génère et affiche un mot de passe de 80 caractères
+docker exec -it forge-audio node server/src/accounts-cli.js passwd evan         # nouveau mot de passe (déconnecte ses sessions)
+docker exec -it forge-audio node server/src/accounts-cli.js remove prenom
+```
+
+Sans Docker : `npm run accounts -- list` (etc.). Sans aucun compte, le serveur fonctionne sans connexion (mode local, utilisé par l'application de bureau).
 
 ### Sans Docker
 
@@ -62,7 +85,8 @@ npm start            # http://127.0.0.1:8787
 | Variable | Rôle | Défaut |
 |---|---|---|
 | `PORT` / `HOST` | Adresse d'écoute | `8787` / `127.0.0.1` |
-| `ACCESS_TOKEN` | Mot de passe demandé à l'ouverture (conseillé sur Internet) | aucun |
+| `DATA_DIR` | Comptes, sessions et bibliothèques des utilisateurs | `data/` |
+| `ACCOUNTS_FILE` | Fichier des comptes | `$DATA_DIR/accounts.json` |
 | `YTDLP_PATH` | Chemin de yt-dlp | `yt-dlp` |
 | `FFMPEG_PATH` | Chemin de ffmpeg | `ffmpeg-static` puis `ffmpeg` |
 | `WEB_ROOT` | Dossier de l'interface compilée | `web/dist` |

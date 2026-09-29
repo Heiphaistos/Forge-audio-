@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { lazyStorage } from '../lib/storage';
 import type { Track } from '../lib/types';
 import { EQ_PRESETS } from '../audio/engine';
 
@@ -128,7 +129,7 @@ export const useSettings = create<SettingsState>()(
     (set) => ({
       accent: 'Braise',
       defaultSource: 'all',
-      visualizer: true,
+      visualizer: false,
       dynamicColors: true,
       eqEnabled: true,
       eqPreset: 'Plat',
@@ -136,6 +137,12 @@ export const useSettings = create<SettingsState>()(
       autoplay: true,
       set: (patch) => set(patch),
     }),
-    { name: 'forge.settings', version: 1 },
+    {
+      name: 'forge.settings',
+      version: 2,
+      storage: lazyStorage,
+      // v2: the visualizer needs the Web Audio chain (source of hiss/stutter on some outputs), so it is now opt-in.
+      migrate: (state, version) => (version < 2 ? { ...(state as object), visualizer: false } : state) as SettingsState,
+    },
   ),
 );

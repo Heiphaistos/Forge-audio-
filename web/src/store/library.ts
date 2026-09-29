@@ -1,9 +1,10 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { lazyStorage } from '../lib/storage';
 import type { Playlist, Track, HistoryEntry } from '../lib/types';
 import { uid } from '../lib/format';
 
-const HISTORY_MAX = 300;
+const HISTORY_MAX = 1000;
 
 /** Strip runtime-only fields before storing a track. */
 export function slimTrack(t: Track): Track {
@@ -15,6 +16,8 @@ interface LibraryState {
   liked: Track[];
   history: HistoryEntry[];
   playCounts: Record<string, number>;
+  /** Deleted playlist ids → time, so a deletion is not undone by merging with another device. */
+  deletedPlaylists: Record<string, number>;
   createPlaylist: (name: string, tracks?: Track[], extra?: Partial<Playlist>) => Playlist;
   updatePlaylist: (id: string, patch: Partial<Pick<Playlist, 'name' | 'description' | 'cover'>>) => void;
   deletePlaylist: (id: string) => void;
@@ -36,6 +39,7 @@ export const useLibrary = create<LibraryState>()(
       liked: [],
       history: [],
       playCounts: {},
+      deletedPlaylists: {},
 
       createPlaylist: (name, tracks = [], extra = {}) => {
         const now = Date.now();
@@ -51,7 +55,10 @@ export const useLibrary = create<LibraryState>()(
         playlists: get().playlists.map((p) => (p.id === id ? { ...p, ...patch, updatedAt: Date.now() } : p)),
       }),
 
-      deletePlaylist: (id) => set({ playlists: get().playlists.filter((p) => p.id !== id) }),
+      deletePlaylist: (id) => set({
+        playlists: get().playlists.filter((p) => p.id !== id),
+        deletedPlaylists: { ...get().deletedPlaylists, [id]: Date.now() },
+      }),
 
       duplicatePlaylist: (id) => {
         const src = get().playlists.find((p) => p.id === id);
@@ -120,7 +127,7 @@ export const useLibrary = create<LibraryState>()(
         return { playlists: incoming.length, liked: liked.length };
       },
     }),
-    { name: 'forge.library', version: 1 },
+    { name: 'forge.library', version: 1, storage: lazyStorage },
   ),
 );
 

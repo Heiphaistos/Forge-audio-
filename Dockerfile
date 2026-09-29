@@ -24,7 +24,10 @@ COPY --from=build /app/node_modules node_modules
 COPY --from=build /app/server server
 COPY --from=build /app/web/dist web/dist
 COPY --from=build /app/package.json .
-ENV NODE_ENV=production HOST=0.0.0.0 PORT=8787 FFMPEG_PATH=/usr/bin/ffmpeg
+# Accounts, sessions and each user's library (playlists, history…). Mounted as a volume: survives rebuilds.
+RUN mkdir -p /app/data && chown node:node /app/data
+VOLUME /app/data
+ENV NODE_ENV=production HOST=0.0.0.0 PORT=8787 FFMPEG_PATH=/usr/bin/ffmpeg DATA_DIR=/app/data
 EXPOSE 8787
 USER node
 CMD ["node", "server/src/index.js"]

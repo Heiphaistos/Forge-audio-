@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { lazyStorage } from '../lib/storage';
 import { engine } from '../audio/engine';
 import { api } from '../lib/api';
 import { shuffleArray } from '../lib/format';
@@ -206,7 +207,7 @@ export const usePlayer = create<PlayerState>()(
             loadIndex(Math.max(0, index), { startAt: saved });
             return;
           }
-          if (engine.audio.paused) engine.play().catch((err) => toast(err.message, 'error'));
+          if (engine.paused) engine.play().catch((err) => toast(err.message, 'error'));
           else engine.pause();
         },
 
@@ -287,6 +288,7 @@ export const usePlayer = create<PlayerState>()(
     {
       name: 'forge.player',
       version: 1,
+      storage: lazyStorage,
       partialize: (s) => ({ queue: s.queue, index: s.index, shuffle: s.shuffle, unshuffled: s.unshuffled, repeat: s.repeat, volume: s.volume, muted: s.muted, rate: s.rate }),
     },
   ),
@@ -294,7 +296,6 @@ export const usePlayer = create<PlayerState>()(
 
 /** Wire audio element events to the store. Call once at startup. */
 export function bindEngine() {
-  const a = engine.audio;
   const st = usePlayer.getState();
   engine.setVolume(st.volume);
   engine.setMuted(st.muted);
@@ -302,7 +303,7 @@ export function bindEngine() {
   usePlayer.setState({ position: Number(localStorage.getItem(POSITION_KEY)) || 0 });
 
   let lastSave = 0;
-  a.addEventListener('timeupdate', () => {
+  engine.on('timeupdate', () => {
     const position = engine.currentTime;
     usePlayer.setState({ position, duration: engine.duration });
     if (Date.now() - lastSave > 3000) {
@@ -310,11 +311,11 @@ export function bindEngine() {
       try { localStorage.setItem(POSITION_KEY, String(Math.floor(position))); } catch { /* quota */ }
     }
   });
-  a.addEventListener('durationchange', () => usePlayer.setState({ duration: engine.duration }));
-  a.addEventListener('play', () => usePlayer.setState({ playing: true }));
-  a.addEventListener('pause', () => usePlayer.setState({ playing: false }));
-  a.addEventListener('waiting', () => usePlayer.setState({ buffering: true }));
-  a.addEventListener('playing', () => {
+  engine.on('durationchange', () => usePlayer.setState({ duration: engine.duration }));
+  engine.on('play', () => usePlayer.setState({ playing: true }));
+  engine.on('pause', () => usePlayer.setState({ playing: false }));
+  engine.on('waiting', () => usePlayer.setState({ buffering: true }));
+  engine.on('playing', () => {
     usePlayer.setState({ buffering: false, error: null });
     const { index, queue } = usePlayer.getState();
     if (historyPushedFor !== loadSeq && queue[index]) {
@@ -323,13 +324,13 @@ export function bindEngine() {
       useLibrary.getState().pushHistory(queue[index]);
     }
   });
-  a.addEventListener('ended', () => {
+  engine.on('ended', () => {
     try { localStorage.setItem(POSITION_KEY, '0'); } catch { /* quota */ }
     usePlayer.getState().next(true);
   });
-  a.addEventListener('error', () => {
+  engine.on('error', () => {
     const track = engine.currentTrack;
-    if (!track || !a.getAttribute('src')) return;
+    if (!track || !engine.hasSource) return;
     const at = engine.currentTime;
     if (retriedUrl !== track.url) {
       // Signed media URLs expire: resolve again and resume where we were.

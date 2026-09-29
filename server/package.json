@@ -1,6 +1,6 @@
 {
   "name": "forge-audio-server",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "main": "src/app.js",
@@ -10,7 +10,8 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "accounts": "node src/accounts-cli.js"
   },
   "dependencies": {
     "@fastify/static": "^8.2.0",

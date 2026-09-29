@@ -7,3 +7,4 @@ desktop/app/
 .DS_Store
 bin/
 *.tsbuildinfo
+data/

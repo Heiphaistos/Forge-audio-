@@ -1,4 +1,5 @@
-import { Home, Search, Library, Heart, History, Plus, Settings, X } from 'lucide-react';
+import { Home, Search, Library, Heart, History, Plus, Settings, X, LogOut, Cloud, CloudOff, Loader2 } from 'lucide-react';
+import { useSync, logout } from '../lib/sync';
 import { useUi, type View } from '../store/ui';
 import { useLibrary } from '../store/library';
 import { usePlayer } from '../store/player';
@@ -63,8 +64,38 @@ export function Sidebar() {
             </button>
           ))}
         </div>
+        <UserBlock />
         {item({ name: 'settings' }, <Settings size={20} />, 'Paramètres')}
       </aside>
     </>
+  );
+}
+
+const STATUS: Record<string, string> = {
+  saved: 'Sauvegardé',
+  saving: 'Sauvegarde…',
+  pending: 'Sauvegarde…',
+  loading: 'Chargement…',
+  offline: 'Hors ligne, en attente',
+  error: 'Sauvegarde en échec, nouvel essai…',
+};
+
+function UserBlock() {
+  const user = useSync((s) => s.user);
+  const status = useSync((s) => s.status);
+  if (!user) return null;
+  const busy = status === 'saving' || status === 'pending' || status === 'loading';
+  const bad = status === 'offline' || status === 'error';
+  return (
+    <div className="user-block">
+      <span className="avatar" aria-hidden>{user.displayName.slice(0, 1).toUpperCase()}</span>
+      <div className="grow">
+        <div className="ellipsis user-name">{user.displayName}</div>
+        <div className={`sync-status ${bad ? 'bad' : ''}`} title="Playlists, likes, historique et file d'attente sont sauvegardés sur le serveur">
+          {busy ? <Loader2 size={11} className="spin" /> : bad ? <CloudOff size={11} /> : <Cloud size={11} />} {STATUS[status] || ''}
+        </div>
+      </div>
+      {user.username !== 'local' && <button className="icon-btn" onClick={() => logout()} title="Se déconnecter" aria-label="Se déconnecter"><LogOut size={17} /></button>}
+    </div>
   );
 }

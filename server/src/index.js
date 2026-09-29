@@ -3,14 +3,18 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createApp } from './app.js';
 import { resolveFfmpeg, resolveYtdlp } from './binaries.js';
+import { resolvePaths } from './paths.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
+
+const { dataDir, accountsFile } = resolvePaths();
 
 const app = createApp({
   ytdlp: resolveYtdlp(),
   ffmpeg: await resolveFfmpeg(),
   webRoot: process.env.WEB_ROOT || path.resolve(here, '../../web/dist'),
-  accessToken: process.env.ACCESS_TOKEN || null,
+  dataDir,
+  accountsFile,
   logger: { level: process.env.LOG_LEVEL || 'info' },
 });
 

@@ -125,3 +125,14 @@ test('pickBestMatch prefers the closest duration and penalizes covers', () => {
   ], wanted);
   assert.equal(best.title, 'Daft Punk - One More Time (Official Video)');
 });
+
+test('password policy and generator', async () => {
+  const { checkPasswordPolicy, generatePassword, hashPassword, verifyPassword } = await import('../src/accounts.js');
+  for (let i = 0; i < 20; i += 1) assert.deepEqual(checkPasswordPolicy(generatePassword()), []);
+  assert.ok(generatePassword().length >= 75);
+  assert.equal(checkPasswordPolicy('Short1!').length > 0, true);
+  assert.deepEqual(checkPasswordPolicy('a'.repeat(80)), ['une majuscule', 'un chiffre', 'un symbole']);
+  const h = await hashPassword('Secret-1');
+  assert.equal(await verifyPassword('Secret-1', h), true);
+  assert.equal(await verifyPassword('Secret-2', h), false);
+});
