@@ -45,6 +45,12 @@ git tag v0.1.0 && git push origin v0.1.0
 
 Le workflow **Applications de bureau** construit Windows, macOS (Intel + Apple Silicon) et Linux et joint les fichiers à la release GitHub. Il peut aussi être lancé à la main depuis l'onglet *Actions* (fichiers téléchargeables dans le run).
 
+## 📱 Android et iOS
+
+Les applications mobiles sont dans le dépôt [Forge-Audio-Android](https://github.com/Heiphaistos/Forge-Audio-Android) (Capacitor). Elles se connectent à votre serveur Forge Audio (même compte et même bibliothèque) et **continuent la musique écran verrouillé ou dans une autre application**, avec notification média (pochette, précédent / lecture / suivant) et commandes de l'écran de verrouillage, du casque et du Bluetooth. APK Android et IPA iOS sont compilés automatiquement ; installation, signature et mise en ligne sur un site sont détaillées dans son README.
+
+> Un **navigateur fermé arrête forcément la musique** (la page n'existe plus). Pour écouter fenêtre fermée, utilisez l'application de bureau (zone de notification) ou l'application mobile.
+
 ## 🌐 Version web (auto-hébergée)
 
 ### Docker (recommandé)

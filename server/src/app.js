@@ -133,7 +133,9 @@ export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null,
   app.post('/api/me/data', saveData);
 
   // ---------- API ----------
-  app.get('/api/health', async (request) => {
+  app.get('/api/health', async (request, reply) => {
+    // Readable from the mobile apps' server setup screen (another origin); contains nothing private.
+    reply.header('access-control-allow-origin', '*');
     let ytdlpVersion = null;
     try {
       ytdlpVersion = (await listCache.wrap('ytdlp-version', () => runYtdlp(ytdlp, ['--version'], { timeoutMs: 15_000 }), 10 * 60 * 1000)).trim();

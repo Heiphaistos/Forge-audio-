@@ -52,6 +52,41 @@ function DesktopServer() {
   );
 }
 
+const DESKTOP_RELEASES = 'https://github.com/Heiphaistos/Forge-audio-/releases/latest';
+export const MOBILE_RELEASES = 'https://github.com/Heiphaistos/Forge-Audio-Android/releases/latest';
+
+const inMobileApp = () => /ForgeAudioApp/.test(navigator.userAgent);
+const isIos = () => /iPhone|iPad|iPod/.test(navigator.userAgent);
+
+/** Inside the Android / iOS app: go back to the bundled server setup screen. */
+function MobileServer() {
+  if (!inMobileApp()) return null;
+  const local = isIos() ? 'capacitor://localhost' : 'https://localhost';
+  return (
+    <section className="settings-card">
+      <h2>Application mobile</h2>
+      <p className="muted">Connecté au serveur <b>{location.origin}</b>. La musique continue écran verrouillé ou dans une autre application, avec les commandes dans la notification et sur l'écran de verrouillage.</p>
+      <a className="btn btn-ghost" href={`${local}/?change=1`}>Changer de serveur</a>
+    </section>
+  );
+}
+
+/** In a browser: links to the desktop and mobile apps (background playback, tray, notifications). */
+function DownloadApps() {
+  if (inMobileApp() || window.forgeDesktop) return null;
+  return (
+    <section className="settings-card">
+      <h2>Applications</h2>
+      <p className="muted">Un navigateur fermé arrête la musique. Les applications, elles, continuent en arrière-plan : zone de notification sur ordinateur, notification et écran de verrouillage sur téléphone.</p>
+      <div className="row gap wrap">
+        <a className="btn btn-primary" href={MOBILE_RELEASES} target="_blank" rel="noreferrer">Android (APK)</a>
+        <a className="btn btn-ghost" href={MOBILE_RELEASES} target="_blank" rel="noreferrer">iPhone / iPad</a>
+        <a className="btn btn-ghost" href={DESKTOP_RELEASES} target="_blank" rel="noreferrer">Windows · macOS · Linux</a>
+      </div>
+    </section>
+  );
+}
+
 function Toggle({ checked, onChange, label, hint }: { checked: boolean; onChange: (v: boolean) => void; label: string; hint?: string }) {
   return (
     <label className="setting">
@@ -107,6 +142,8 @@ export function Settings() {
       </section>
 
       <DesktopServer />
+      <MobileServer />
+      <DownloadApps />
 
       <section className="settings-card">
         <h2>Serveur</h2>
