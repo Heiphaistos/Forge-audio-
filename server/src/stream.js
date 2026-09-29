@@ -28,6 +28,10 @@ export const FORMATS = {
 
 export const PREFS = ['webm', 'mp4'];
 
+// Re-encoding to MP3 overshoots full scale on loud masters (+0.8 dB measured on Dailymotion), which crackles:
+// a -1 dBFS limiter keeps the peaks in range.
+const MP3_LIMIT = ['-af', 'alimiter=limit=0.891:level=disabled'];
+
 function formatFor(kind, pref) {
   const f = FORMATS[kind];
   if (!f) throw new HttpError(`Type de flux inconnu : ${kind}`);
@@ -186,7 +190,7 @@ export class MediaService {
   transcode(media, { start = 0, video = false } = {}) {
     const out = video
       ? ['-an', '-c:v', 'copy', '-f', 'mp4', '-movflags', 'frag_keyframe+empty_moov+default_base_moof']
-      : ['-vn', '-c:a', 'libmp3lame', '-b:a', '192k', '-f', 'mp3'];
+      : ['-vn', ...MP3_LIMIT, '-c:a', 'libmp3lame', '-b:a', '192k', '-f', 'mp3'];
     return this.spawnFfmpeg([this.inputArgs(media, start)], out);
   }
 
@@ -203,7 +207,7 @@ export class MediaService {
     let filename;
     let type;
     if (format === 'mp3') {
-      proc = this.spawnFfmpeg([this.inputArgs(audio)], ['-vn', ...meta, '-c:a', 'libmp3lame', '-b:a', '320k', '-id3v2_version', '3', '-f', 'mp3']);
+      proc = this.spawnFfmpeg([this.inputArgs(audio)], ['-vn', ...meta, ...MP3_LIMIT, '-c:a', 'libmp3lame', '-b:a', '320k', '-id3v2_version', '3', '-f', 'mp3']);
       filename = `${base}.mp3`;
       type = 'audio/mpeg';
     } else if (format === 'audio') {

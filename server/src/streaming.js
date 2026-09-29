@@ -180,15 +180,39 @@ export function pickBestMatch(candidates, wanted) {
 
 const matches = new TtlCache({ ttlMs: 6 * 3600_000, max: 2000 });
 
+async function youtubeMatch(ytdlp, wanted) {
+  const query = `${wanted.author ? `${wanted.author} - ` : ''}${wanted.title}`.slice(0, 200);
+  const raw = await runYtdlp(ytdlp, buildListArgs(`ytsearch6:${query}`, { maxEntries: 6 }));
+  const best = pickBestMatch(parseYtdlpJson(raw, { maxEntries: 6 }).tracks, wanted);
+  if (!best) throw new HttpError(`Introuvable sur YouTube : ${query}`, 404, 'NOT_FOUND');
+  return best.url;
+}
+
+/** SoundCloud Go+ titles are DRM-protected: find the same title on YouTube (title from the public oEmbed). */
+async function soundcloudFallback(ytdlp, url) {
+  const data = await getJson(`https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(url)}`, 'SoundCloud');
+  const full = String(data.title || ''); // "Minor Swing by Django Reinhardt"
+  const cut = full.lastIndexOf(' by ');
+  const [title, author] = cut > 0 ? [full.slice(0, cut), full.slice(cut + 4)] : [full, null];
+  if (!title) throw new HttpError('Titre SoundCloud protégé (DRM) et introuvable', 404, 'NOT_FOUND');
+  return matches.wrap(`drm|${url}`, () => youtubeMatch(ytdlp, { title, author: author || data.author_name || null, duration: null }));
+}
+
+/** Run `fn(url)`; if the source refuses because of DRM (SoundCloud Go+), retry with the YouTube equivalent. */
+export async function withDrmFallback(ytdlp, url, fn) {
+  try {
+    return await fn(url);
+  } catch (err) {
+    if (!/DRM/i.test(err?.message || '') || !/(^|\.)soundcloud\.com$/.test(new URL(url).hostname)) throw err;
+    return fn(await soundcloudFallback(ytdlp, url));
+  }
+}
+
 /** Playable URL for any link: streaming-service titles are replaced by their YouTube match. */
 export function playableUrl(ytdlp, url) {
   if (!detectService(url)) return Promise.resolve(url);
   return matches.wrap(url, async () => {
     const [wanted] = (await resolveStreamingLink(url, { maxEntries: 1 })).tracks;
-    const query = `${wanted.author ? `${wanted.author} - ` : ''}${wanted.title}`.slice(0, 200);
-    const raw = await runYtdlp(ytdlp, buildListArgs(`ytsearch6:${query}`, { maxEntries: 6 }));
-    const best = pickBestMatch(parseYtdlpJson(raw, { maxEntries: 6 }).tracks, wanted);
-    if (!best) throw new HttpError(`Introuvable sur YouTube : ${query}`, 404, 'NOT_FOUND');
-    return best.url;
+    return youtubeMatch(ytdlp, wanted);
   });
 }

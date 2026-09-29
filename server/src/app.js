@@ -8,10 +8,10 @@ import { runYtdlp, buildListArgs, parseYtdlpJson } from './ytdlp.js';
 import { search, suggest, radio, SOURCES } from './search.js';
 import { MediaService } from './stream.js';
 import { findLyrics } from './lyrics.js';
-import { resolveStreamingLink, playableUrl } from './streaming.js';
+import { resolveStreamingLink, playableUrl, withDrmFallback } from './streaming.js';
 import { HttpError, isPublicUrl, clampInt, TtlCache } from './util.js';
 
-export const VERSION = '0.2.0';
+export const VERSION = '0.2.1';
 
 const IMAGE_HOSTS = /(^|\.)(ytimg\.com|ggpht\.com|googleusercontent\.com|sndcdn\.com|dmcdn\.net|dailymotion\.com|bcbits\.com|vimeocdn\.com|jtvnw\.net|scdn\.co|spotifycdn\.com|dzcdn\.net|mzstatic\.com)$/i;
 
@@ -122,7 +122,8 @@ export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null,
 
   app.get('/api/playback', async (request) => {
     const kind = request.query.kind === 'video' ? 'video' : 'audio';
-    return media.playback(await playableUrl(ytdlp, requirePublicUrl(request.query.url)), kind, request.query.pref);
+    const url = await playableUrl(ytdlp, requirePublicUrl(request.query.url));
+    return withDrmFallback(ytdlp, url, (u) => media.playback(u, kind, request.query.pref));
   });
 
   app.get('/api/stream/:kind', async (request, reply) => {
@@ -133,7 +134,8 @@ export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null,
 
   app.get('/api/download', async (request, reply) => {
     const format = ['mp3', 'audio', 'video'].includes(request.query.format) ? request.query.format : 'mp3';
-    return media.download(request, reply, await playableUrl(ytdlp, requirePublicUrl(request.query.url)), format);
+    const url = await playableUrl(ytdlp, requirePublicUrl(request.query.url));
+    return withDrmFallback(ytdlp, url, (u) => media.download(request, reply, u, format));
   });
 
   app.get('/api/lyrics', async (request) => {
