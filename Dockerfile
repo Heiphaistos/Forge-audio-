@@ -4,7 +4,8 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY server/package.json server/
 COPY web/package.json web/
-RUN npm ci --omit=optional
+# Optional deps needed here: rollup/esbuild native binaries (ffmpeg-static is pruned below)
+RUN npm ci
 COPY server server
 COPY web web
 RUN npm run build && npm prune --omit=dev --omit=optional

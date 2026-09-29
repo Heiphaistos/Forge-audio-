@@ -10,7 +10,7 @@ import { MediaService } from './stream.js';
 import { findLyrics } from './lyrics.js';
 import { HttpError, isPublicUrl, clampInt, TtlCache } from './util.js';
 
-export const VERSION = '0.1.0';
+export const VERSION = '0.1.1';
 
 const IMAGE_HOSTS = /(^|\.)(ytimg\.com|ggpht\.com|googleusercontent\.com|sndcdn\.com|dmcdn\.net|dailymotion\.com|bcbits\.com|vimeocdn\.com|jtvnw\.net)$/i;
 
