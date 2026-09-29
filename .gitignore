@@ -6,3 +6,4 @@ desktop/app/
 .env
 .DS_Store
 bin/
+*.tsbuildinfo
