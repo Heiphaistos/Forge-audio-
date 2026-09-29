@@ -11,7 +11,7 @@ import { findLyrics } from './lyrics.js';
 import { resolveStreamingLink, playableUrl, withDrmFallback } from './streaming.js';
 import { HttpError, isPublicUrl, clampInt, TtlCache } from './util.js';
 
-export const VERSION = '0.2.1';
+export const VERSION = '0.2.2';
 
 const IMAGE_HOSTS = /(^|\.)(ytimg\.com|ggpht\.com|googleusercontent\.com|sndcdn\.com|dmcdn\.net|dailymotion\.com|bcbits\.com|vimeocdn\.com|jtvnw\.net|scdn\.co|spotifycdn\.com|dzcdn\.net|mzstatic\.com)$/i;
 

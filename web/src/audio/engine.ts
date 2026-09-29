@@ -42,6 +42,15 @@ class AudioEngine {
     this.audio = new Audio();
     this.audio.preload = 'auto';
     this.audio.crossOrigin = 'anonymous';
+    // A running AudioContext keeps the sound card open: on many headphone jacks that is a constant hum/hiss.
+    // Suspend it as soon as nothing plays (short delay so pause → play stays instant), resume on play.
+    let idle: ReturnType<typeof setTimeout> | undefined;
+    const sleep = () => {
+      clearTimeout(idle);
+      idle = setTimeout(() => { if (this.audio.paused && this.ctx?.state === 'running') this.ctx.suspend().catch(() => {}); }, 1500);
+    };
+    for (const e of ['pause', 'ended', 'emptied', 'error']) this.audio.addEventListener(e, sleep);
+    this.audio.addEventListener('play', () => { clearTimeout(idle); if (this.ctx?.state === 'suspended') this.ctx.resume().catch(() => {}); });
   }
 
   /** Build the Web Audio graph (must happen after a user gesture). */
