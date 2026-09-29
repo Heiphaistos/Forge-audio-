@@ -173,3 +173,28 @@ test('unknown API routes return JSON 404', async () => {
   assert.equal(res.statusCode, 404);
   assert.equal(res.json().code, 'NOT_FOUND');
 });
+
+test('accounts changed by the CLI apply without a restart', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'forge-'));
+  const accountsFile = path.join(dir, 'accounts.json');
+  await new Accounts(accountsFile).set('evan', 'Evan', generatePassword(80));
+  const app = make({ dataDir: dir, accountsFile });
+  const login = (username, password) => app.inject({ method: 'POST', url: '/api/login', payload: { username, password } });
+
+  // Another process (accounts-cli.js) adds a user while the server runs.
+  const pw = generatePassword(80);
+  await new Accounts(accountsFile).set('polo', 'Polo', pw);
+  const res = await login('polo', pw);
+  assert.equal(res.statusCode, 200);
+  const cookie = res.headers['set-cookie'].split(';')[0];
+  assert.equal((await app.inject({ url: '/api/me', headers: { cookie } })).json().user.username, 'polo');
+
+  // passwd signs out existing sessions, remove locks the account out.
+  await new Promise((r) => setTimeout(r, 5));
+  await new Accounts(accountsFile).set('polo', 'Polo', generatePassword(80));
+  assert.equal((await app.inject({ url: '/api/me', headers: { cookie } })).statusCode, 401);
+  assert.equal((await login('polo', pw)).statusCode, 401);
+  new Accounts(accountsFile).remove('polo');
+  assert.equal(new Accounts(accountsFile).get('polo'), null);
+  await app.close();
+});

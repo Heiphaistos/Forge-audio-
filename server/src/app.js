@@ -12,7 +12,7 @@ import { HttpError, isPublicUrl, clampInt, TtlCache } from './util.js';
 import { Accounts, Sessions, LoginLimiter } from './accounts.js';
 import { UserData } from './userdata.js';
 
-export const VERSION = '0.3.1';
+export const VERSION = '0.3.2';
 
 const IMAGE_HOSTS = /(^|\.)(ytimg\.com|ggpht\.com|googleusercontent\.com|sndcdn\.com|dmcdn\.net|dailymotion\.com|bcbits\.com|vimeocdn\.com|jtvnw\.net|scdn\.co|spotifycdn\.com|dzcdn\.net|mzstatic\.com)$/i;
 
@@ -67,7 +67,8 @@ export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null,
     if (!accounts.enabled) return LOCAL_USER;
     const s = sessions.get(readCookie(request.headers.cookie, COOKIE));
     const u = s && accounts.get(s.username);
-    return u ? { username: u.username, displayName: u.displayName } : null;
+    // A password change (accounts-cli passwd) signs out every older session.
+    return u && s.created >= u.since ? { username: u.username, displayName: u.displayName } : null;
   };
 
   const PUBLIC = new Set(['/api/health', '/api/login', '/api/logout']);

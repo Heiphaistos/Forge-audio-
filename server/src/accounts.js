@@ -91,23 +91,34 @@ export class Accounts {
   constructor(file) {
     this.file = file;
     this.users = new Map();
+    this.mtime = null;
     this.reload();
+  }
+
+  /** Pick up changes made by accounts-cli.js (another process) without a restart. */
+  refresh() {
+    let mtime = null;
+    try { mtime = fs.statSync(this.file).mtimeMs; } catch { /* no file: no account */ }
+    if (mtime !== this.mtime) this.reload();
   }
 
   reload() {
     this.users.clear();
+    try { this.mtime = this.file ? fs.statSync(this.file).mtimeMs : null; } catch { this.mtime = null; }
     const data = this.file ? readJson(this.file, { users: [] }) : { users: [] };
     for (const u of data.users || []) {
       const username = normalizeUsername(u.username);
-      if (isValidUsername(username) && u.password) this.users.set(username, { username, displayName: u.displayName || username, password: u.password });
+      if (isValidUsername(username) && u.password) this.users.set(username, { username, displayName: u.displayName || username, password: u.password, since: Number(u.since) || 0 });
     }
   }
 
   get enabled() {
+    this.refresh();
     return this.users.size > 0;
   }
 
   get(username) {
+    this.refresh();
     return this.users.get(normalizeUsername(username)) || null;
   }
 
@@ -124,7 +135,7 @@ export class Accounts {
     if (!isValidUsername(name)) throw new Error(`Nom d'utilisateur invalide : ${username}`);
     const problems = checkPasswordPolicy(password);
     if (problems.length) throw new Error(`Mot de passe trop faible : il faut ${problems.join(', ')}`);
-    this.users.set(name, { username: name, displayName: displayName || this.users.get(name)?.displayName || name, password: await hashPassword(password) });
+    this.users.set(name, { username: name, displayName: displayName || this.users.get(name)?.displayName || name, password: await hashPassword(password), since: Date.now() });
     this.save();
   }
 
