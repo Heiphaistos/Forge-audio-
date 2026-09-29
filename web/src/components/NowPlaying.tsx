@@ -32,7 +32,7 @@ export function NowPlaying() {
 
   if (!open || !track) return null;
   const tab = (s: Side, icon: React.ReactNode, label: string) => (
-    <button className={`chip ${side === s ? 'active' : ''}`} onClick={() => setSide(s)}>{icon} {label}</button>
+    <button className={`chip ${side === s ? 'active' : ''}`} onClick={() => { if (s === 'video') useUi.getState().setMiniVideo(false); setSide(s); }}>{icon} {label}</button>
   );
 
   return (
@@ -48,7 +48,7 @@ export function NowPlaying() {
       </div>
       <div className={`np-body ${side === 'video' ? 'with-video' : ''}`}>
         <div className="np-left">
-          {side === 'video' ? <VideoView /> : <Cover src={track.thumbnail} size="min(56vh, 100%)" large radius={14} className="np-cover" />}
+          {side === 'video' ? <VideoView variant="np" /> : <Cover src={track.thumbnail} size="min(56vh, 100%)" large radius={14} className="np-cover" />}
           <div className="np-meta">
             <div className="grow" style={{ minWidth: 0 }}>
               <h1 className="np-title">{track.title}</h1>

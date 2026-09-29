@@ -16,6 +16,7 @@ export const SHORTCUTS: [string, string][] = [
   ['L', 'Paroles'],
   ['Q', "File d'attente"],
   ['V', 'Vidéo'],
+  ['I', 'Lecteur vidéo réduit'],
   ['E', 'Égaliseur'],
   ['F', 'Lecteur plein écran'],
   ['Ctrl + K ou /', 'Rechercher'],

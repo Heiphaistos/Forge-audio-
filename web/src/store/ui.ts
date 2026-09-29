@@ -37,6 +37,8 @@ interface UiState {
   forward: View[];
   panel: Panel;
   nowPlaying: boolean;
+  /** Floating reduced video player. */
+  miniVideo: boolean;
   eqOpen: boolean;
   pickerTracks: Track[] | null;
   menu: MenuState | null;
@@ -48,6 +50,7 @@ interface UiState {
   togglePanel: (p: Exclude<Panel, null>) => void;
   setPanel: (p: Panel) => void;
   setNowPlaying: (v: boolean) => void;
+  setMiniVideo: (v: boolean) => void;
   setEqOpen: (v: boolean) => void;
   openPicker: (tracks: Track[] | null) => void;
   openMenu: (m: MenuState | null) => void;
@@ -64,6 +67,7 @@ export const useUi = create<UiState>()((set, get) => ({
   forward: [],
   panel: null,
   nowPlaying: false,
+  miniVideo: false,
   eqOpen: false,
   pickerTracks: null,
   menu: null,
@@ -87,8 +91,10 @@ export const useUi = create<UiState>()((set, get) => ({
     const [next, ...forward] = get().forward;
     if (next) set({ view: next, forward, back: [...get().back, get().view] });
   },
-  togglePanel: (p) => set({ panel: get().panel === p ? null : p }),
-  setPanel: (panel) => set({ panel }),
+  // Only one video at a time: opening the video panel closes the reduced player and vice versa.
+  togglePanel: (p) => set({ panel: get().panel === p ? null : p, miniVideo: p === 'video' ? false : get().miniVideo }),
+  setPanel: (panel) => set({ panel, miniVideo: panel === 'video' ? false : get().miniVideo }),
+  setMiniVideo: (miniVideo) => set({ miniVideo, panel: miniVideo && get().panel === 'video' ? null : get().panel, nowPlaying: miniVideo ? false : get().nowPlaying }),
   setNowPlaying: (nowPlaying) => set({ nowPlaying }),
   setEqOpen: (eqOpen) => set({ eqOpen }),
   openPicker: (pickerTracks) => set({ pickerTracks, menu: null }),

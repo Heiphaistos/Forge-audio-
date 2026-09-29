@@ -14,6 +14,34 @@ export function useEscape(open: boolean, close: () => void) {
   }, [open, close]);
 }
 
+declare global {
+  interface Window {
+    /** Remote control used by the desktop tray and the mobile apps' notification buttons. */
+    __forgeRemote?: (action: 'toggle' | 'play' | 'pause' | 'next' | 'prev') => void;
+    /** Current track for native notifications. */
+    __forgeNowPlaying?: () => { title: string; author: string; thumbnail: string | null; playing: boolean } | null;
+  }
+}
+
+export function useRemoteControl() {
+  useEffect(() => {
+    window.__forgeRemote = (action) => {
+      const p = usePlayer.getState();
+      if (action === 'toggle') p.togglePlay();
+      else if (action === 'play') { if (engine.paused) p.togglePlay(); }
+      else if (action === 'pause') engine.pause();
+      else if (action === 'next') p.next(false);
+      else if (action === 'prev') p.prev();
+    };
+    window.__forgeNowPlaying = () => {
+      const p = usePlayer.getState();
+      const t = p.queue[p.index];
+      return t ? { title: t.title, author: t.author || '', thumbnail: t.thumbnail, playing: p.playing } : null;
+    };
+    return () => { delete window.__forgeRemote; delete window.__forgeNowPlaying; };
+  }, []);
+}
+
 /** OS media keys / lock screen controls. */
 export function useMediaSession() {
   const track = usePlayer((s) => s.queue[s.index]);
@@ -72,6 +100,7 @@ export function useShortcuts() {
         case 'l': case 'L': ui.togglePanel('lyrics'); break;
         case 'q': case 'Q': ui.togglePanel('queue'); break;
         case 'v': case 'V': ui.togglePanel('video'); break;
+        case 'i': case 'I': ui.setMiniVideo(!ui.miniVideo); break;
         case 'e': case 'E': ui.setEqOpen(!ui.eqOpen); break;
         case 'f': case 'F': if (p.queue[p.index]) ui.setNowPlaying(!ui.nowPlaying); break;
         case '/': e.preventDefault(); focusSearch(); break;

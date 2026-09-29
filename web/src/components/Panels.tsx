@@ -1,4 +1,4 @@
-import { X, Trash2, Loader2, Maximize, Radio, GripVertical } from 'lucide-react';
+import { X, Trash2, Loader2, Maximize, Minimize, Maximize2, Radio, GripVertical, GripHorizontal, PictureInPicture2, AppWindow } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { usePlayer, useCurrentTrack } from '../store/player';
 import { useUi } from '../store/ui';
@@ -126,14 +126,26 @@ export function LyricsView({ big = false }: { big?: boolean }) {
   );
 }
 
+type FsDocument = Document & { webkitFullscreenElement?: Element; webkitExitFullscreen?: () => void };
+type FsElement = HTMLElement & { webkitRequestFullscreen?: () => void };
+type IosVideo = HTMLVideoElement & { webkitEnterFullscreen?: () => void };
+
+function fullscreenElement() {
+  const d = document as FsDocument;
+  return d.fullscreenElement || d.webkitFullscreenElement || null;
+}
+
 /** Muted video kept in sync with the audio engine (audio never stops when toggling video). */
-export function VideoView() {
+export function VideoView({ variant = 'panel' }: { variant?: 'panel' | 'mini' | 'np' }) {
   const track = useCurrentTrack();
   const playing = usePlayer((s) => s.playing);
   const rate = usePlayer((s) => s.rate);
+  const setMiniVideo = useUi((s) => s.setMiniVideo);
   const ref = useRef<HTMLVideoElement>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [isFs, setIsFs] = useState(false);
+  const [isPip, setIsPip] = useState(false);
   const meta = useRef<{ seekable: boolean; offset: number }>({ seekable: true, offset: 0 });
 
   useEffect(() => {
@@ -165,13 +177,111 @@ export function VideoView() {
     return () => clearInterval(t);
   }, [playing, rate, status]);
 
+  // Track fullscreen / picture-in-picture state so the buttons always do the right thing.
+  useEffect(() => {
+    const onFs = () => setIsFs(fullscreenElement() === wrap.current);
+    const v = ref.current;
+    const onPipIn = () => setIsPip(true);
+    const onPipOut = () => setIsPip(false);
+    document.addEventListener('fullscreenchange', onFs);
+    document.addEventListener('webkitfullscreenchange', onFs);
+    v?.addEventListener('enterpictureinpicture', onPipIn);
+    v?.addEventListener('leavepictureinpicture', onPipOut);
+    return () => {
+      document.removeEventListener('fullscreenchange', onFs);
+      document.removeEventListener('webkitfullscreenchange', onFs);
+      v?.removeEventListener('enterpictureinpicture', onPipIn);
+      v?.removeEventListener('leavepictureinpicture', onPipOut);
+      if (document.pictureInPictureElement === v) document.exitPictureInPicture().catch(() => {});
+    };
+  }, []);
+
+  const toggleFullscreen = () => {
+    const d = document as FsDocument;
+    if (fullscreenElement()) {
+      (d.exitFullscreen ? d.exitFullscreen() : Promise.resolve(d.webkitExitFullscreen?.())).catch(() => {});
+      return;
+    }
+    const el = wrap.current as FsElement | null;
+    if (el?.requestFullscreen) el.requestFullscreen().catch(() => {});
+    else if (el?.webkitRequestFullscreen) el.webkitRequestFullscreen();
+    else (ref.current as IosVideo | null)?.webkitEnterFullscreen?.(); // iPhone: only the video itself can go fullscreen
+  };
+
+  const togglePip = async () => {
+    const v = ref.current;
+    if (!v) return;
+    try {
+      if (document.pictureInPictureElement) await document.exitPictureInPicture();
+      else await v.requestPictureInPicture();
+    } catch {
+      useUi.getState().toast("L'image dans l'image n'est pas disponible dans ce navigateur", 'error');
+    }
+  };
+
+  const toMini = () => {
+    if (fullscreenElement()) (document as FsDocument).exitFullscreen?.().catch(() => {});
+    setMiniVideo(true);
+  };
+
   if (!track) return <div className="empty">Aucun titre en cours</div>;
+  const pipSupported = typeof document !== 'undefined' && 'pictureInPictureEnabled' in document && document.pictureInPictureEnabled;
   return (
-    <div className="video-wrap" ref={wrap}>
+    <div className={`video-wrap video-${variant} ${isFs ? 'is-fs' : ''}`} ref={wrap} onDoubleClick={toggleFullscreen}>
       <video ref={ref} muted playsInline className="video" onClick={() => usePlayer.getState().togglePlay()} poster={track.thumbnail || undefined} />
       {status === 'loading' && <div className="video-status"><Loader2 className="spin" /> Chargement de la vidéo…</div>}
       {status === 'error' && <div className="video-status">Vidéo indisponible pour ce titre</div>}
-      <button className="icon-btn video-fs" onClick={() => wrap.current?.requestFullscreen?.()} aria-label="Plein écran"><Maximize size={18} /></button>
+      {isPip && <div className="video-status">Lecture en image dans l'image</div>}
+      <div className="video-tools" onDoubleClick={(e) => e.stopPropagation()}>
+        {isFs && <span className="video-fs-title ellipsis">{track.title}</span>}
+        {variant !== 'mini' && (
+          <button className="icon-btn" onClick={toMini} title="Lecteur réduit" aria-label="Lecteur réduit"><PictureInPicture2 size={18} /></button>
+        )}
+        {pipSupported && (
+          <button className={`icon-btn ${isPip ? 'on' : ''}`} onClick={togglePip} title="Image dans l'image (par-dessus les autres fenêtres)" aria-label="Image dans l'image"><AppWindow size={18} /></button>
+        )}
+        <button className="icon-btn" onClick={toggleFullscreen} title={isFs ? 'Quitter le plein écran (Échap)' : 'Plein écran'} aria-label={isFs ? 'Quitter le plein écran' : 'Plein écran'}>
+          {isFs ? <Minimize size={18} /> : <Maximize size={18} />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Floating, draggable video that stays on screen while browsing the app. */
+export function MiniVideo() {
+  const open = useUi((s) => s.miniVideo);
+  const setMiniVideo = useUi((s) => s.setMiniVideo);
+  const setPanel = useUi((s) => s.setPanel);
+  const hasTrack = usePlayer((s) => !!s.queue[s.index]);
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  const drag = useRef<{ dx: number; dy: number } | null>(null);
+  const box = useRef<HTMLDivElement>(null);
+
+  if (!open || !hasTrack) return null;
+  const onDown = (e: React.PointerEvent) => {
+    const r = box.current!.getBoundingClientRect();
+    drag.current = { dx: e.clientX - r.left, dy: e.clientY - r.top };
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  };
+  const onMove = (e: React.PointerEvent) => {
+    if (!drag.current || !box.current) return;
+    const w = box.current.offsetWidth;
+    const h = box.current.offsetHeight;
+    setPos({
+      x: Math.max(4, Math.min(window.innerWidth - w - 4, e.clientX - drag.current.dx)),
+      y: Math.max(4, Math.min(window.innerHeight - h - 4, e.clientY - drag.current.dy)),
+    });
+  };
+  return (
+    <div className="mini-video" ref={box} style={pos ? { left: pos.x, top: pos.y, right: 'auto', bottom: 'auto' } : undefined}>
+      <div className="mini-head" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={() => { drag.current = null; }}>
+        <GripHorizontal size={16} className="muted" />
+        <span className="grow" />
+        <button className="icon-btn" onPointerDown={(e) => e.stopPropagation()} onClick={() => { setMiniVideo(false); setPanel('video'); }} title="Agrandir dans le panneau" aria-label="Agrandir"><Maximize2 size={15} /></button>
+        <button className="icon-btn" onPointerDown={(e) => e.stopPropagation()} onClick={() => setMiniVideo(false)} title="Fermer la vidéo (la musique continue)" aria-label="Fermer la vidéo"><X size={16} /></button>
+      </div>
+      <VideoView variant="mini" />
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { useUi } from './store/ui';
 import { usePlayer } from './store/player';
 import { Sidebar, Logo } from './components/Sidebar';
 import { PlayerBar } from './components/PlayerBar';
-import { RightPanel } from './components/Panels';
+import { RightPanel, MiniVideo } from './components/Panels';
 import { NowPlaying } from './components/NowPlaying';
 import { ContextMenu } from './components/ContextMenu';
 import { PlaylistPicker } from './components/PlaylistPicker';
@@ -14,7 +14,7 @@ import { Home } from './views/Home';
 import { Search, Artist } from './views/Search';
 import { Library, PlaylistView, Liked, HistoryView } from './views/Library';
 import { Settings } from './views/Settings';
-import { useAudioEffects, useMediaSession, useShortcuts, useTheme } from './hooks';
+import { useAudioEffects, useMediaSession, useRemoteControl, useShortcuts, useTheme } from './hooks';
 import { api, type User } from './lib/api';
 import { startSync } from './lib/sync';
 
@@ -113,6 +113,7 @@ export function App() {
   useShortcuts();
   useTheme();
   useAudioEffects();
+  useRemoteControl();
 
   const enter = async (user: User | null, sync: boolean) => {
     if (user && sync) {
@@ -147,6 +148,7 @@ export function App() {
       <RightPanel />
       <PlayerBar />
       <NowPlaying />
+      <MiniVideo />
       <ContextMenu />
       <PlaylistPicker />
       <Equalizer />

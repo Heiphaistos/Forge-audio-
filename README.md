@@ -10,7 +10,7 @@ Disponible en **version web** (auto-hébergée) et en **application de bureau** 
 - **Coller un lien** : une vidéo ou une playlist entière (YouTube, SoundCloud, Bandcamp…) → lecture immédiate ou import en playlist, resynchronisable.
 - **Lecteur complet** : file d'attente (glisser-déposer), aléatoire, répétition (file / titre), vitesse 0,5× → 2×, minuteur de sommeil, reprise où vous vous étiez arrêté.
 - **Radio / lecture automatique** : en fin de file, enchaîne sur des titres similaires (mix YouTube).
-- **Vidéo synchronisée** : affichez le clip (jusqu'en 1080p) sans couper le son, en plein écran.
+- **Vidéo synchronisée** : affichez le clip (jusqu'en 1080p) sans couper le son : dans le panneau, en plein écran (bouton ou double-clic, Échap pour sortir), en **lecteur réduit** flottant et déplaçable qui reste affiché pendant la navigation (touche `I`), ou en **image dans l'image** par-dessus les autres fenêtres.
 - **Paroles synchronisées** (LRCLIB) : cliquez une ligne pour y aller.
 - **Son propre** : lecture directe par le système, sans traitement ; l'**égaliseur 10 bandes** (10 préréglages) et le **visualiseur** ne s'activent que si vous les utilisez.
 - **Comptes et sauvegarde automatique** sur le serveur : playlists, likes, historique et file d'attente retrouvés sur tous vos appareils.
@@ -30,6 +30,8 @@ Téléchargez la version pour votre système dans les [Releases](https://github.
 | Linux | `.deb` | `.AppImage` (rendre exécutable et lancer) ou `.tar.gz` |
 
 L'application embarque son serveur et ffmpeg ; **yt-dlp est téléchargé automatiquement** au premier lancement puis mis à jour tous les 3 jours. En version portable Windows, les données sont rangées dans `ForgeAudio-data` à côté de l'exécutable.
+
+**Fermer la fenêtre ne coupe pas la musique** : Forge Audio reste dans la zone de notification (barre des tâches) avec Lecture/Pause, Suivant, Précédent et Quitter (clic droit sur l'icône). Option désactivable dans ce même menu.
 
 **Connexion au serveur** : dans *Paramètres → Application de bureau*, entrez l'adresse de votre serveur (ex. `https://musique.mon-vps.fr`) pour utiliser le même compte et la même bibliothèque que sur le web. Sans serveur, l'application fonctionne seule et sauvegarde la bibliothèque sur l'ordinateur.
 

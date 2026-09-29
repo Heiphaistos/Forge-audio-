@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, Menu, dialog, ipcMain } from 'electron';
+import { app, BrowserWindow, shell, Menu, dialog, ipcMain, Tray, nativeImage, Notification } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
@@ -19,15 +19,13 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   let win = null;
+  let tray = null;
+  let quitting = false;
+  let trayHintShown = false;
   let server = null;
   let serverPort = null;
 
-  app.on('second-instance', () => {
-    if (win) {
-      if (win.isMinimized()) win.restore();
-      win.focus();
-    }
-  });
+  app.on('second-instance', () => showWindow());
 
   function ffmpegPath() {
     try {
@@ -89,6 +87,47 @@ if (!app.requestSingleInstanceLock()) {
     return config.serverUrl || null;
   });
 
+  const remote = (action) => win?.webContents.executeJavaScript(`window.__forgeRemote && window.__forgeRemote(${JSON.stringify(action)})`).catch(() => {});
+
+  function showWindow() {
+    if (!win) return createWindow();
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.focus();
+  }
+
+  async function refreshTray() {
+    if (!tray) return;
+    const np = await win?.webContents.executeJavaScript('window.__forgeNowPlaying ? window.__forgeNowPlaying() : null').catch(() => null);
+    tray.setToolTip(np ? `Forge Audio — ${np.title}${np.author ? ` · ${np.author}` : ''}` : 'Forge Audio');
+    tray.setContextMenu(Menu.buildFromTemplate([
+      ...(np ? [{ label: np.title.slice(0, 60), enabled: false }, { type: 'separator' }] : []),
+      { label: 'Afficher Forge Audio', click: showWindow },
+      { label: np?.playing ? 'Pause' : 'Lecture', click: () => remote('toggle') },
+      { label: 'Titre suivant', click: () => remote('next') },
+      { label: 'Titre précédent', click: () => remote('prev') },
+      { type: 'separator' },
+      {
+        label: 'Continuer la lecture quand la fenêtre est fermée',
+        type: 'checkbox',
+        checked: readConfig().closeToTray !== false,
+        click: (item) => writeConfig({ ...readConfig(), closeToTray: item.checked }),
+      },
+      { label: 'Quitter', click: () => { quitting = true; app.quit(); } },
+    ]));
+  }
+
+  function createTray() {
+    if (tray) return;
+    const icon = nativeImage.createFromPath(path.join(here, 'build/icon.png')).resize({ width: process.platform === 'darwin' ? 18 : 24 });
+    tray = new Tray(icon);
+    tray.on('click', showWindow);
+    tray.on('right-click', () => refreshTray());
+    refreshTray();
+    // Keep the tooltip / menu in sync with what is playing.
+    setInterval(refreshTray, 5000).unref?.();
+  }
+
   const splash = (text) => `data:text/html;charset=utf-8,${encodeURIComponent(`<!doctype html><html><body style="margin:0;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:#0b0908;color:#f6f3f1;font:600 16px system-ui,sans-serif"><div style="font-size:26px">Forge <span style="color:#ff6a1a">Audio</span></div><div id="t" style="color:#a39b95;font-weight:400">${text}</div></body></html>`)}`;
 
   async function createWindow() {
@@ -111,7 +150,18 @@ if (!app.requestSingleInstanceLock()) {
       return { action: 'deny' };
     });
 
+    // Closing the window keeps the music playing: the app lives on in the system tray.
+    win.on('close', (e) => {
+      if (quitting || readConfig().closeToTray === false) return;
+      e.preventDefault();
+      win.hide();
+      if (!trayHintShown && Notification.isSupported()) {
+        trayHintShown = true;
+        new Notification({ title: 'Forge Audio continue en arrière-plan', body: "La musique continue. Clic droit sur l'icône Forge Audio pour la contrôler ou quitter." }).show();
+      }
+    });
     win.on('closed', () => { win = null; });
+    createTray();
     await openApp();
   }
 
@@ -154,14 +204,14 @@ if (!app.requestSingleInstanceLock()) {
     process.env.FORGE_AUDIO_VERSION = app.getVersion();
     if (process.platform !== 'darwin') Menu.setApplicationMenu(null);
     createWindow();
-    app.on('activate', () => { if (!win) createWindow(); });
+    app.on('activate', () => showWindow());
   });
 
   app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') app.quit();
+    if (process.platform !== 'darwin' && (quitting || !tray)) app.quit();
   });
 
-  app.on('before-quit', () => { server?.close().catch(() => {}); });
+  app.on('before-quit', () => { quitting = true; server?.close().catch(() => {}); });
 
   // Keep the managed yt-dlp folder from growing if an update left a partial file behind.
   app.on('will-quit', () => {

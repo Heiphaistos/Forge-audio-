@@ -402,8 +402,27 @@ kbd {
 .video-wrap:fullscreen { border-radius: 0; }
 .video { width: 100%; height: 100%; object-fit: contain; display: block; cursor: pointer; }
 .video-status { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--muted); background: rgba(0, 0, 0, .55); }
-.video-fs { position: absolute; right: 8px; bottom: 8px; background: rgba(0, 0, 0, .6); color: #fff; opacity: 0; }
-.video-wrap:hover .video-fs { opacity: 1; }
+/* Video controls: always reachable (touch screens have no hover), fully visible on hover / in fullscreen. */
+.video-tools {
+  position: absolute; right: 8px; bottom: 8px; left: 8px; display: flex; align-items: center; justify-content: flex-end; gap: 4px;
+  opacity: .55; transition: opacity .2s; pointer-events: none;
+}
+.video-tools > * { pointer-events: auto; }
+.video-tools .icon-btn { background: rgba(0, 0, 0, .65); color: #fff; width: 34px; height: 34px; }
+.video-tools .icon-btn:hover { background: rgba(0, 0, 0, .85); }
+.video-wrap:hover .video-tools, .video-wrap.is-fs .video-tools { opacity: 1; }
+.video-fs-title { margin-right: auto; font-weight: 700; font-size: 16px; text-shadow: 0 2px 8px #000; }
+.video-wrap.is-fs .video-tools { right: 24px; bottom: 24px; left: 24px; }
+.video-wrap.is-fs .video-tools .icon-btn { width: 44px; height: 44px; }
+.video-wrap:fullscreen { aspect-ratio: auto; width: 100vw; height: 100vh; }
+.mini-video {
+  position: fixed; right: 16px; bottom: calc(var(--player-h) + 20px); z-index: 45; width: min(380px, calc(100vw - 32px));
+  background: #000; border-radius: 12px; overflow: hidden; box-shadow: 0 20px 50px rgba(0, 0, 0, .65); border: 1px solid var(--border);
+  animation: fade-up .2s ease;
+}
+.mini-head { display: flex; align-items: center; gap: 2px; padding: 4px 6px 4px 10px; background: var(--surface-2); cursor: grab; touch-action: none; user-select: none; }
+.mini-head:active { cursor: grabbing; }
+.mini-video .video-wrap { border-radius: 0; }
 
 /* ---------- now playing ---------- */
 .now-playing { position: fixed; inset: 0; z-index: 50; background: #050404; display: flex; flex-direction: column; animation: fade-up .25s ease; overflow: hidden; }
