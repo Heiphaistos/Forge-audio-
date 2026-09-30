@@ -3,6 +3,7 @@ import { engine } from './audio/engine';
 import { usePlayer } from './store/player';
 import { useUi, useSettings, ACCENTS } from './store/ui';
 import { dominantColor } from './lib/color';
+import { openLink } from './views/Home';
 
 /** Close a dialog or overlay with the Escape key while it is open. */
 export function useEscape(open: boolean, close: () => void) {
@@ -17,28 +18,55 @@ export function useEscape(open: boolean, close: () => void) {
 declare global {
   interface Window {
     /** Remote control used by the desktop tray and the mobile apps' notification buttons. */
-    __forgeRemote?: (action: 'toggle' | 'play' | 'pause' | 'next' | 'prev') => void;
-    /** Current track for native notifications. */
-    __forgeNowPlaying?: () => { title: string; author: string; thumbnail: string | null; playing: boolean } | null;
+    __forgeRemote?: (action: 'toggle' | 'play' | 'pause' | 'next' | 'prev' | 'seek', value?: number) => void;
+    /** Current track for native notifications (position and duration in seconds, duration null when unknown or live). */
+    __forgeNowPlaying?: () => { title: string; author: string; thumbnail: string | null; playing: boolean; position: number; duration: number | null } | null;
+    /** Mobile apps' share target: plays or imports the first link found in the shared text. */
+    __forgeOpenLink?: (text: string) => void;
+    /** Android Back button: closes the topmost overlay or goes back one view. Returns false when there is nothing left to close. */
+    __forgeBack?: () => boolean;
   }
 }
 
 export function useRemoteControl() {
   useEffect(() => {
-    window.__forgeRemote = (action) => {
+    window.__forgeRemote = (action, value) => {
       const p = usePlayer.getState();
       if (action === 'toggle') p.togglePlay();
       else if (action === 'play') { if (engine.paused) p.togglePlay(); }
       else if (action === 'pause') engine.pause();
       else if (action === 'next') p.next(false);
       else if (action === 'prev') p.prev();
+      else if (action === 'seek' && Number.isFinite(value)) p.seek(value!);
     };
     window.__forgeNowPlaying = () => {
       const p = usePlayer.getState();
       const t = p.queue[p.index];
-      return t ? { title: t.title, author: t.author || '', thumbnail: t.thumbnail, playing: p.playing } : null;
+      if (!t) return null;
+      const duration = t.isLive ? null : engine.duration;
+      return { title: t.title, author: t.author || '', thumbnail: t.thumbnail, playing: p.playing, position: engine.currentTime, duration: Number.isFinite(duration) ? duration : null };
     };
-    return () => { delete window.__forgeRemote; delete window.__forgeNowPlaying; };
+    window.__forgeBack = () => {
+      const ui = useUi.getState();
+      if (document.fullscreenElement) { document.exitFullscreen().catch(() => {}); return true; }
+      if (ui.menu) ui.openMenu(null);
+      else if (ui.pickerTracks) ui.openPicker(null);
+      else if (ui.eqOpen) ui.setEqOpen(false);
+      else if (ui.sidebarOpen) ui.setSidebarOpen(false);
+      else if (ui.nowPlaying) ui.setNowPlaying(false);
+      else if (ui.panel) ui.setPanel(null);
+      else if (ui.back.length) ui.goBack();
+      else return false;
+      return true;
+    };
+    window.__forgeOpenLink = (text) => {
+      const url = text.match(/https?:\/\/\S+/)?.[0];
+      const { toast } = useUi.getState();
+      if (!url) return toast('Aucun lien dans le texte partagé', 'error');
+      toast('Ouverture du lien partagé…');
+      openLink(url).catch((err) => toast((err as Error).message, 'error'));
+    };
+    return () => { delete window.__forgeRemote; delete window.__forgeNowPlaying; delete window.__forgeBack; delete window.__forgeOpenLink; };
   }, []);
 }
 

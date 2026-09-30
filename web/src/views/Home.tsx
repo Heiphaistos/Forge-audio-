@@ -16,27 +16,30 @@ function greeting() {
   return 'Bonsoir';
 }
 
+/** Play a pasted or shared link: a track plays at once, a playlist is imported. Shared by the paste box and the mobile apps' share target. */
+export async function openLink(url: string) {
+  const { toast, navigate } = useUi.getState();
+  const res = await api.resolve(url.trim());
+  if (res.type === 'playlist' && res.tracks.length > 1) {
+    const pl = useLibrary.getState().createPlaylist(res.title || 'Playlist importée', res.tracks, { sourceUrl: res.url, cover: res.thumbnail });
+    toast(`Playlist « ${pl.name} » importée (${res.tracks.length} titres)`, 'success');
+    navigate({ name: 'playlist', id: pl.id });
+  } else {
+    usePlayer.getState().playList(res.tracks);
+  }
+}
+
 export function ImportBox() {
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const toast = useUi((s) => s.toast);
-  const navigate = useUi((s) => s.navigate);
-  const playList = usePlayer((s) => s.playList);
-  const createPlaylist = useLibrary((s) => s.createPlaylist);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isUrl(url)) return toast('Collez un lien valide (YouTube, SoundCloud, Dailymotion, Bandcamp…)', 'error');
     setLoading(true);
     try {
-      const res = await api.resolve(url.trim());
-      if (res.type === 'playlist' && res.tracks.length > 1) {
-        const pl = createPlaylist(res.title || 'Playlist importée', res.tracks, { sourceUrl: res.url, cover: res.thumbnail });
-        toast(`Playlist « ${pl.name} » importée (${res.tracks.length} titres)`, 'success');
-        navigate({ name: 'playlist', id: pl.id });
-      } else {
-        playList(res.tracks);
-      }
+      await openLink(url);
       setUrl('');
     } catch (err) {
       toast((err as Error).message, 'error');
