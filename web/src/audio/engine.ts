@@ -63,6 +63,8 @@ class AudioEngine {
   private loudness = new Map<string, Promise<number>>();
   private xfade: { timer: ReturnType<typeof setInterval>; old: HTMLAudioElement } | null = null;
   private listeners = new Set<Listener>();
+  /** Told when a track plays from SoundCloud / Dailymotion because YouTube blocks the server. */
+  onFallback?: (track: Track, source: string) => void;
   private mediaListeners: [MediaEventName, EventListener][] = [];
 
   constructor() {
@@ -218,7 +220,7 @@ class AudioEngine {
     const q = this.quality;
     const hit = this.prefetched.get(track.url);
     if (hit && hit.q === q && Date.now() - hit.at < 60 * 60 * 1000) return hit.promise;
-    const promise = api.playback(track.url, 'audio', undefined, q);
+    const promise = api.playback(track.url, 'audio', undefined, q, track);
     this.prefetched.set(track.url, { at: Date.now(), q, promise });
     promise.catch(() => this.prefetched.delete(track.url));
     if (this.prefetched.size > 50) this.prefetched.delete(this.prefetched.keys().next().value!);
@@ -351,6 +353,7 @@ class AudioEngine {
     const pb = await this.resolve(track);
     if (token !== this.loadToken) return false;
     this.playback = pb;
+    if (pb.fallback) this.onFallback?.(track, pb.fallback.source);
     // Known loudness (prefetched): start at the right level; otherwise correct as soon as it is measured.
     this.norm = await Promise.race([gain, new Promise<number>((r) => setTimeout(() => r(this.norm), 250))]);
     if (token !== this.loadToken) return false;

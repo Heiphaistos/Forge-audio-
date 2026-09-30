@@ -55,6 +55,8 @@ export interface Playback {
   duration: number | null;
   isLive: boolean;
   mime: string;
+  /** YouTube blocked the server: the same title plays from another site. */
+  fallback?: { url: string; source: 'soundcloud' | 'dailymotion' };
 }
 
 export interface LyricsResult {

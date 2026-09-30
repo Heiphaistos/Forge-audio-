@@ -5,6 +5,7 @@
  */
 import { runYtdlp, buildListArgs, parseYtdlpJson } from './ytdlp.js';
 import { HttpError, TtlCache } from './util.js';
+import { searchDailymotion } from './search.js';
 
 const TIMEOUT = 10_000;
 const UA = 'ForgeAudio/0.1 (+https://github.com/Heiphaistos/Forge-audio-)';
@@ -205,6 +206,48 @@ export async function withDrmFallback(ytdlp, url, fn) {
   } catch (err) {
     if (!/DRM/i.test(err?.message || '') || !/(^|\.)soundcloud\.com$/.test(new URL(url).hostname)) throw err;
     return fn(await soundcloudFallback(ytdlp, url));
+  }
+}
+
+/** YouTube refuses the server's address (« Sign in to confirm you're not a bot »): an IP block, every client gets it. */
+export const isBotCheck = (err) => /confirm you.?re not a bot|sign in to confirm/i.test(err?.message || '');
+const isYoutube = (url) => { try { return /(^|\.)(youtube\.com|youtu\.be)$/.test(new URL(url).hostname); } catch { return false; } };
+/** « Daft Punk - Instant Crush (Official Video) ft. X » -> « Daft Punk - Instant Crush ft. X » for another site's search. */
+export const cleanSearchTitle = (t) => String(t || '')
+  .replace(/[([][^)\]]*(official|officiel|video|vid[ée]o|audio|lyrics?|paroles|clip|visualizer|hd|4k|remaster(ed)?)[^)\]]*[)\]]/gi, ' ')
+  .replace(/\s+/g, ' ').trim();
+
+/** Same title on SoundCloud (its 30 s previews of Go+ titles skipped), else Dailymotion. */
+async function alternativeMatch(ytdlp, wanted) {
+  const title = cleanSearchTitle(wanted.title);
+  const author = String(wanted.author || '').replace(/\s*-\s*Topic$/i, '').replace(/VEVO$/i, '').trim();
+  const query = (title.toLowerCase().includes(author.toLowerCase()) || !author ? title : `${author} - ${title}`).slice(0, 200);
+  const sources = [
+    async () => parseYtdlpJson(await runYtdlp(ytdlp, buildListArgs(`scsearch8:${query}`, { maxEntries: 8 })), { maxEntries: 8 }).tracks,
+    () => searchDailymotion(query, 6),
+  ];
+  for (const find of sources) {
+    let tracks = [];
+    try { tracks = await find(); } catch { continue; }
+    const full = tracks.filter((c) => !(c.duration && c.duration <= 31) || (wanted.duration && wanted.duration <= 45));
+    const best = pickBestMatch(full, wanted);
+    if (best) return best.url;
+  }
+  throw new HttpError(`YouTube bloque le serveur et « ${query} » est introuvable ailleurs`, 502, 'YOUTUBE_BLOCKED');
+}
+
+/**
+ * Run `fn(url)`; when YouTube blocks the server, play the same title from SoundCloud / Dailymotion instead.
+ * `wanted` = { title, author, duration } sent by the client (the blocked server cannot read the YouTube page).
+ * The result says so (`fallback`), so the app can tell the listener.
+ */
+export async function withBotFallback(ytdlp, url, wanted, fn) {
+  try {
+    return await fn(url);
+  } catch (err) {
+    if (!isBotCheck(err) || !isYoutube(url) || !wanted?.title) throw err;
+    const alt = await matches.wrap(`alt|${url}`, () => alternativeMatch(ytdlp, wanted));
+    return { ...(await fn(alt)), fallback: { url: alt, source: /soundcloud/.test(alt) ? 'soundcloud' : 'dailymotion' } };
   }
 }
 

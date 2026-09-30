@@ -350,6 +350,13 @@ export function bindEngine() {
   engine.setRate(st.rate);
   usePlayer.setState({ position: Number(localStorage.getItem(POSITION_KEY)) || 0 });
 
+  let fallbackToldAt = 0;
+  engine.onFallback = (track, source) => {
+    if (Date.now() - fallbackToldAt < 30 * 60_000) return;
+    fallbackToldAt = Date.now();
+    useUi.getState().toast(`YouTube bloque le serveur en ce moment : « ${track.title} » est lu depuis ${source === 'soundcloud' ? 'SoundCloud' : 'Dailymotion'}.`, 'info');
+  };
+
   let lastSave = 0;
   let crossedFor = -1;
   engine.on('timeupdate', () => {

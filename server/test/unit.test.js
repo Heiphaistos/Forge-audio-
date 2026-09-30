@@ -136,3 +136,12 @@ test('password policy and generator', async () => {
   assert.equal(await verifyPassword('Secret-1', h), true);
   assert.equal(await verifyPassword('Secret-2', h), false);
 });
+
+test('YouTube block fallback: detects the bot check and cleans titles for another site', async () => {
+  const { isBotCheck, cleanSearchTitle } = await import('../src/streaming.js');
+  assert.equal(isBotCheck(new Error('ERROR: [youtube] x: Sign in to confirm you’re not a bot. Use --cookies')), true);
+  assert.equal(isBotCheck(new Error('Video unavailable')), false);
+  assert.equal(cleanSearchTitle('Daft Punk - Instant Crush (Official Video) ft. Julian Casablancas'), 'Daft Punk - Instant Crush ft. Julian Casablancas');
+  assert.equal(cleanSearchTitle('Stromae - Alors on danse [Clip Officiel]'), 'Stromae - Alors on danse');
+  assert.equal(cleanSearchTitle('Justice - D.A.N.C.E. (Radio Edit)'), 'Justice - D.A.N.C.E. (Radio Edit)');
+});
