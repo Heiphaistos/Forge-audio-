@@ -24,7 +24,8 @@ export function tasteOf(lib, max = 60) {
   return [...score.entries()].filter(([u]) => !hidden.has(u)).sort((a, b) => b[1] - a[1]).slice(0, max).map(([u]) => byUrl.get(u));
 }
 
-const artistOf = (t) => String(t?.author || '').replace(/\s*-\s*Topic$/i, '').replace(/VEVO$/i, '').trim().toLowerCase();
+const artistName = (t) => String(t?.author || '').replace(/\s*-\s*Topic$/i, '').replace(/VEVO$/i, '').trim();
+const artistOf = (t) => artistName(t).toLowerCase();
 
 /** Blend two tastes: shared tracks first, then one of each in turn, no duplicates. `match` = artist overlap in %. */
 export function blend(a, b, size = 50) {
@@ -40,6 +41,27 @@ export function blend(a, b, size = 50) {
   const inter = [...aa].filter((x) => ba.has(x)).length;
   const match = aa.size && ba.size ? Math.round((100 * inter) / Math.min(aa.size, ba.size)) : 0;
   return { tracks: out, common: common.length, match };
+}
+
+/**
+ * Listening stats of a library over the last `days` (Discord /playlist stats; the app computes the
+ * same numbers itself in views/Stats.tsx so they stay available offline).
+ */
+export function statsOf(lib, days = 28, now = Date.now()) {
+  const plays = (lib?.history || []).filter((h) => h?.track && h.at >= now - days * 86400000);
+  const tracks = new Map();
+  const artists = new Map();
+  let seconds = 0;
+  for (const { track } of plays) {
+    seconds += track.duration || 0;
+    const t = tracks.get(track.url) || { track, n: 0 };
+    t.n += 1;
+    tracks.set(track.url, t);
+    const name = artistName(track);
+    if (name) { const a = artists.get(name.toLowerCase()) || { name, n: 0 }; a.n += 1; artists.set(name.toLowerCase(), a); }
+  }
+  const top = (m) => [...m.values()].sort((a, b) => b.n - a.n).slice(0, 10);
+  return { days, plays: plays.length, minutes: Math.round(seconds / 60), artistCount: artists.size, topArtists: top(artists), topTracks: top(tracks) };
 }
 
 export function registerActivity(app, { accounts, userData, hub }) {
@@ -60,9 +82,9 @@ export function registerActivity(app, { accounts, userData, hub }) {
     return { ok: true, shared: true };
   });
 
-  app.get('/api/activity', async (request) => {
+  const friendsOf = (username) => {
     const now = Date.now();
-    const friends = accounts.list().filter((a) => a.username !== me(request)).map((a) => {
+    return accounts.list().filter((a) => a.username !== username).map((a) => {
       const data = dataOf(a.username);
       if (!sharing(data)) return null;
       const l = live.get(a.username);
@@ -70,18 +92,21 @@ export function registerActivity(app, { accounts, userData, hub }) {
       const entry = l && (!last || l.at >= last.at) ? l : last ? { track: last.track, at: last.at } : null;
       return entry ? { user: a.username, displayName: a.displayName, ...entry, live: now - entry.at < LIVE_MS } : null;
     }).filter(Boolean).sort((x, y) => y.at - x.at);
-    return { friends };
-  });
+  };
 
-  app.get('/api/blend/:username', async (request) => {
-    const other = String(request.params.username || '').toLowerCase();
+  const blendOf = (username, otherName) => {
+    const other = String(otherName || '').toLowerCase();
     const acc = accounts.get(other);
-    if (!acc || other === me(request)) throw new HttpError('Compte introuvable', 404);
-    const mine = dataOf(me(request));
+    if (!acc || other === username) throw new HttpError('Compte introuvable', 404);
+    const mine = dataOf(username);
     const theirs = dataOf(other);
     if (!sharing(theirs)) throw new HttpError(`${acc.displayName} ne partage pas son activité : Blend indisponible`, 403, 'NOT_SHARED');
     if (!sharing(mine)) throw new HttpError('Activez « Partager mon activité » pour créer un Blend', 403, 'NOT_SHARED');
-    const r = blend(tasteOf(mine?.library), tasteOf(theirs?.library));
-    return { with: { username: other, displayName: acc.displayName }, ...r };
-  });
+    return { with: { username: other, displayName: acc.displayName }, ...blend(tasteOf(mine?.library), tasteOf(theirs?.library)) };
+  };
+
+  app.get('/api/activity', async (request) => ({ friends: friendsOf(me(request)) }));
+  app.get('/api/blend/:username', async (request) => blendOf(me(request), request.params.username));
+
+  return { friendsOf, blendOf, statsOf: (username, days) => statsOf(dataOf(username)?.library, days) };
 }

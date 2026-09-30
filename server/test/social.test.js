@@ -194,3 +194,32 @@ test('friend activity and Blend follow the « share my activity » setting', asy
   assert.equal((await lohan('GET', '/api/blend/evan')).status, 403, 'blending requires sharing yourself');
   assert.equal((await evan('GET', '/api/blend/evan')).status, 404);
 });
+
+test('bot: friend activity, stats and Blend of linked Discord members', async () => {
+  const { app, evan, polo } = await setup();
+  const bot = async (method, url) => {
+    const res = await app.inject({ method, url, headers: { authorization: `Bearer ${BOT}` } });
+    return { status: res.statusCode, body: res.json() };
+  };
+  const link = async (as, discordId) => {
+    const { code } = (await as('POST', '/api/me/discord/code')).body;
+    await app.inject({ method: 'POST', url: '/api/bot/link', payload: { code, discordId }, headers: { authorization: `Bearer ${BOT}` } });
+  };
+  const now = Date.now();
+  await evan('PUT', '/api/me/data', { baseRev: 0, data: { library: { liked: [track(1)], history: [{ track: track(1), at: now }, { track: track(1), at: now - 1000 }, { track: track(2), at: now - 40 * 86400000 }], playCounts: {} }, settings: {} } });
+  await polo('PUT', '/api/me/data', { baseRev: 0, data: { library: { liked: [track(1), track(3)], history: [{ track: track(3), at: now }], playCounts: {} }, settings: {} } });
+  await link(evan, '111111111111111111');
+  assert.equal((await bot('GET', '/api/bot/users/111111111111111111/blend/222222222222222222')).body.code, 'OTHER_NOT_LINKED');
+  await link(polo, '222222222222222222');
+
+  const act = (await bot('GET', '/api/bot/users/111111111111111111/activity')).body.friends;
+  assert.deepEqual(act.map((f) => [f.user, f.track.url]), [['polo', track(3).url]]);
+  const st = (await bot('GET', '/api/bot/users/111111111111111111/stats?days=28')).body;
+  assert.equal(st.plays, 2, 'the 40-day-old play is outside 4 weeks');
+  assert.equal(st.minutes, 7);
+  assert.equal(st.topTracks[0].n, 2);
+  assert.equal((await bot('GET', '/api/bot/users/111111111111111111/stats?days=365')).body.plays, 3);
+  const bl = (await bot('GET', '/api/bot/users/111111111111111111/blend/222222222222222222')).body;
+  assert.equal(bl.with.username, 'polo');
+  assert.equal(bl.tracks[0].url, track(1).url);
+});

@@ -17,7 +17,7 @@ export function registerSocial(app, { accounts, userData, dataDir, botToken = pr
   const links = new DiscordLinks(dataDir);
   const isAccount = (u) => !!accounts.get(u);
   const me = (request) => request.user.username;
-  registerActivity(app, { accounts, userData, hub });
+  const activity = registerActivity(app, { accounts, userData, hub });
   const sharedEvent = (users, playlist, extra = {}) => hub.emit(users, { type: 'shared', id: playlist?.id ?? extra.id, playlist: playlist ?? null, ...extra });
 
   // ---------- Live events ----------
@@ -109,6 +109,15 @@ export function registerSocial(app, { accounts, userData, dataDir, botToken = pr
     const username = linked(request);
     const lists = shared.forUser(username).map((p) => ({ id: p.id, name: p.name, owner: p.owner, members: p.members, tracks: p.tracks, updatedAt: p.updatedAt }));
     return { username, displayName: accounts.get(username)?.displayName || username, liked: likedOf(username), shared: lists };
+  });
+  app.get('/api/bot/users/:discordId/activity', async (request) => ({ friends: activity.friendsOf(linked(request)) }));
+  app.get('/api/bot/users/:discordId/stats', async (request) => activity.statsOf(linked(request), Math.min(3650, Math.max(1, Number(request.query.days) || 28))));
+  /** Blend with another linked Discord member. */
+  app.get('/api/bot/users/:discordId/blend/:otherId', async (request) => {
+    const username = linked(request);
+    const other = links.usernameOf(request.params.otherId);
+    if (!other || !isAccount(other)) throw new HttpError('Ce membre n’a pas lié son compte Forge Audio', 404, 'OTHER_NOT_LINKED');
+    return activity.blendOf(username, other);
   });
   /** « Ajouter à une playlist » from Discord into a Forge Audio shared playlist. */
   app.post('/api/bot/users/:discordId/shared/:id/tracks', async (request) => {
