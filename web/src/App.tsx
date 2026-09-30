@@ -16,6 +16,7 @@ import { Library, PlaylistView, Liked, HistoryView } from './views/Library';
 import { Settings } from './views/Settings';
 import { SharedPlaylistView } from './views/Shared';
 import { JamPanel, JamBanner } from './components/Jam';
+import { SelectionBar } from './components/SelectionBar';
 import { startSocial } from './store/social';
 import { useAudioEffects, useMediaSession, useRemoteControl, useShortcuts, useTheme } from './hooks';
 import { api, type User } from './lib/api';
@@ -160,6 +161,7 @@ export function App() {
       <PlaylistPicker />
       <Equalizer />
       <JamPanel />
+      <SelectionBar />
       <Toasts />
     </div>
   );

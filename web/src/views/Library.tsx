@@ -1,4 +1,4 @@
-import { Plus, Upload, Download, FolderOpen, Heart, Play, Shuffle, Trash2, Pencil, Copy, RefreshCw, ListEnd, Loader2, ArrowDownUp, Search as SearchIcon, Check, Users } from 'lucide-react';
+import { Plus, Upload, Download, FolderOpen, Heart, Play, Shuffle, Trash2, Pencil, Copy, RefreshCw, ListEnd, Loader2, ArrowDownUp, Search as SearchIcon, Check, Users, GitMerge, Pin, PinOff, ImagePlus, Folder, ListPlus } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import { useLibrary } from '../store/library';
 import { usePlayer } from '../store/player';
@@ -8,6 +8,7 @@ import { Mosaic } from '../components/Cover';
 import { TrackList } from '../components/TrackList';
 import { AddTracks } from '../components/AddTracks';
 import { ShareDialog } from '../components/ShareDialog';
+import { MergeDialog } from '../components/MergeDialog';
 import { shared, useShared, useJam, nameOf } from '../store/social';
 import { Cover } from '../components/Cover';
 import { ImportBox } from './Home';
@@ -53,14 +54,17 @@ export function Library() {
   const playList = usePlayer((s) => s.playList);
   const fileInput = useRef<HTMLInputElement>(null);
   const [sort, setSort] = useState<'recent' | 'name' | 'size'>('recent');
+  const [merging, setMerging] = useState(false);
+  const [folder, setFolder] = useState<string | null>(null);
+  const folders = useMemo(() => [...new Set(playlists.map((p) => p.folder).filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b, 'fr')), [playlists]);
 
   const sorted = useMemo(() => {
-    const list = [...playlists];
+    const list = playlists.filter((p) => !folder || p.folder === folder);
     if (sort === 'name') list.sort((a, b) => a.name.localeCompare(b.name, 'fr'));
     if (sort === 'size') list.sort((a, b) => b.tracks.length - a.tracks.length);
     if (sort === 'recent') list.sort((a, b) => b.updatedAt - a.updatedAt);
-    return list;
-  }, [playlists, sort]);
+    return list.sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned));
+  }, [playlists, sort, folder]);
 
   return (
     <div className="page">
@@ -68,6 +72,7 @@ export function Library() {
       <div className="actions">
         <button className="btn btn-primary" onClick={() => { const p = createPlaylist(`Ma playlist n°${playlists.length + 1}`); navigate({ name: 'playlist', id: p.id }); }}><Plus size={16} /> Nouvelle playlist</button>
         <LocalFilesButton />
+        <button className="btn btn-ghost" onClick={() => setMerging(true)}><GitMerge size={16} /> Fusionner</button>
         <button className="btn btn-ghost" onClick={() => downloadText(`forge-audio-${new Date().toISOString().slice(0, 10)}.json`, exportData())}><Download size={16} /> Exporter</button>
         <button className="btn btn-ghost" onClick={() => fileInput.current?.click()}><Upload size={16} /> Importer</button>
         <input ref={fileInput} type="file" accept="application/json,.json" hidden onChange={async (e) => {
@@ -92,6 +97,13 @@ export function Library() {
           <option value="size">Nombre de titres</option>
         </select>
       </div>
+      {folders.length > 0 && (
+        <div className="chips">
+          <button className={`chip ${!folder ? 'active' : ''}`} onClick={() => setFolder(null)}>Toutes</button>
+          {folders.map((f) => <button key={f} className={`chip ${folder === f ? 'active' : ''}`} onClick={() => setFolder(folder === f ? null : f)}><Folder size={13} /> {f}</button>)}
+        </div>
+      )}
+      {merging && <MergeDialog onClose={() => setMerging(false)} />}
       <div className="card-grid">
         <div className="card liked-card" onClick={() => navigate({ name: 'liked' })}>
           <div className="liked-card-inner">
@@ -104,7 +116,7 @@ export function Library() {
           {liked.length > 0 && <button className="card-play" aria-label="Lire les titres likés" onClick={(e) => { e.stopPropagation(); playList(liked); }}><Play size={20} fill="currentColor" /></button>}
         </div>
         {sorted.map((p) => (
-          <PlaylistCard key={p.id} name={p.name} sub={`${p.tracks.length} titres · ${timeAgo(p.updatedAt)}`} covers={p.cover ? [p.cover] : p.tracks.map((t) => t.thumbnail)}
+          <PlaylistCard key={p.id} name={`${p.pinned ? '📌 ' : ''}${p.name}`} sub={`${p.folder ? `${p.folder} · ` : ''}${p.tracks.length} titres · ${timeAgo(p.updatedAt)}`} covers={p.cover ? [p.cover] : p.tracks.map((t) => t.thumbnail)}
             onOpen={() => navigate({ name: 'playlist', id: p.id })} onPlay={() => playList(p.tracks)} />
         ))}
       </div>
@@ -164,7 +176,11 @@ export function PlaylistView() {
   const [sort, setSort] = useState<SortKey>('custom');
   const [syncing, setSyncing] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [merging, setMerging] = useState(false);
+  const [folderInput, setFolderInput] = useState('');
   const canShare = useJam((s) => !!s.me);
+  const coverInput = useRef<HTMLInputElement>(null);
+  const allFolders = useLibrary((s) => [...new Set(s.playlists.map((p) => p.folder).filter(Boolean) as string[])].join('\u0000'));
 
   const shown = useMemo(() => {
     if (!pl) return [];
@@ -184,9 +200,11 @@ export function PlaylistView() {
         <div className="hero-info">
           <div className="muted small">PLAYLIST</div>
           {editing ? (
-            <form className="edit-form" onSubmit={(e) => { e.preventDefault(); updatePlaylist(pl.id, { name: name.trim() || pl.name, description: desc }); setEditing(false); }}>
+            <form className="edit-form" onSubmit={(e) => { e.preventDefault(); updatePlaylist(pl.id, { name: name.trim() || pl.name, description: desc, folder: folderInput.trim() || null }); setEditing(false); }}>
               <input className="input hero-input" value={name} onChange={(e) => setName(e.target.value)} autoFocus aria-label="Nom" />
               <textarea className="input" value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Description (facultatif)" rows={2} aria-label="Description" />
+              <input className="input" list="pl-folders" value={folderInput} onChange={(e) => setFolderInput(e.target.value)} placeholder="Dossier (facultatif), ex. Soirées" aria-label="Dossier" maxLength={60} />
+              <datalist id="pl-folders">{allFolders.split('\u0000').filter(Boolean).map((f) => <option key={f} value={f} />)}</datalist>
               <div className="row gap">
                 <button className="btn btn-primary btn-sm" type="submit"><Check size={14} /> Enregistrer</button>
                 <button className="btn btn-ghost btn-sm" type="button" onClick={() => setEditing(false)}>Annuler</button>
@@ -194,7 +212,8 @@ export function PlaylistView() {
             </form>
           ) : (
             <>
-              <h1 className="hero-title" onClick={() => { setName(pl.name); setDesc(pl.description); setEditing(true); }} title="Cliquer pour renommer">{pl.name}</h1>
+              <h1 className="hero-title" onClick={() => { setName(pl.name); setDesc(pl.description); setFolderInput(pl.folder || ''); setEditing(true); }} title="Cliquer pour renommer">{pl.name}</h1>
+              {pl.folder && <div className="muted small"><Folder size={12} /> {pl.folder}</div>}
               {pl.description && <p className="muted">{pl.description}</p>}
             </>
           )}
@@ -205,7 +224,18 @@ export function PlaylistView() {
         <button className="play-btn big" disabled={!pl.tracks.length} onClick={() => playList(shown)} aria-label="Lire"><Play size={26} fill="currentColor" className="nudge" /></button>
         <button className="icon-btn big" disabled={!pl.tracks.length} onClick={() => playList(shown, 0, { shuffle: true })} aria-label="Lecture aléatoire" title="Lecture aléatoire"><Shuffle size={24} /></button>
         <button className="btn btn-ghost" disabled={!pl.tracks.length} onClick={() => enqueue(shown)}><ListEnd size={16} /> File d'attente</button>
-        <button className="btn btn-ghost" onClick={() => { setName(pl.name); setDesc(pl.description); setEditing(true); }}><Pencil size={16} /> Modifier</button>
+        <button className="btn btn-ghost" onClick={() => { setName(pl.name); setDesc(pl.description); setFolderInput(pl.folder || ''); setEditing(true); }}><Pencil size={16} /> Modifier</button>
+        <button className="btn btn-ghost" onClick={() => { updatePlaylist(pl.id, { pinned: !pl.pinned }); toast(pl.pinned ? 'Désépinglée' : 'Épinglée en haut de la liste', 'success'); }}>{pl.pinned ? <><PinOff size={16} /> Désépingler</> : <><Pin size={16} /> Épingler</>}</button>
+        <button className="btn btn-ghost" onClick={() => coverInput.current?.click()}><ImagePlus size={16} /> Image</button>
+        {pl.cover?.startsWith('/api/covers/') && <button className="btn btn-ghost" onClick={() => updatePlaylist(pl.id, { cover: null })}>Retirer l'image</button>}
+        <input ref={coverInput} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={async (e) => {
+          const f = e.target.files?.[0];
+          e.target.value = '';
+          if (!f) return;
+          if (f.size > 2 * 1024 * 1024) { toast('Image trop lourde (2 Mo maximum)', 'error'); return; }
+          try { const { url } = await api.uploadCover(f); updatePlaylist(pl.id, { cover: url }); toast('Image de la playlist changée', 'success'); } catch (err) { toast((err as Error).message, 'error'); }
+        }} />
+        <button className="btn btn-ghost" onClick={() => setMerging(true)}><GitMerge size={16} /> Fusionner avec…</button>
         <button className="btn btn-ghost" onClick={() => { duplicatePlaylist(pl.id); toast('Playlist dupliquée', 'success'); }}><Copy size={16} /> Dupliquer</button>
         {canShare && <button className="btn btn-ghost" onClick={() => setSharing(true)}><Users size={16} /> Partager</button>}
         <button className="btn btn-ghost" onClick={() => {
@@ -247,6 +277,7 @@ export function PlaylistView() {
         onReorder={reorderable ? (from, to) => movePlaylistTrack(pl.id, from, to) : undefined}
         empty={<>Cette playlist est vide. <button className="link accent" onClick={() => navigate({ name: 'search' })}>Rechercher des titres</button></>}
       />
+      {merging && <MergeDialog preselect={[pl.id]} onClose={() => setMerging(false)} />}
       {sharing && (
         <ShareDialog title={`Partager « ${pl.name} »`} confirm="Partager la playlist" onClose={() => setSharing(false)} onDone={async (members) => {
           if (!members.length) throw new Error('Choisissez au moins un compte');
@@ -287,7 +318,11 @@ export function Liked() {
         <button className="play-btn big" disabled={!liked.length} onClick={() => playList(shown)} aria-label="Lire"><Play size={26} fill="currentColor" className="nudge" /></button>
         <button className="icon-btn big" disabled={!liked.length} onClick={() => playList(shown, 0, { shuffle: true })} aria-label="Lecture aléatoire"><Shuffle size={24} /></button>
         <button className="btn btn-ghost" disabled={!liked.length} onClick={() => enqueue(shown)}><ListEnd size={16} /> File d'attente</button>
+        <button className="btn btn-ghost" disabled={!shown.length} onClick={() => useUi.getState().openPicker(shown)} title="Nouvelle playlist (ou une existante) avec ces titres ; vos likes ne bougent pas">
+          <ListPlus size={16} /> {filter ? `Créer une playlist avec ces ${shown.length} titres` : `Créer une playlist avec les ${shown.length} titres`}
+        </button>
       </div>
+      <p className="muted small">Astuce : pour n'en prendre que certains, touchez <b>Sélectionner</b> (ou Ctrl/Maj + clic, appui long sur téléphone), puis « Ajouter à une playlist… ».</p>
       {liked.length > 0 && (
         <div className="row gap list-tools">
           <div className="filter-input"><SearchIcon size={14} /><input placeholder="Filtrer dans les titres likés" value={filter} onChange={(e) => setFilter(e.target.value)} /></div>
@@ -302,7 +337,7 @@ export function Liked() {
       <AddTracks have={new Set(liked.map((t) => t.url))} startOpen={!liked.length} onAdd={(t) => {
         if (useLibrary.getState().likeTracks([t])) toast('Ajouté aux titres likés', 'success');
       }} />
-      <TrackList tracks={shown} empty={liked.length ? `Aucun titre liké ne correspond à « ${filter} »` : 'Les titres que vous aimez apparaîtront ici : touchez ♥ à côté d\'un titre, ou ajoutez-en ci-dessus.'} />
+      <TrackList tracks={shown} listKey="liked" empty={liked.length ? `Aucun titre liké ne correspond à « ${filter} »` : 'Les titres que vous aimez apparaîtront ici : touchez ♥ à côté d\'un titre, ou ajoutez-en ci-dessus.'} />
     </div>
   );
 }
@@ -318,7 +353,7 @@ export function HistoryView() {
         <h1 className="page-title grow">Historique</h1>
         {history.length > 0 && <button className="btn btn-ghost" onClick={() => { if (confirm("Effacer tout l'historique ?")) clearHistory(); }}><Trash2 size={16} /> Effacer</button>}
       </div>
-      <TrackList tracks={tracks} onPlay={(i) => playList(tracks, i)} empty="Aucune écoute pour l'instant." />
+      <TrackList tracks={tracks} listKey="history" onPlay={(i) => playList(tracks, i)} empty="Aucune écoute pour l'instant." />
     </div>
   );
 }

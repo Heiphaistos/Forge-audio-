@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { lazyStorage } from '../lib/storage';
-import type { Artist, Playlist, Track, HistoryEntry } from '../lib/types';
+import type { Artist, HiddenEntry, Playlist, Track, HistoryEntry } from '../lib/types';
 import { uid } from '../lib/format';
 import { artistKey } from '../lib/merge';
 
@@ -30,8 +30,14 @@ interface LibraryState {
   followedArtists: Artist[];
   /** Unfollowed artist keys → time. */
   unfollowed: Record<string, number>;
+  /** Tracks (by url) and artists (by artistKey) left out of radio, autoplay and recommendations. */
+  hiddenTracks: Record<string, HiddenEntry>;
+  hiddenArtists: Record<string, HiddenEntry>;
   createPlaylist: (name: string, tracks?: Track[], extra?: Partial<Playlist>) => Playlist;
-  updatePlaylist: (id: string, patch: Partial<Pick<Playlist, 'name' | 'description' | 'cover'>>) => void;
+  updatePlaylist: (id: string, patch: Partial<Pick<Playlist, 'name' | 'description' | 'cover' | 'folder' | 'pinned'>>) => void;
+  /** Several playlists (and/or tracks such as the liked ones) into a new one, duplicates removed. */
+  mergeIntoNew: (name: string, sources: Track[][], removeIds?: string[]) => Playlist;
+  setHidden: (kind: 'track' | 'artist', key: string, label: string, hidden: boolean) => void;
   deletePlaylist: (id: string) => void;
   duplicatePlaylist: (id: string) => void;
   addToPlaylist: (id: string, tracks: Track[]) => number;
@@ -58,6 +64,8 @@ export const useLibrary = create<LibraryState>()(
       unliked: {},
       followedArtists: [],
       unfollowed: {},
+      hiddenTracks: {},
+      hiddenArtists: {},
 
       createPlaylist: (name, tracks = [], extra = {}) => {
         const now = Date.now();
@@ -77,6 +85,19 @@ export const useLibrary = create<LibraryState>()(
         playlists: get().playlists.filter((p) => p.id !== id),
         deletedPlaylists: { ...get().deletedPlaylists, [id]: Date.now() },
       }),
+
+      mergeIntoNew: (name, sources, removeIds = []) => {
+        const seen = new Set<string>();
+        const tracks = sources.flat().filter((t) => t.source !== 'local' && !seen.has(t.url) && seen.add(t.url));
+        const pl = get().createPlaylist(name, tracks);
+        for (const id of removeIds) get().deletePlaylist(id);
+        return pl;
+      },
+
+      setHidden: (kind, key, label, hidden) => {
+        const field = kind === 'track' ? 'hiddenTracks' : 'hiddenArtists';
+        set({ [field]: { ...get()[field], [key]: { at: hidden ? Date.now() : -Date.now(), label } } } as Partial<LibraryState>);
+      },
 
       duplicatePlaylist: (id) => {
         const src = get().playlists.find((p) => p.id === id);
@@ -177,4 +198,9 @@ export const useLibrary = create<LibraryState>()(
 );
 
 export const useIsLiked = (url: string | undefined) => useLibrary((s) => !!url && s.liked.some((t) => t.url === url));
+/** Left out of radio / autoplay / recommendations? */
+export function isHidden(t: Track) {
+  const { hiddenTracks, hiddenArtists } = useLibrary.getState();
+  return (hiddenTracks[t.url]?.at || 0) > 0 || (!!t.author && (hiddenArtists[artistKey(t.author)]?.at || 0) > 0);
+}
 export const useIsFollowed = (name: string | undefined) => useLibrary((s) => !!name && s.followedArtists.some((a) => artistKey(a.name) === artistKey(name)));

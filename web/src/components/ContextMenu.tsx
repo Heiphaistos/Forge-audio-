@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Play, ListPlus, ListEnd, ListMusic, Heart, Radio, User, Download, ExternalLink, Link2, Trash2, Film, FileAudio } from 'lucide-react';
+import { Play, ListPlus, ListEnd, ListMusic, Heart, Radio, User, Download, ExternalLink, Link2, Trash2, Film, FileAudio, EyeOff, Eye, UserX } from 'lucide-react';
 import { useUi } from '../store/ui';
 import { usePlayer } from '../store/player';
-import { useLibrary } from '../store/library';
+import { useLibrary, artistKey } from '../store/library';
 import { api } from '../lib/api';
 import { shared, useJam } from '../store/social';
 
@@ -15,6 +15,8 @@ export function ContextMenu() {
   const { playNow, addNext, enqueue, removeAt, startRadio } = usePlayer.getState();
   const liked = useLibrary((s) => !!menu && s.liked.some((t) => t.url === menu.track.url));
   const inJam = useJam((s) => !!s.jam);
+  const trackHidden = useLibrary((s) => !!menu && (s.hiddenTracks[menu.track.url]?.at || 0) > 0);
+  const artistHidden = useLibrary((s) => !!menu?.track.author && (s.hiddenArtists[artistKey(menu.track.author)]?.at || 0) > 0);
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ x: 0, y: 0 });
 
@@ -75,6 +77,16 @@ export function ContextMenu() {
         </button>
         {!isLocal && <button role="menuitem" onClick={act(() => startRadio(t))}><Radio size={16} /> Lancer la radio du titre</button>}
         {t.author && <button role="menuitem" onClick={act(() => navigate({ name: 'artist', q: t.author! }))}><User size={16} /> Voir l'artiste</button>}
+        {!isLocal && (
+          <button role="menuitem" onClick={act(() => { useLibrary.getState().setHidden('track', t.url, `${t.title}${t.author ? ` · ${t.author}` : ''}`, !trackHidden); toast(trackHidden ? 'Titre réaffiché dans la radio et les recommandations' : 'Titre masqué : il ne sera plus proposé par la radio ni les recommandations'); })}>
+            {trackHidden ? <><Eye size={16} /> Réafficher ce titre</> : <><EyeOff size={16} /> Masquer ce titre</>}
+          </button>
+        )}
+        {t.author && (
+          <button role="menuitem" onClick={act(() => { useLibrary.getState().setHidden('artist', artistKey(t.author!), t.author!, !artistHidden); toast(artistHidden ? `${t.author} de nouveau recommandé` : `${t.author} ne sera plus recommandé`); })}>
+            <UserX size={16} /> {artistHidden ? `Recommander de nouveau ${t.author}` : `Ne plus recommander ${t.author}`}
+          </button>
+        )}
         {!isLocal && !t.isLive && (
           <>
             <div className="menu-sep" />

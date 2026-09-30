@@ -42,3 +42,11 @@ test('followed artists merge like likes (case-insensitive key)', () => {
   );
   assert.deepEqual(r.library.followedArtists!.map((a) => a.name), ['Daft Punk']);
 });
+
+test('hidden tracks/artists: the latest choice wins, from either device', () => {
+  const r = merge(
+    doc({ hiddenTracks: { a: { at: 100, label: 'A' }, b: { at: -300, label: 'B' } } }),
+    doc({ hiddenTracks: { a: { at: -50, label: 'A' }, b: { at: 200, label: 'B' }, c: { at: 10, label: 'C' } } }),
+  );
+  assert.deepEqual(Object.fromEntries(Object.entries(r.library.hiddenTracks!).map(([k, v]) => [k, v.at])), { a: 100, b: -300, c: 10 });
+});

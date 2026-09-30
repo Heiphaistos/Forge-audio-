@@ -30,8 +30,18 @@ export interface Playlist {
   tracks: Track[];
   cover: string | null;
   sourceUrl?: string | null;
+  /** Folder name in the sidebar and the library (null = none). */
+  folder?: string | null;
+  /** Pinned at the top of the sidebar and the library. */
+  pinned?: boolean;
   createdAt: number;
   updatedAt: number;
+}
+
+/** « Masquer » / « Ne plus recommander »: `at` > 0 hidden at that time, < 0 shown again at -at. */
+export interface HiddenEntry {
+  at: number;
+  label: string;
 }
 
 export interface HistoryEntry {

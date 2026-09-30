@@ -1,4 +1,4 @@
-import type { Artist, HistoryEntry, Playlist, RepeatMode, Track } from './types';
+import type { Artist, HiddenEntry, HistoryEntry, Playlist, RepeatMode, Track } from './types';
 
 /**
  * Merging two copies of a library (this device and the server) after a save conflict.
@@ -16,6 +16,8 @@ export interface SyncData {
     unliked?: Record<string, number>;
     followedArtists?: Artist[];
     unfollowed?: Record<string, number>;
+    hiddenTracks?: Record<string, HiddenEntry>;
+    hiddenArtists?: Record<string, HiddenEntry>;
     history: HistoryEntry[];
     playCounts: Record<string, number>;
   };
@@ -59,7 +61,17 @@ export function merge(local: SyncData, server: SyncData): SyncData {
   const playCounts: Record<string, number> = { ...server.library.playCounts };
   for (const [u, n] of Object.entries(local.library.playCounts)) playCounts[u] = Math.max(playCounts[u] || 0, n);
 
-  return { library: { playlists, deletedPlaylists: tomb, liked, unliked, followedArtists, unfollowed, history, playCounts }, settings: local.settings, player: local.player };
+  const hiddenTracks = latestChoice(local.library.hiddenTracks, server.library.hiddenTracks);
+  const hiddenArtists = latestChoice(local.library.hiddenArtists, server.library.hiddenArtists);
+
+  return { library: { playlists, deletedPlaylists: tomb, liked, unliked, followedArtists, unfollowed, hiddenTracks, hiddenArtists, history, playCounts }, settings: local.settings, player: local.player };
+}
+
+/** Hidden / shown again: the most recent choice wins (|at| is the time of the choice). */
+export function latestChoice(a: Record<string, HiddenEntry> = {}, b: Record<string, HiddenEntry> = {}) {
+  const out = { ...b };
+  for (const [k, v] of Object.entries(a)) if (!out[k] || Math.abs(v.at) >= Math.abs(out[k].at)) out[k] = v;
+  return out;
 }
 
 export function maxTimes(a: Record<string, number> = {}, b: Record<string, number> = {}) {

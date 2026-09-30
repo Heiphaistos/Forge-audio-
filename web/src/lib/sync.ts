@@ -52,6 +52,8 @@ export function collect(): SyncData {
       unliked: lib.unliked,
       followedArtists: lib.followedArtists,
       unfollowed: lib.unfollowed,
+      hiddenTracks: lib.hiddenTracks,
+      hiddenArtists: lib.hiddenArtists,
       history: lib.history.filter((h) => remote(h.track)),
       playCounts: lib.playCounts,
     },
@@ -80,6 +82,8 @@ function apply(data: SyncData) {
       unliked: lib.unliked || {},
       followedArtists: lib.followedArtists || [],
       unfollowed: lib.unfollowed || {},
+      hiddenTracks: lib.hiddenTracks || {},
+      hiddenArtists: lib.hiddenArtists || {},
       history: lib.history || [],
       playCounts: lib.playCounts || {},
     });
@@ -170,7 +174,7 @@ function beacon() {
 
 function resetLocal() {
   applying = true;
-  useLibrary.setState({ playlists: [], deletedPlaylists: {}, liked: [], unliked: {}, followedArtists: [], unfollowed: {}, history: [], playCounts: {} });
+  useLibrary.setState({ playlists: [], deletedPlaylists: {}, liked: [], unliked: {}, followedArtists: [], unfollowed: {}, hiddenTracks: {}, hiddenArtists: {}, history: [], playCounts: {} });
   usePlayer.setState({ queue: [], index: -1, unshuffled: null, position: 0 });
   localStorage.removeItem(POSITION_KEY);
   applying = false;

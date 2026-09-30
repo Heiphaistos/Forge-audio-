@@ -611,3 +611,28 @@ kbd {
 .nav-square.jam { background: linear-gradient(135deg, var(--accent), #d7263d); color: #fff; }
 .picker-item.picked { background: rgba(var(--accent-rgb, 255, 106, 26), .12); }
 .discord-code code { display: inline-block; padding: 8px 12px; border-radius: 8px; background: var(--surface-2); font-size: 15px; user-select: all; overflow-wrap: anywhere; }
+
+/* Multi-select, merge, folders, hidden */
+.tr-check { width: 20px; height: 20px; border-radius: 6px; border: 2px solid var(--muted); display: grid; place-items: center; color: #140b05; }
+.tr-check.on { background: var(--accent); border-color: var(--accent); }
+.track-row.picked { background: rgba(var(--accent-rgb), .12); }
+.track-row.selecting .tr-main { cursor: pointer; }
+.tr-select-all { justify-self: end; }
+.selection-bar { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--player-h, 88px) + 12px); z-index: 60; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; max-width: calc(100vw - 24px); padding: 10px 12px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--border); box-shadow: 0 16px 40px rgba(0, 0, 0, .5); }
+.selection-count { font-weight: 700; font-size: 14px; padding: 0 6px; }
+.merge-order { width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: #140b05; font-size: 12px; font-weight: 800; display: grid; place-items: center; flex: none; }
+.check-row { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; color: var(--muted); }
+.nav-folder summary { display: flex; align-items: center; gap: 8px; padding: 6px 10px; cursor: pointer; color: var(--muted); font-size: 13px; list-style: none; }
+.nav-folder summary::-webkit-details-marker { display: none; }
+.nav-folder[open] summary { color: var(--text); }
+.nav-folder .nav-pl { padding-left: 18px; }
+.hidden-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.hidden-list li { display: flex; align-items: center; gap: 10px; min-width: 0; }
+@media (max-width: 820px) {
+  /* Keep « Sélectionner » reachable on phones (the rest of the header is hidden). */
+  .track-head { display: flex !important; justify-content: flex-end; height: auto; border: 0; margin: 0 0 4px; }
+  .track-head > span { display: none; }
+  .selection-bar { bottom: calc(var(--player-h, 72px) + 8px); padding: 8px; gap: 4px; width: calc(100vw - 16px); }
+  .track-row.picked .tr-main .cover { outline: 3px solid var(--accent); outline-offset: -3px; }
+  .selection-bar .btn-sm { padding: 6px 9px; font-size: 12px; }
+}

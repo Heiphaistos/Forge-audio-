@@ -186,7 +186,7 @@ export function Search() {
       )}
 
       {!state.loading && q && !state.error && (
-        <TrackList tracks={state.tracks} showViews empty={`Aucun résultat pour « ${q} »`} />
+        <TrackList tracks={state.tracks} listKey={`search:${q}`} showViews empty={`Aucun résultat pour « ${q} »`} />
       )}
     </div>
   );
@@ -228,7 +228,7 @@ export function Artist() {
       </div>
       {state.loading && <div className="empty"><Loader2 className="spin" size={28} /> Chargement…</div>}
       {state.error && <div className="empty error">{state.error}</div>}
-      {!state.loading && <TrackList tracks={state.tracks} showViews />}
+      {!state.loading && <TrackList tracks={state.tracks} listKey={`artist:${name}`} showViews />}
     </div>
   );
 }

@@ -138,6 +138,12 @@ export const api = {
   jamRemove: (id: string, index: number) => send<{ jam: Jam }>('POST', `/api/jam/${id}/remove`, { index }),
   jamControl: (id: string, body: { action: string; position?: number; index?: number; from?: number }) => send<{ jam: Jam }>('POST', `/api/jam/${id}/control`, body),
   jamSettings: (id: string, everyoneControls: boolean) => send<{ jam: Jam }>('PATCH', `/api/jam/${id}`, { everyoneControls }),
+  uploadCover: async (file: File) => {
+    const res = await fetch('/api/me/covers', { method: 'POST', body: file, headers: { 'content-type': file.type || 'application/octet-stream' }, credentials: 'same-origin' });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new ApiError(body.error || `Erreur ${res.status}`, res.status, body.code);
+    return body as { url: string };
+  },
   discord: () => get<{ link: DiscordLink | null; botEnabled: boolean }>('/api/me/discord'),
   discordCode: () => send<{ code: string; expiresAt: number }>('POST', '/api/me/discord/code', {}),
   discordUnlink: () => send<{ ok: true }>('DELETE', '/api/me/discord', {}),

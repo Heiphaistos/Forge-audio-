@@ -37,6 +37,18 @@ export const cleanTracks = tracks;
 const tombstones = (obj) => Object.fromEntries(Object.entries(obj && typeof obj === 'object' ? obj : {})
   .filter(([k, v]) => k.length <= 2000 && Number(v) > 0).slice(0, 5000).map(([k, v]) => [k, Math.floor(Number(v))]));
 
+/** Cover of a playlist: a public image URL or an image uploaded to this server (covers.js). */
+export const COVER_PATH = /^\/api\/covers\/[a-z0-9][a-z0-9._-]{1,31}\/[A-Za-z0-9_-]{8,40}\.(jpg|png|webp)$/;
+export const cleanCover = (c) => (typeof c === 'string' && (/^https?:\/\//.test(c) || COVER_PATH.test(c)) ? c.slice(0, 2000) : null);
+
+/**
+ * Hidden tracks / artists (« masquer », « ne plus recommander »): key -> { at, label }. A negative
+ * `at` means shown again at that time, so the choice made last wins when two devices merge.
+ */
+const hiddenMap = (obj) => Object.fromEntries(Object.entries(obj && typeof obj === 'object' ? obj : {})
+  .filter(([k, v]) => k.length <= 2000 && v && Number.isFinite(Number(v.at)) && Number(v.at) !== 0).slice(0, 5000)
+  .map(([k, v]) => [k, { at: Math.trunc(Number(v.at)), label: String(v.label || '').slice(0, 300) }]));
+
 const artists = (list) => (Array.isArray(list) ? list : [])
   .filter((a) => a && typeof a.name === 'string' && a.name.trim())
   .slice(0, 2000)
@@ -56,7 +68,9 @@ export function sanitizeData(data) {
         id: p.id.slice(0, 64),
         name: p.name.slice(0, 200),
         description: String(p.description || '').slice(0, 2000),
-        cover: typeof p.cover === 'string' && /^https?:\/\//.test(p.cover) ? p.cover : null,
+        cover: cleanCover(p.cover),
+        folder: typeof p.folder === 'string' && p.folder.trim() ? p.folder.trim().slice(0, 60) : null,
+        pinned: !!p.pinned,
         sourceUrl: typeof p.sourceUrl === 'string' && /^https?:\/\//.test(p.sourceUrl) ? p.sourceUrl : null,
         tracks: tracks(p.tracks),
         createdAt: Number(p.createdAt) || Date.now(),
@@ -67,6 +81,8 @@ export function sanitizeData(data) {
       unliked: tombstones(lib.unliked),
       followedArtists: artists(lib.followedArtists),
       unfollowed: tombstones(lib.unfollowed),
+      hiddenTracks: hiddenMap(lib.hiddenTracks),
+      hiddenArtists: hiddenMap(lib.hiddenArtists),
       history: (Array.isArray(lib.history) ? lib.history : []).filter((h) => h && isRemoteTrack(h.track)).slice(0, MAX_HISTORY).map((h) => ({ track: cleanTrack(h.track), at: Number(h.at) || 0 })),
       playCounts: Object.fromEntries(Object.entries(lib.playCounts || {}).filter(([k, v]) => /^https?:\/\//.test(k) && Number(v) > 0).slice(0, 20000).map(([k, v]) => [k, Math.floor(Number(v))])),
     },

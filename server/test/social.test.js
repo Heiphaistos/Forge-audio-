@@ -26,7 +26,7 @@ async function setup() {
     const res = await app.inject({ method, url, payload, headers: { cookie: cookie[u] } });
     return { status: res.statusCode, body: res.json() };
   };
-  return { app, dir, evan: as('evan'), polo: as('polo'), lohan: as('lohan') };
+  return { app, dir, cookie, evan: as('evan'), polo: as('polo'), lohan: as('lohan') };
 }
 
 test('shared playlists: owner shares, members edit tracks, only the owner manages', async () => {
@@ -142,4 +142,29 @@ test('Jam and shared playlist with 10 people: all join, all add, all get the liv
   const { playlist } = await as('ami0')('POST', '/api/shared', { name: 'Les 10', tracks: [], members: names.slice(1) });
   for (const [i, u] of names.entries()) await as(u)('POST', `/api/shared/${playlist.id}/tracks`, { tracks: [track(200 + i)] });
   for (const u of names) assert.equal((await as(u)('GET', `/api/shared/${playlist.id}`)).playlist.tracks.length, 10, `${u} sees all 10 tracks`);
+});
+
+test('playlist covers: real images only, served to signed-in users; library keeps folder, pin and hidden', async () => {
+  const { app, cookie, evan } = await setup();
+  const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(40, 1)]);
+  const up = (body, type) => app.inject({ method: 'POST', url: '/api/me/covers', payload: body, headers: { 'content-type': type, cookie: cookie.evan } });
+  assert.equal((await up(Buffer.from('<svg onload=alert(1)>'), 'image/png')).statusCode, 415, 'content checked, not the declared type');
+  const ok = await up(png, 'image/png');
+  assert.equal(ok.statusCode, 200);
+  const { url } = ok.json();
+  assert.match(url, /^\/api\/covers\/evan\/[A-Za-z0-9_-]+\.png$/);
+  const img = await app.inject({ url, headers: { cookie: cookie.polo } });
+  assert.equal(img.statusCode, 200, 'members of a shared playlist can see it');
+  assert.equal(img.headers['content-type'], 'image/png');
+  assert.equal((await app.inject({ url })).statusCode, 401, 'not without a session');
+  assert.equal((await app.inject({ url: '/api/covers/evan/..%2F..%2Faccounts.json', headers: { cookie: cookie.evan } })).statusCode, 404);
+
+  const data = { library: { playlists: [{ id: 'p1', name: 'A', tracks: [], cover: url, folder: ' Soirées ', pinned: 1, createdAt: 1, updatedAt: 1 }, { id: 'p2', name: 'B', tracks: [], cover: '/etc/passwd', createdAt: 1, updatedAt: 1 }],
+    liked: [], history: [], playCounts: {}, hiddenTracks: { 'https://youtu.be/x': { at: 5, label: 'Titre' }, bad: { at: 'x' } }, hiddenArtists: { 'daft punk': { at: -7, label: 'Daft Punk' } } }, settings: {}, player: null };
+  assert.equal((await evan('PUT', '/api/me/data', { baseRev: 0, data })).status, 200);
+  const lib = (await evan('GET', '/api/me/data')).body.data.library;
+  assert.deepEqual([lib.playlists[0].cover, lib.playlists[0].folder, lib.playlists[0].pinned], [url, 'Soirées', true]);
+  assert.equal(lib.playlists[1].cover, null, 'only uploaded covers or http(s) images');
+  assert.deepEqual(lib.hiddenTracks, { 'https://youtu.be/x': { at: 5, label: 'Titre' } });
+  assert.equal(lib.hiddenArtists['daft punk'].at, -7, 'shown again: negative time kept for merging');
 });

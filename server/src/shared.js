@@ -2,7 +2,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { HttpError } from './util.js';
 import { readJson, writeJsonAtomic } from './accounts.js';
-import { cleanTracks } from './userdata.js';
+import { cleanTracks, cleanCover } from './userdata.js';
 
 /**
  * Playlists shared between accounts (Spotify "collaborative playlists"): the owner shares with
@@ -60,7 +60,7 @@ export class SharedPlaylists {
       id: crypto.randomBytes(9).toString('base64url'),
       name: String(name || '').trim().slice(0, 200) || 'Playlist partagée',
       description: String(description || '').slice(0, 2000),
-      cover: typeof cover === 'string' && /^https?:\/\//.test(cover) ? cover : null,
+      cover: cleanCover(cover),
       owner,
       members: this.cleanMembers(owner, members, isAccount),
       tracks: cleanTracks(tracks, MAX_TRACKS).map((t) => ({ ...t, addedBy: owner, addedAt: t.addedAt || now })),
@@ -84,7 +84,7 @@ export class SharedPlaylists {
     const p = this.owned(id, username);
     if (patch.name !== undefined) p.name = String(patch.name).trim().slice(0, 200) || p.name;
     if (patch.description !== undefined) p.description = String(patch.description).slice(0, 2000);
-    if (patch.cover !== undefined) p.cover = typeof patch.cover === 'string' && /^https?:\/\//.test(patch.cover) ? patch.cover : null;
+    if (patch.cover !== undefined) p.cover = cleanCover(patch.cover);
     const before = this.audience(p);
     if (patch.members !== undefined) p.members = this.cleanMembers(p.owner, patch.members, isAccount);
     this.touch(p);

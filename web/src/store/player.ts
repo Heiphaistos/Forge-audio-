@@ -5,7 +5,7 @@ import { engine } from '../audio/engine';
 import { api } from '../lib/api';
 import { shuffleArray } from '../lib/format';
 import type { RepeatMode, Track } from '../lib/types';
-import { useLibrary, slimTrack } from './library';
+import { useLibrary, slimTrack, isHidden } from './library';
 import { useSettings, useUi } from './ui';
 
 const POSITION_KEY = 'forge.position';
@@ -296,7 +296,7 @@ export const usePlayer = create<PlayerState>()(
           try {
             const { tracks } = await api.radio(track);
             const have = new Set(get().queue.map((t) => t.url));
-            const fresh = tracks.filter((t) => !have.has(t.url));
+            const fresh = tracks.filter((t) => !have.has(t.url) && !isHidden(t));
             if (fresh.length) {
               set({ queue: [...get().queue, ...fresh.map(slimTrack)] });
               toast(`Radio : ${fresh.length} titres ajoutés d'après « ${track.title} »`, 'success');

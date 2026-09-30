@@ -1,4 +1,5 @@
-import { Home, Search, Library, Heart, History, Plus, Settings, X, LogOut, Cloud, CloudOff, Loader2, Radio, Users } from 'lucide-react';
+import { Home, Search, Library, Heart, History, Plus, Settings, X, LogOut, Cloud, CloudOff, Loader2, Radio, Users, Pin, Folder } from 'lucide-react';
+import type { Playlist } from '../lib/types';
 import { useJam, useShared } from '../store/social';
 import { useSync, logout } from '../lib/sync';
 import { useUi, type View } from '../store/ui';
@@ -14,6 +15,15 @@ export function Logo() {
       <span>Forge <b>Audio</b></span>
     </div>
   );
+}
+
+/** Pinned first, then playlists without a folder, then one group per folder (alphabetical). */
+function groupPlaylists(playlists: Playlist[]): [string | null, Playlist[]][] {
+  const byPin = [...playlists].sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned));
+  const loose = byPin.filter((p) => !p.folder || p.pinned);
+  const folders = new Map<string, Playlist[]>();
+  for (const p of byPin) if (p.folder && !p.pinned) folders.set(p.folder, [...(folders.get(p.folder) || []), p]);
+  return [[null, loose], ...[...folders.entries()].sort(([a], [b]) => a.localeCompare(b, 'fr'))];
 }
 
 export function Sidebar() {
@@ -74,13 +84,22 @@ export function Sidebar() {
               {playingUrl && p.tracks.some((t) => t.url === playingUrl) && <PlayingBars />}
             </button>
           ))}
-          {playlists.map((p) => (
-            <button key={p.id} className={`nav-pl ${view.name === 'playlist' && view.id === p.id ? 'active' : ''}`} onClick={() => navigate({ name: 'playlist', id: p.id })}>
-              <Mosaic covers={p.cover ? [p.cover] : p.tracks.map((t) => t.thumbnail)} size={36} radius={4} />
-              <span className="ellipsis grow">{p.name}</span>
-              {playingUrl && p.tracks.some((t) => t.url === playingUrl) && <PlayingBars />}
-            </button>
-          ))}
+          {groupPlaylists(playlists).map(([folder, list]) => {
+            const rows = list.map((p) => (
+              <button key={p.id} className={`nav-pl ${view.name === 'playlist' && view.id === p.id ? 'active' : ''}`} onClick={() => navigate({ name: 'playlist', id: p.id })}>
+                <Mosaic covers={p.cover ? [p.cover] : p.tracks.map((t) => t.thumbnail)} size={36} radius={4} />
+                <span className="ellipsis grow">{p.name}</span>
+                {p.pinned && <Pin size={12} className="muted" aria-label="Épinglée" />}
+                {playingUrl && p.tracks.some((t) => t.url === playingUrl) && <PlayingBars />}
+              </button>
+            ));
+            return folder ? (
+              <details key={`f-${folder}`} className="nav-folder" open>
+                <summary><Folder size={14} /> <span className="ellipsis">{folder}</span> <span className="muted small">{list.length}</span></summary>
+                {rows}
+              </details>
+            ) : rows;
+          })}
         </div>
         <UserBlock />
         {item({ name: 'settings' }, <Settings size={20} />, 'Paramètres')}

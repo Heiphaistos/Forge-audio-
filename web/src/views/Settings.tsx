@@ -61,6 +61,28 @@ const inMobileApp = () => /ForgeAudioApp/.test(navigator.userAgent);
 const isIos = () => /iPhone|iPad|iPod/.test(navigator.userAgent);
 
 /** Inside the Android / iOS app: go back to the bundled server setup screen. */
+/** « Masquer ce titre » / « Ne plus recommander » : list, and show again. */
+function HiddenCard() {
+  const tracks = useLibrary((st) => st.hiddenTracks);
+  const artists = useLibrary((st) => st.hiddenArtists);
+  const on = (m: Record<string, { at: number; label: string }>) => Object.entries(m).filter(([, v]) => v.at > 0).sort((x, y) => y[1].at - x[1].at);
+  const list = [...on(artists).map(([k, v]) => ({ kind: 'artist' as const, k, v })), ...on(tracks).map(([k, v]) => ({ kind: 'track' as const, k, v }))];
+  if (!list.length) return null;
+  return (
+    <section className="settings-card">
+      <h2>Masqués de la radio et des recommandations</h2>
+      <ul className="hidden-list">
+        {list.map(({ kind, k, v }) => (
+          <li key={`${kind}:${k}`}>
+            <span className="grow ellipsis">{kind === 'artist' ? '👤 ' : '🎵 '}{v.label || k}</span>
+            <button className="btn btn-ghost btn-sm" onClick={() => useLibrary.getState().setHidden(kind, k, v.label, false)}>Réafficher</button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 /** Link with HeiphaisBot: same liked tracks in Discord (❤️ J'aime) and in Forge Audio. */
 function DiscordLinkCard() {
   const { link, botEnabled } = useDiscord();
@@ -180,6 +202,7 @@ export function Settings() {
       <DesktopServer />
       <MobileServer />
       <DiscordLinkCard />
+      <HiddenCard />
       <DownloadApps />
 
       <section className="settings-card">
