@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useUi } from '../store/ui';
 import { useLibrary } from '../store/library';
 import { Mosaic } from './Cover';
+import { shared, useShared } from '../store/social';
 import { useEscape } from '../hooks';
 
 export function PlaylistPicker() {
@@ -11,6 +12,7 @@ export function PlaylistPicker() {
   const toast = useUi((s) => s.toast);
   const playlists = useLibrary((s) => s.playlists);
   const liked = useLibrary((s) => s.liked);
+  const sharedLists = useShared((s) => s.list);
   const { addToPlaylist, createPlaylist, likeTracks } = useLibrary.getState();
   const [name, setName] = useState('');
   const close = () => { openPicker(null); setName(''); };
@@ -50,6 +52,16 @@ export function PlaylistPicker() {
             <span className="muted small">{liked.length} titres</span>
             {contains(liked) && <Check size={18} className="accent" aria-label="Déjà ajouté" />}
           </button>
+          {sharedLists.map((p) => (
+            <button key={`s-${p.id}`} className="picker-item" onClick={() => {
+              shared.add(p.id, tracks).then((n) => done(n, p.name)).catch((err) => toast((err as Error).message, 'error'));
+            }}>
+              <Mosaic covers={p.tracks.map((t) => t.thumbnail)} size={44} radius={6} />
+              <span className="grow ellipsis">{p.name} <span className="muted small">· partagée</span></span>
+              <span className="muted small">{p.tracks.length} titres</span>
+              {contains(p.tracks) && <Check size={18} className="accent" aria-label="Déjà ajouté" />}
+            </button>
+          ))}
           {playlists.map((p) => (
             <button key={p.id} className="picker-item" onClick={() => done(addToPlaylist(p.id, tracks), p.name)}>
               <Mosaic covers={p.tracks.map((t) => t.thumbnail)} size={44} radius={6} />

@@ -4,6 +4,7 @@ import { useUi } from '../store/ui';
 import { usePlayer } from '../store/player';
 import { useLibrary } from '../store/library';
 import { api } from '../lib/api';
+import { shared, useJam } from '../store/social';
 
 export function ContextMenu() {
   const menu = useUi((s) => s.menu);
@@ -13,6 +14,7 @@ export function ContextMenu() {
   const toast = useUi((s) => s.toast);
   const { playNow, addNext, enqueue, removeAt, startRadio } = usePlayer.getState();
   const liked = useLibrary((s) => !!menu && s.liked.some((t) => t.url === menu.track.url));
+  const inJam = useJam((s) => !!s.jam);
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ x: 0, y: 0 });
 
@@ -56,10 +58,14 @@ export function ContextMenu() {
         <div className="menu-title" title={t.title}>{t.title}</div>
         <button role="menuitem" onClick={act(() => playNow(t))}><Play size={16} /> Lire maintenant</button>
         <button role="menuitem" onClick={act(() => addNext([t]))}><ListPlus size={16} /> Lire ensuite</button>
-        <button role="menuitem" onClick={act(() => enqueue([t]))}><ListEnd size={16} /> Ajouter à la file d'attente</button>
+        <button role="menuitem" onClick={act(() => enqueue([t]))}><ListEnd size={16} /> {inJam ? 'Ajouter à la file du Jam' : 'Ajouter à la file d\'attente'}</button>
         <button role="menuitem" onClick={() => openPicker([t])}><ListMusic size={16} /> Ajouter à une playlist…</button>
         {menu.playlistId !== undefined && menu.index !== undefined && (
-          <button role="menuitem" onClick={act(() => useLibrary.getState().removeFromPlaylist(menu.playlistId!, menu.index!))}><Trash2 size={16} /> Retirer de cette playlist</button>
+          <button role="menuitem" onClick={act(() => {
+            const id = menu.playlistId!;
+            if (id.startsWith('shared:')) shared.remove(id.slice(7), t.url).catch((err) => toast((err as Error).message, 'error'));
+            else useLibrary.getState().removeFromPlaylist(id, menu.index!);
+          })}><Trash2 size={16} /> Retirer de cette playlist</button>
         )}
         {menu.queueIndex !== undefined && (
           <button role="menuitem" onClick={act(() => removeAt(menu.queueIndex!))}><Trash2 size={16} /> Retirer de la file</button>

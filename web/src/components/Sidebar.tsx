@@ -1,4 +1,5 @@
-import { Home, Search, Library, Heart, History, Plus, Settings, X, LogOut, Cloud, CloudOff, Loader2 } from 'lucide-react';
+import { Home, Search, Library, Heart, History, Plus, Settings, X, LogOut, Cloud, CloudOff, Loader2, Radio, Users } from 'lucide-react';
+import { useJam, useShared } from '../store/social';
 import { useSync, logout } from '../lib/sync';
 import { useUi, type View } from '../store/ui';
 import { useLibrary } from '../store/library';
@@ -24,6 +25,10 @@ export function Sidebar() {
   const likedCount = useLibrary((s) => s.liked.length);
   const createPlaylist = useLibrary((s) => s.createPlaylist);
   const playingUrl = usePlayer((s) => (s.playing ? s.queue[s.index]?.url : undefined));
+  const sharedLists = useShared((s) => s.list);
+  const inJam = useJam((s) => !!s.jam);
+  const social = useJam((s) => !!s.me);
+  const setJamOpen = useUi((s) => s.setJamOpen);
 
   const item = (v: View, icon: React.ReactNode, label: string) => (
     <button className={`nav-item ${view.name === v.name && view.id === v.id ? 'active' : ''}`} onClick={() => navigate(v)}>
@@ -54,8 +59,21 @@ export function Sidebar() {
           <button className={`nav-item ${view.name === 'history' ? 'active' : ''}`} onClick={() => navigate({ name: 'history' })}>
             <span className="nav-square hist"><History size={15} /></span><span>Historique</span>
           </button>
+          {social && (
+            <button className={`nav-item ${inJam ? 'active' : ''}`} onClick={() => { setJamOpen(true); setOpen(false); }}>
+              <span className="nav-square jam"><Radio size={15} /></span><span>{inJam ? 'Jam en cours' : 'Jam : écouter ensemble'}</span>
+            </button>
+          )}
         </div>
         <div className="playlist-nav">
+          {sharedLists.map((p) => (
+            <button key={`s-${p.id}`} className={`nav-pl ${view.name === 'shared' && view.id === p.id ? 'active' : ''}`} onClick={() => navigate({ name: 'shared', id: p.id })}>
+              <Mosaic covers={p.cover ? [p.cover] : p.tracks.map((t) => t.thumbnail)} size={36} radius={4} />
+              <span className="ellipsis grow">{p.name}</span>
+              <Users size={13} className="muted" aria-label="Partagée" />
+              {playingUrl && p.tracks.some((t) => t.url === playingUrl) && <PlayingBars />}
+            </button>
+          ))}
           {playlists.map((p) => (
             <button key={p.id} className={`nav-pl ${view.name === 'playlist' && view.id === p.id ? 'active' : ''}`} onClick={() => navigate({ name: 'playlist', id: p.id })}>
               <Mosaic covers={p.cover ? [p.cover] : p.tracks.map((t) => t.thumbnail)} size={36} radius={4} />

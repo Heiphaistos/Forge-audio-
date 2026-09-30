@@ -156,6 +156,9 @@ async function pull() {
   } catch { /* offline: try again later */ }
 }
 
+/** Library changed elsewhere (❤ from the Discord bot, live event): fetch it now. */
+export const pullNow = () => pull();
+
 function beacon() {
   if (!dirty || !started) return;
   const body = new Blob([JSON.stringify({ baseRev: rev, data: collect() })], { type: 'application/json' });

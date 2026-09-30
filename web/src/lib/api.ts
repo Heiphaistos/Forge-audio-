@@ -51,6 +51,39 @@ export interface Health {
   sync: boolean;
 }
 
+export interface SharedTrack extends Track { addedBy?: string }
+
+export interface SharedPlaylist {
+  id: string;
+  name: string;
+  description: string;
+  cover: string | null;
+  owner: string;
+  members: string[];
+  tracks: SharedTrack[];
+  createdAt: number;
+  updatedAt: number;
+  rev: number;
+}
+
+export interface Jam {
+  id: string;
+  code: string;
+  host: string;
+  everyoneControls: boolean;
+  participants: { username: string; displayName: string; joinedAt: number }[];
+  queue: SharedTrack[];
+  index: number;
+  playing: boolean;
+  /** seconds, at server time positionAt (ms) */
+  position: number;
+  positionAt: number;
+  serverNow: number;
+  createdAt: number;
+}
+
+export interface DiscordLink { discordId: string; discordName: string | null; linkedAt: number }
+
 export interface ResolveResult {
   type: 'search' | 'playlist' | 'track';
   title: string | null;
@@ -87,6 +120,27 @@ export const api = {
   lyrics: (t: Track, signal?: AbortSignal) => get<LyricsResult>('/api/lyrics', { title: t.title, author: t.author, duration: t.duration }, signal),
   downloadUrl: (url: string, format: 'mp3' | 'audio' | 'video') => `/api/download?${new URLSearchParams({ url, format })}`,
   imageUrl: (url: string) => `/api/image?${new URLSearchParams({ url })}`,
+  // Between accounts (server/src/social.js)
+  users: () => get<{ users: User[] }>('/api/users'),
+  shared: () => get<{ playlists: SharedPlaylist[] }>('/api/shared'),
+  sharedCreate: (p: { name: string; description?: string; cover?: string | null; tracks: Track[]; members: string[] }) => send<{ playlist: SharedPlaylist }>('POST', '/api/shared', p),
+  sharedUpdate: (id: string, patch: Partial<Pick<SharedPlaylist, 'name' | 'description' | 'members' | 'cover'>>) => send<{ playlist: SharedPlaylist }>('PATCH', `/api/shared/${id}`, patch),
+  sharedAdd: (id: string, tracks: Track[]) => send<{ playlist: SharedPlaylist; added: number }>('POST', `/api/shared/${id}/tracks`, { tracks }),
+  sharedRemove: (id: string, url: string) => send<{ playlist: SharedPlaylist }>('DELETE', `/api/shared/${id}/tracks?${new URLSearchParams({ url })}`, {}),
+  sharedMove: (id: string, from: number, to: number) => send<{ playlist: SharedPlaylist }>('POST', `/api/shared/${id}/move`, { from, to }),
+  sharedLeave: (id: string) => send<{ ok: true; deleted: boolean }>('DELETE', `/api/shared/${id}`, {}),
+  jam: () => get<{ jam: Jam | null }>('/api/jam'),
+  jamStart: (p: { tracks: Track[]; index: number; position: number; playing: boolean }) => send<{ jam: Jam }>('POST', '/api/jam', p),
+  jamJoin: (code: string) => send<{ jam: Jam }>('POST', '/api/jam/join', { code }),
+  jamLeave: (id: string) => send<{ jam: null }>('POST', `/api/jam/${id}/leave`, {}),
+  jamInvite: (id: string, username: string) => send<{ online: boolean }>('POST', `/api/jam/${id}/invite`, { username }),
+  jamAdd: (id: string, tracks: Track[], next = false) => send<{ jam: Jam }>('POST', `/api/jam/${id}/add`, { tracks, next }),
+  jamRemove: (id: string, index: number) => send<{ jam: Jam }>('POST', `/api/jam/${id}/remove`, { index }),
+  jamControl: (id: string, body: { action: string; position?: number; index?: number; from?: number }) => send<{ jam: Jam }>('POST', `/api/jam/${id}/control`, body),
+  jamSettings: (id: string, everyoneControls: boolean) => send<{ jam: Jam }>('PATCH', `/api/jam/${id}`, { everyoneControls }),
+  discord: () => get<{ link: DiscordLink | null; botEnabled: boolean }>('/api/me/discord'),
+  discordCode: () => send<{ code: string; expiresAt: number }>('POST', '/api/me/discord/code', {}),
+  discordUnlink: () => send<{ ok: true }>('DELETE', '/api/me/discord', {}),
 };
 
 export function isUrl(str: string): boolean {

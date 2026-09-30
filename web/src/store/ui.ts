@@ -4,7 +4,7 @@ import { lazyStorage } from '../lib/storage';
 import type { Track } from '../lib/types';
 import { EQ_PRESETS } from '../audio/engine';
 
-export type ViewName = 'home' | 'search' | 'library' | 'playlist' | 'liked' | 'history' | 'settings' | 'artist';
+export type ViewName = 'home' | 'search' | 'library' | 'playlist' | 'shared' | 'liked' | 'history' | 'settings' | 'artist';
 
 export interface View {
   name: ViewName;
@@ -18,6 +18,8 @@ export interface Toast {
   id: number;
   text: string;
   kind: 'info' | 'error' | 'success';
+  /** Button in the toast (e.g. « Rejoindre » for a Jam invitation). */
+  action?: { label: string; run: () => void };
 }
 
 export interface MenuState {
@@ -40,6 +42,7 @@ interface UiState {
   /** Floating reduced video player. */
   miniVideo: boolean;
   eqOpen: boolean;
+  jamOpen: boolean;
   pickerTracks: Track[] | null;
   menu: MenuState | null;
   toasts: Toast[];
@@ -52,9 +55,10 @@ interface UiState {
   setNowPlaying: (v: boolean) => void;
   setMiniVideo: (v: boolean) => void;
   setEqOpen: (v: boolean) => void;
+  setJamOpen: (v: boolean) => void;
   openPicker: (tracks: Track[] | null) => void;
   openMenu: (m: MenuState | null) => void;
-  toast: (text: string, kind?: Toast['kind']) => void;
+  toast: (text: string, kind?: Toast['kind'], action?: Toast['action']) => void;
   dismiss: (id: number) => void;
   setSidebarOpen: (v: boolean) => void;
 }
@@ -69,6 +73,7 @@ export const useUi = create<UiState>()((set, get) => ({
   nowPlaying: false,
   miniVideo: false,
   eqOpen: false,
+  jamOpen: false,
   pickerTracks: null,
   menu: null,
   toasts: [],
@@ -97,12 +102,13 @@ export const useUi = create<UiState>()((set, get) => ({
   setMiniVideo: (miniVideo) => set({ miniVideo, panel: miniVideo && get().panel === 'video' ? null : get().panel, nowPlaying: miniVideo ? false : get().nowPlaying }),
   setNowPlaying: (nowPlaying) => set({ nowPlaying }),
   setEqOpen: (eqOpen) => set({ eqOpen }),
+  setJamOpen: (jamOpen) => set({ jamOpen }),
   openPicker: (pickerTracks) => set({ pickerTracks, menu: null }),
   openMenu: (menu) => set({ menu }),
-  toast: (text, kind = 'info') => {
+  toast: (text, kind = 'info', action) => {
     const id = ++toastId;
-    set({ toasts: [...get().toasts.slice(-3), { id, text, kind }] });
-    setTimeout(() => get().dismiss(id), kind === 'error' ? 6000 : 3500);
+    set({ toasts: [...get().toasts.slice(-3), { id, text, kind, action }] });
+    setTimeout(() => get().dismiss(id), action ? 20000 : kind === 'error' ? 6000 : 3500);
   },
   dismiss: (id) => set({ toasts: get().toasts.filter((t) => t.id !== id) }),
   setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),

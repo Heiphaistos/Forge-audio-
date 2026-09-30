@@ -1,4 +1,4 @@
-import { Plus, Upload, Download, FolderOpen, Heart, Play, Shuffle, Trash2, Pencil, Copy, RefreshCw, ListEnd, Loader2, ArrowDownUp, Search as SearchIcon, Check } from 'lucide-react';
+import { Plus, Upload, Download, FolderOpen, Heart, Play, Shuffle, Trash2, Pencil, Copy, RefreshCw, ListEnd, Loader2, ArrowDownUp, Search as SearchIcon, Check, Users } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import { useLibrary } from '../store/library';
 import { usePlayer } from '../store/player';
@@ -7,6 +7,8 @@ import { PlaylistCard } from '../components/Cards';
 import { Mosaic } from '../components/Cover';
 import { TrackList } from '../components/TrackList';
 import { AddTracks } from '../components/AddTracks';
+import { ShareDialog } from '../components/ShareDialog';
+import { shared, useShared, useJam, nameOf } from '../store/social';
 import { Cover } from '../components/Cover';
 import { ImportBox } from './Home';
 import { api } from '../lib/api';
@@ -44,6 +46,7 @@ export function Library() {
   const playlists = useLibrary((s) => s.playlists);
   const liked = useLibrary((s) => s.liked);
   const artists = useLibrary((s) => s.followedArtists);
+  const sharedLists = useShared((s) => s.list);
   const { createPlaylist, exportData, importData } = useLibrary.getState();
   const navigate = useUi((s) => s.navigate);
   const toast = useUi((s) => s.toast);
@@ -106,6 +109,17 @@ export function Library() {
         ))}
       </div>
       {!playlists.length && <p className="muted">Créez une playlist, ou collez le lien d'une playlist YouTube / SoundCloud ci-dessus pour l'importer.</p>}
+      {sharedLists.length > 0 && (
+        <>
+          <div className="row gap shelf-head"><h2 className="grow">Playlists partagées</h2></div>
+          <div className="card-grid">
+            {sharedLists.map((p) => (
+              <PlaylistCard key={p.id} name={p.name} sub={`${[p.owner, ...p.members].map(nameOf).join(', ')} · ${p.tracks.length} titres`} covers={p.cover ? [p.cover] : p.tracks.map((t) => t.thumbnail)}
+                onOpen={() => navigate({ name: 'shared', id: p.id })} onPlay={() => playList(p.tracks)} />
+            ))}
+          </div>
+        </>
+      )}
       {artists.length > 0 && (
         <>
           <div className="row gap shelf-head"><h2 className="grow">Artistes suivis</h2></div>
@@ -149,6 +163,8 @@ export function PlaylistView() {
   const [filter, setFilter] = useState('');
   const [sort, setSort] = useState<SortKey>('custom');
   const [syncing, setSyncing] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const canShare = useJam((s) => !!s.me);
 
   const shown = useMemo(() => {
     if (!pl) return [];
@@ -191,6 +207,7 @@ export function PlaylistView() {
         <button className="btn btn-ghost" disabled={!pl.tracks.length} onClick={() => enqueue(shown)}><ListEnd size={16} /> File d'attente</button>
         <button className="btn btn-ghost" onClick={() => { setName(pl.name); setDesc(pl.description); setEditing(true); }}><Pencil size={16} /> Modifier</button>
         <button className="btn btn-ghost" onClick={() => { duplicatePlaylist(pl.id); toast('Playlist dupliquée', 'success'); }}><Copy size={16} /> Dupliquer</button>
+        {canShare && <button className="btn btn-ghost" onClick={() => setSharing(true)}><Users size={16} /> Partager</button>}
         <button className="btn btn-ghost" onClick={() => {
           const data = JSON.parse(exportData());
           downloadText(`${pl.name}.json`, JSON.stringify({ ...data, playlists: [pl], liked: [] }, null, 2));
@@ -230,6 +247,16 @@ export function PlaylistView() {
         onReorder={reorderable ? (from, to) => movePlaylistTrack(pl.id, from, to) : undefined}
         empty={<>Cette playlist est vide. <button className="link accent" onClick={() => navigate({ name: 'search' })}>Rechercher des titres</button></>}
       />
+      {sharing && (
+        <ShareDialog title={`Partager « ${pl.name} »`} confirm="Partager la playlist" onClose={() => setSharing(false)} onDone={async (members) => {
+          if (!members.length) throw new Error('Choisissez au moins un compte');
+          // The playlist becomes collaborative: it moves to the server, the local copy is removed.
+          const sp = await shared.create(pl.name, pl.tracks, members, { description: pl.description, cover: pl.cover });
+          deletePlaylist(pl.id);
+          toast(`« ${sp.name} » est maintenant partagée`, 'success');
+          navigate({ name: 'shared', id: sp.id });
+        }} />
+      )}
     </div>
   );
 }

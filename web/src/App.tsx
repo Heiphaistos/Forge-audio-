@@ -14,6 +14,9 @@ import { Home } from './views/Home';
 import { Search, Artist } from './views/Search';
 import { Library, PlaylistView, Liked, HistoryView } from './views/Library';
 import { Settings } from './views/Settings';
+import { SharedPlaylistView } from './views/Shared';
+import { JamPanel, JamBanner } from './components/Jam';
+import { startSocial } from './store/social';
 import { useAudioEffects, useMediaSession, useRemoteControl, useShortcuts, useTheme } from './hooks';
 import { api, type User } from './lib/api';
 import { startSync } from './lib/sync';
@@ -25,6 +28,7 @@ function CurrentView() {
     case 'artist': return <Artist key={view.q} />;
     case 'library': return <Library />;
     case 'playlist': return <PlaylistView key={view.id} />;
+    case 'shared': return <SharedPlaylistView key={view.id} />;
     case 'liked': return <Liked />;
     case 'history': return <HistoryView />;
     case 'settings': return <Settings />;
@@ -116,6 +120,8 @@ export function App() {
   useRemoteControl();
 
   const enter = async (user: User | null, sync: boolean) => {
+    // Shared playlists, Jam and the Discord link need real accounts (not the desktop app's local mode).
+    if (user && user.username !== 'local') startSocial(user);
     if (user && sync) {
       // Load the saved library before showing the app, so it never flashes empty.
       await Promise.race([startSync(user).catch(() => useUi.getState().toast('Bibliothèque en ligne indisponible, nouvel essai automatique', 'error')), new Promise((r) => setTimeout(r, 8000))]);
@@ -142,6 +148,7 @@ export function App() {
         <div className="main-tint" />
         <div className="main-scroll">
           <TopBar />
+          <JamBanner />
           <CurrentView />
         </div>
       </main>
@@ -152,6 +159,7 @@ export function App() {
       <ContextMenu />
       <PlaylistPicker />
       <Equalizer />
+      <JamPanel />
       <Toasts />
     </div>
   );

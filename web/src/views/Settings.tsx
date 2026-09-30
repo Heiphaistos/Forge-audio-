@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { CheckCircle2, XCircle, Github, Loader2 } from 'lucide-react';
-import { ACCENTS, useSettings } from '../store/ui';
+import { ACCENTS, useSettings, useUi } from '../store/ui';
+import { discord, useDiscord, useJam } from '../store/social';
 import { useLibrary } from '../store/library';
 import { api, type Health } from '../lib/api';
 import { SOURCE_LABELS } from '../lib/format';
@@ -60,6 +61,40 @@ const inMobileApp = () => /ForgeAudioApp/.test(navigator.userAgent);
 const isIos = () => /iPhone|iPad|iPod/.test(navigator.userAgent);
 
 /** Inside the Android / iOS app: go back to the bundled server setup screen. */
+/** Link with HeiphaisBot: same liked tracks in Discord (❤️ J'aime) and in Forge Audio. */
+function DiscordLinkCard() {
+  const { link, botEnabled } = useDiscord();
+  const social = useJam((st) => !!st.me);
+  const toast = useUi((st) => st.toast);
+  const [code, setCode] = useState<{ code: string; expiresAt: number } | null>(null);
+  useEffect(() => { if (social) discord.refresh().catch(() => {}); }, [social]);
+  useEffect(() => { if (link) setCode(null); }, [link]);
+  if (!social || !botEnabled) return null;
+  return (
+    <section className="settings-card">
+      <h2>Discord (HeiphaisBot)</h2>
+      {link ? (
+        <>
+          <p className="muted">Lié au compte Discord <b>{link.discordName || link.discordId}</b>. Un ❤️ <b>J'aime</b> dans le lecteur du bot ajoute le titre à vos titres likés ici, et la playlist « Titres likés » du bot est celle de Forge Audio.</p>
+          <button className="btn btn-ghost danger" onClick={() => discord.unlink().then(() => toast('Compte Discord délié')).catch((e) => toast(e.message, 'error'))}>Délier</button>
+        </>
+      ) : code ? (
+        <>
+          <p className="muted">Dans Discord, sur un serveur où se trouve HeiphaisBot, tapez :</p>
+          <p className="discord-code"><code>/playlist forgeaudio code:{code.code}</code></p>
+          <p className="muted small">Code valable 10 minutes, utilisable une seule fois.</p>
+          <button className="btn btn-ghost btn-sm" onClick={() => navigator.clipboard?.writeText(`/playlist forgeaudio code:${code.code}`).then(() => toast('Commande copiée', 'success'))}>Copier la commande</button>
+        </>
+      ) : (
+        <>
+          <p className="muted">Liez votre compte Discord pour avoir les mêmes titres likés dans Forge Audio et dans le lecteur du bot Discord.</p>
+          <button className="btn btn-primary" onClick={() => discord.code().then(setCode).catch((e) => toast(e.message, 'error'))}>Lier mon compte Discord</button>
+        </>
+      )}
+    </section>
+  );
+}
+
 function MobileServer() {
   if (!inMobileApp()) return null;
   const local = isIos() ? 'capacitor://localhost' : 'https://localhost';
@@ -144,6 +179,7 @@ export function Settings() {
 
       <DesktopServer />
       <MobileServer />
+      <DiscordLinkCard />
       <DownloadApps />
 
       <section className="settings-card">

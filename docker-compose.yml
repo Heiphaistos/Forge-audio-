@@ -5,6 +5,10 @@ services:
     restart: unless-stopped
     ports:
       - "8787:8787"
+    environment:
+      # Jeton partagé avec le bot Discord (HeiphaisBot : FORGEAUDIO_BOT_TOKEN) : titres likés et playlists partagées
+      # communs à Forge Audio et Discord. Vide = liaison désactivée. Défini dans .env (non versionné).
+      - FORGE_BOT_TOKEN=${FORGE_BOT_TOKEN:-}
     volumes:
       # Comptes, sessions et bibliothèque de chaque utilisateur (playlists, historique, likes…).
       # Aucun fichier audio n'y est stocké.

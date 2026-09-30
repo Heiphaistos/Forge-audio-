@@ -11,8 +11,9 @@ import { resolveStreamingLink, playableUrl, withDrmFallback } from './streaming.
 import { HttpError, isPublicUrl, clampInt, TtlCache } from './util.js';
 import { Accounts, Sessions, LoginLimiter } from './accounts.js';
 import { UserData } from './userdata.js';
+import { registerSocial } from './social.js';
 
-export const VERSION = '0.5.0';
+export const VERSION = '0.6.0';
 
 const IMAGE_HOSTS = /(^|\.)(ytimg\.com|ggpht\.com|googleusercontent\.com|sndcdn\.com|dmcdn\.net|dailymotion\.com|bcbits\.com|vimeocdn\.com|jtvnw\.net|scdn\.co|spotifycdn\.com|dzcdn\.net|mzstatic\.com)$/i;
 
@@ -76,7 +77,8 @@ export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null,
     const p = request.url.split('?')[0];
     if (!p.startsWith('/api/')) return;
     request.user = userOf(request);
-    if (!request.user && !PUBLIC.has(p)) return reply.code(401).send({ error: 'Connexion requise', code: 'AUTH_REQUIRED' });
+    // /api/bot/*: HeiphaisBot, authenticated by its bearer token (social.js), not by a session.
+    if (!request.user && !PUBLIC.has(p) && !p.startsWith('/api/bot/')) return reply.code(401).send({ error: 'Connexion requise', code: 'AUTH_REQUIRED' });
   });
 
   const cookie = (request, value, maxAge) => {
@@ -131,6 +133,9 @@ export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null,
   app.put('/api/me/data', saveData);
   // sendBeacon (page closing) can only POST.
   app.post('/api/me/data', saveData);
+
+  // Shared playlists, Jam, live events, link with the Discord bot.
+  registerSocial(app, { accounts, userData, dataDir });
 
   // ---------- API ----------
   app.get('/api/health', async (request, reply) => {

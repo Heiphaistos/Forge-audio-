@@ -47,7 +47,18 @@ interface PlayerState {
   setRate: (r: number) => void;
   setSleep: (minutes: number | 'track' | null) => void;
   startRadio: (track: Track) => Promise<void>;
+  /** Jam: load a track of the (shared) queue at a position without going through the router. */
+  jamLoad: (i: number, startAt: number, autoplay: boolean) => Promise<void>;
 }
+
+/**
+ * Set while in a Jam (store/social.ts): playback and queue actions go to the shared session, whose
+ * state then drives this player. Returns true when it handled the action.
+ */
+type JamOp = 'toggle' | 'next' | 'ended' | 'prev' | 'seek' | 'jump' | 'playNow' | 'addNext' | 'enqueue' | 'playList' | 'remove' | 'blocked';
+let jamRouter: ((op: JamOp, arg?: unknown) => boolean) | null = null;
+export function setJamRouter(fn: typeof jamRouter) { jamRouter = fn; }
+const jam = (op: JamOp, arg?: unknown) => !!jamRouter && jamRouter(op, arg);
 
 let retriedUrl: string | null = null;
 let historyPushedFor = -1;
@@ -101,6 +112,7 @@ export const usePlayer = create<PlayerState>()(
 
         playList: (tracks, start = 0, opts = {}) => {
           if (!tracks.length) return;
+          if (jam('playList', tracks.slice(start))) return;
           const list = tracks.map(slimTrack);
           if (opts.shuffle) {
             const first = list[start] && start > 0 ? list[start] : list[Math.floor(Math.random() * list.length)];
@@ -114,6 +126,7 @@ export const usePlayer = create<PlayerState>()(
         },
 
         playNow: (track) => {
+          if (jam('playNow', track)) return;
           const { queue, index } = get();
           if (index < 0 || !queue.length) {
             get().playList([track]);
@@ -126,6 +139,7 @@ export const usePlayer = create<PlayerState>()(
         },
 
         addNext: (tracks) => {
+          if (jam('addNext', tracks)) return;
           const { queue, index } = get();
           if (index < 0) return get().playList(tracks);
           const q = [...queue];
@@ -136,6 +150,7 @@ export const usePlayer = create<PlayerState>()(
         },
 
         enqueue: (tracks) => {
+          if (jam('enqueue', tracks)) return;
           const { queue, index } = get();
           if (index < 0) return get().playList(tracks);
           set({ queue: [...queue, ...tracks.map(slimTrack)], unshuffled: get().unshuffled ? [...get().unshuffled!, ...tracks.map(slimTrack)] : null });
@@ -143,12 +158,14 @@ export const usePlayer = create<PlayerState>()(
         },
 
         removeAt: (i) => {
+          if (jam('remove', i)) return;
           const { queue, index } = get();
           if (i === index) return;
           set({ queue: queue.filter((_, j) => j !== i), index: i < index ? index - 1 : index });
         },
 
         move: (from, to) => {
+          if (jam('blocked')) return;
           const { queue, index } = get();
           if (from === to) return;
           const q = [...queue];
@@ -162,13 +179,16 @@ export const usePlayer = create<PlayerState>()(
         },
 
         clearUpcoming: () => {
+          if (jam('blocked')) return;
           const { queue, index } = get();
           set({ queue: queue.slice(0, index + 1), unshuffled: null });
         },
 
-        jumpTo: (i) => loadIndex(i),
+        jumpTo: (i) => { if (!jam('jump', i)) loadIndex(i); },
+        jamLoad: (i, startAt, autoplay) => loadIndex(i, { startAt, autoplay }),
 
         next: async (auto = false) => {
+          if (jam(auto ? 'ended' : 'next')) return;
           const { queue, index, repeat, sleepAfterTrack } = get();
           if (auto && sleepAfterTrack) {
             set({ sleepAfterTrack: false, playing: false });
@@ -191,6 +211,7 @@ export const usePlayer = create<PlayerState>()(
         },
 
         prev: () => {
+          if (jam('prev')) return;
           const { index } = get();
           if (engine.currentTime > 4 || index <= 0) {
             engine.seek(0);
@@ -200,6 +221,7 @@ export const usePlayer = create<PlayerState>()(
         },
 
         togglePlay: () => {
+          if (jam('toggle')) return;
           const { queue, index } = get();
           if (!queue.length) return;
           if (!engine.currentTrack || engine.currentTrack.url !== queue[index]?.url) {
@@ -212,6 +234,7 @@ export const usePlayer = create<PlayerState>()(
         },
 
         seek: (t) => {
+          if (jam('seek', t)) return;
           engine.seek(t);
           set({ position: t });
         },
@@ -229,6 +252,7 @@ export const usePlayer = create<PlayerState>()(
         },
 
         toggleShuffle: () => {
+          if (jam('blocked')) return;
           const { shuffle, queue, index, unshuffled } = get();
           const current = queue[index];
           if (!shuffle) {

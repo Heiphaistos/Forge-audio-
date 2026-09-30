@@ -30,6 +30,8 @@ function cleanTrack(t) {
 }
 
 const tracks = (list, max = MAX_TRACKS_PER_LIST) => (Array.isArray(list) ? list.filter(isRemoteTrack).slice(0, max).map(cleanTrack) : []);
+/** Remote tracks only, known fields only (shared playlists and Jam queues use it too). */
+export const cleanTracks = tracks;
 
 /** { key: time } maps (deleted playlists, un-liked tracks, unfollowed artists): positive times only, capped. */
 const tombstones = (obj) => Object.fromEntries(Object.entries(obj && typeof obj === 'object' ? obj : {})
@@ -115,5 +117,18 @@ export class UserData {
     if (size > MAX_BYTES) throw new HttpError('Bibliothèque trop volumineuse', 413, 'TOO_LARGE');
     writeJsonAtomic(this.file(username), doc);
     return { rev: doc.rev, updatedAt: doc.updatedAt };
+  }
+
+  /**
+   * Change a user's library on the server side (likes from the Discord bot). The devices get the
+   * new revision at their next pull, and a device that saves on an older revision merges (409).
+   */
+  update(username, change) {
+    const current = this.get(username);
+    const data = current.data || { library: {}, settings: {}, player: null };
+    data.library = data.library || {};
+    const result = change(data);
+    this.put(username, current.rev, data);
+    return result;
   }
 }

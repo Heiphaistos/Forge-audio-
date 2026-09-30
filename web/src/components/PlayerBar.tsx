@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { usePlayer, useCurrentTrack } from '../store/player';
 import { useUi, useSettings } from '../store/ui';
 import { useIsLiked, useLibrary } from '../store/library';
+import { useJam } from '../store/social';
 import { Cover } from './Cover';
 import { SeekBar, Slider } from './Seek';
 import { Visualizer } from './Visualizer';
@@ -98,6 +99,19 @@ export function VolumeControl() {
   );
 }
 
+/** Jam: listen together (lit while in one). */
+function JamButton() {
+  const inJam = useJam((s) => !!s.jam);
+  const social = useJam((s) => !!s.me);
+  const setJamOpen = useUi((s) => s.setJamOpen);
+  if (!social) return null;
+  return (
+    <button className={`icon-btn ${inJam ? 'on' : ''}`} onClick={() => setJamOpen(true)} aria-label="Jam : écouter ensemble" title={inJam ? 'Jam en cours' : 'Jam : écouter ensemble'}>
+      <Radio size={18} />
+    </button>
+  );
+}
+
 export function PlayerBar() {
   const track = useCurrentTrack();
   const panel = useUi((s) => s.panel);
@@ -140,6 +154,7 @@ export function PlayerBar() {
             <Heart size={18} fill={liked ? 'currentColor' : 'none'} />
           </button>
         )}
+        <JamButton />
         <button className={`icon-btn ${panel === 'lyrics' ? 'on' : ''}`} onClick={() => togglePanel('lyrics')} aria-label="Paroles" title="Paroles (L)"><Mic2 size={18} /></button>
         <button className={`icon-btn ${panel === 'video' ? 'on' : ''}`} onClick={() => togglePanel('video')} aria-label="Vidéo" title="Vidéo (V)"><MonitorPlay size={18} /></button>
         <button className={`icon-btn ${panel === 'queue' ? 'on' : ''}`} onClick={() => togglePanel('queue')} aria-label="File d'attente" title="File d'attente (Q)"><ListMusic size={18} /></button>
