@@ -58,6 +58,8 @@ const DESKTOP_RELEASES = 'https://github.com/Heiphaistos/Forge-audio-/releases/l
 export const MOBILE_RELEASES = 'https://github.com/Heiphaistos/Forge-Audio-Android/releases/latest';
 
 export const inMobileApp = () => /ForgeAudioApp/.test(navigator.userAgent);
+/** Version of the installed mobile app (« ForgeAudioApp/0.5.1 » in the user agent, from 0.5.1). */
+const appVersion = () => navigator.userAgent.match(/ForgeAudioApp\/([\d.]+)/)?.[1] || null;
 const isIos = () => /iPhone|iPad|iPod/.test(navigator.userAgent);
 /** The mobile app's server screen (bundled page), reached from the login page and Settings. */
 export const changeServerUrl = () => `${isIos() ? 'capacitor://localhost' : 'https://localhost'}/?change=1`;
@@ -124,6 +126,7 @@ function MobileServer() {
   return (
     <section className="settings-card">
       <h2>Application mobile</h2>
+      <p className="muted">Application <b>{appVersion() || 'version inconnue (avant 0.5.1)'}</b> · mises à jour automatiques.</p>
       <p className="muted">Connecté au serveur <b>{location.origin}</b>. La musique continue écran verrouillé ou dans une autre application, avec les commandes dans la notification et sur l'écran de verrouillage.</p>
       <a className="btn btn-ghost" href={changeServerUrl()}>Changer de serveur</a>
     </section>
