@@ -14,7 +14,8 @@ export function parseIntegrated(stderr) {
   // Summary block: « Integrated loudness: / I: -9.7 LUFS »
   const m = String(stderr).match(/Integrated loudness:\s*\n\s*I:\s*(-?\d+(?:\.\d+)?)\s*LUFS/);
   const v = m ? Number(m[1]) : NaN;
-  return Number.isFinite(v) && v > -70 ? v : null;
+  // 0.0 = the empty summary printed when the filter failed; real music sits between -70 and 0.
+  return Number.isFinite(v) && v > -70 && v < 0 ? v : null;
 }
 
 function measure(ffmpeg, media) {
@@ -22,12 +23,12 @@ function measure(ffmpeg, media) {
     const args = ['-hide_banner', '-nostats', '-t', '90'];
     const hdr = Object.entries(media.direct.headers || {}).filter(([k]) => !/^(accept-encoding|range)$/i.test(k)).map(([k, v]) => `${k}: ${v}\r\n`).join('');
     if (hdr) args.push('-headers', hdr);
-    args.push('-i', media.direct.url, '-vn', '-af', 'ebur128=framelog=quiet', '-f', 'null', '-');
+    args.push('-i', media.direct.url, '-vn', '-af', 'ebur128=framelog=verbose', '-f', 'null', '-');
     const proc = spawn(ffmpeg, args, { stdio: ['ignore', 'ignore', 'pipe'] });
     let err = '';
     proc.stderr.on('data', (d) => { err += d; if (err.length > 200000) err = err.slice(-50000); });
     const timer = setTimeout(() => proc.kill('SIGKILL'), 60_000);
-    proc.on('close', () => { clearTimeout(timer); resolve(parseIntegrated(err)); });
+    proc.on('close', (code) => { clearTimeout(timer); resolve(code === 0 ? parseIntegrated(err) : null); });
     proc.on('error', () => { clearTimeout(timer); resolve(null); });
   });
 }

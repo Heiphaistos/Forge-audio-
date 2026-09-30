@@ -7,4 +7,5 @@ test('parseIntegrated reads the EBU R128 summary', () => {
   assert.equal(parseIntegrated(out), -9.7);
   assert.equal(parseIntegrated('  Integrated loudness:\n    I:         -70.0 LUFS'), null); // silence
   assert.equal(parseIntegrated('garbage'), null);
+  assert.equal(parseIntegrated('  Integrated loudness:\n    I:           0.0 LUFS'), null); // filter failed (ffmpeg 5.1)
 });
