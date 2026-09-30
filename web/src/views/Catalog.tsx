@@ -1,6 +1,7 @@
 import { Check, ExternalLink, Heart, ListEnd, ListPlus, Loader2, Play, Save, Shuffle, UserPlus } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { api, type AlbumCardData, type AlbumPage, type ArtistCardData, type ArtistPage } from '../lib/api';
+import { api, type AlbumCardData, type AlbumPage, type ArtistCardData, type ArtistPage, type CatalogPlaylist } from '../lib/api';
+import { GENRES } from '../components/Cards';
 import type { Track } from '../lib/types';
 import { formatTotal } from '../lib/format';
 import { usePlayer } from '../store/player';
@@ -185,6 +186,51 @@ export function MixView() {
         <button className="btn btn-ghost" onClick={() => { const pl = useLibrary.getState().createPlaylist(`${mix.title} (${new Date().toLocaleDateString('fr-FR')})`, mix.tracks); toast(`Enregistré dans « ${pl.name} »`, 'success'); }}><Save size={16} /> Enregistrer comme playlist</button>
       </div>
       <TrackList tracks={mix.tracks} listKey={`mix:${mix.id}`} />
+    </div>
+  );
+}
+
+/** A catalogue playlist (Deezer): opening it imports it like a pasted link. */
+export function CatalogPlaylistCard({ p }: { p: CatalogPlaylist }) {
+  const navigate = useUi((s) => s.navigate);
+  return (
+    <div className="card" onClick={() => navigate({ name: 'search', q: p.url })}>
+      <div className="card-cover"><Cover src={p.cover} size="100%" radius={8} /></div>
+      <div className="card-title ellipsis" title={p.title}>{p.title}</div>
+      <div className="card-sub ellipsis">{p.tracks ?? '?'} titres · {p.by?.replace(/^.* - /, '') || 'Deezer'}</div>
+    </div>
+  );
+}
+
+/** Genre page (Home genre cards): official playlists by Deezer's curators, then the community mixes. */
+export function GenreView() {
+  const label = useUi((s) => s.view.id);
+  const navigate = useUi((s) => s.navigate);
+  const g = GENRES.find((x) => x.label === label);
+  const [state, setState] = useState<{ list: CatalogPlaylist[] | null; error: string | null }>({ list: null, error: null });
+  useEffect(() => {
+    if (!g) return;
+    let alive = true;
+    api.catalogGenre(g.dz, g.pq).then((r) => alive && setState({ list: r.playlists, error: null })).catch((e) => alive && setState({ list: null, error: e.message }));
+    return () => { alive = false; };
+  }, [g]);
+  if (!g) return <div className="page"><div className="empty">Genre inconnu.</div></div>;
+  return (
+    <div className="page">
+      <div className="hero genre-hero" style={{ background: `linear-gradient(135deg, ${g.color}, transparent 85%)` }}>
+        <div className="hero-info"><div className="muted small">GENRE</div><h1 className="hero-title">{g.label}</h1></div>
+      </div>
+      <section className="shelf">
+        <div className="shelf-head"><h2>Playlists officielles</h2><span className="muted small">par les éditeurs de Deezer</span></div>
+        {!state.list && !state.error && <div className="empty"><Loader2 className="spin" size={28} /> Chargement…</div>}
+        {state.error && <div className="empty error">{state.error}</div>}
+        {state.list && !state.list.length && <div className="empty small">Aucune playlist officielle trouvée pour ce genre.</div>}
+        {state.list && state.list.length > 0 && <div className="card-grid">{state.list.map((p) => <CatalogPlaylistCard key={p.id} p={p} />)}</div>}
+      </section>
+      <section className="shelf">
+        <div className="shelf-head"><h2>Mix de la communauté</h2></div>
+        <button className="btn btn-ghost" onClick={() => navigate({ name: 'search', q: g.q })}><Play size={16} /> Voir les mix et playlists de la communauté</button>
+      </section>
     </div>
   );
 }

@@ -38,6 +38,9 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm ci --prefix desktop
+      # electron-builder needs rpmbuild for the Fedora / openSUSE package
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update -q && sudo apt-get install -y -q rpm
       - name: Package
         working-directory: desktop
         env:
@@ -55,5 +58,6 @@ jobs:
             desktop/release/*.dmg
             desktop/release/*.AppImage
             desktop/release/*.deb
+            desktop/release/*.rpm
             desktop/release/*.tar.gz
           if-no-files-found: ignore

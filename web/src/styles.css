@@ -532,7 +532,8 @@ kbd {
   .page { padding: 4px 14px 32px; }
   .page-title { font-size: 26px; }
   .player-bar { grid-template-columns: minmax(0, 1fr) auto; padding: 0 10px; border-top: 1px solid var(--border); gap: 8px; padding-bottom: env(safe-area-inset-bottom); }
-  .pb-center .seekbar, .transport > .icon-btn:first-child, .transport > .icon-btn:last-child, .transport > .icon-btn:nth-child(2) { display: none; }
+  .pb-center .seekbar, .transport > .icon-btn:first-child, .transport > .icon-btn:last-child { display: none; }
+  .pb-center .transport { gap: 4px; }
   .pb-right { display: none; }
   .pb-cover .cover { width: 48px !important; height: 48px !important; }
   .right-panel { inset: 0 0 var(--player-h) 0; width: auto; border-radius: 0; }
@@ -656,3 +657,5 @@ kbd {
 .rank { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .rank li { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .rank-n { width: 22px; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+.np-in { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 2px 0 6px; min-width: 0; }
+.np-in .chip { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

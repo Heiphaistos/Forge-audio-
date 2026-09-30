@@ -93,7 +93,8 @@ export interface ArtistPage {
   bio: { text: string; url: string | null; lang: string } | null;
 }
 export interface AlbumPage { album: AlbumCardData & { duration: number | null; label: string | null; genres: string[] }; tracks: Track[] }
-export interface CatalogSearch { artists: ArtistCardData[]; albums: AlbumCardData[]; playlists: { id: number; title: string; cover: string | null; tracks: number | null; url: string }[] }
+export interface CatalogPlaylist { id: number; title: string; cover: string | null; tracks: number | null; by: string | null; url: string }
+export interface CatalogSearch { artists: ArtistCardData[]; albums: AlbumCardData[]; playlists: CatalogPlaylist[] }
 export interface Mix { id: string; title: string; subtitle: string; cover: string | null; tracks: Track[] }
 export interface Reco { mixes: Mix[]; discover: Mix | null; radar: AlbumCardData[]; seeds: ArtistCardData[] }
 
@@ -160,6 +161,7 @@ export const api = {
   catalogArtist: (q: { id?: number; name?: string }) => get<ArtistPage>('/api/catalog/artist', { id: q.id, name: q.name }),
   catalogAlbum: (id: number) => get<AlbumPage>(`/api/catalog/album/${id}`),
   catalogSearch: (q: string, signal?: AbortSignal) => get<CatalogSearch>('/api/catalog/search', { q }, signal),
+  catalogGenre: (id: number | undefined, q: string[]) => get<{ playlists: CatalogPlaylist[] }>(`/api/catalog/genre?${new URLSearchParams([...(id === undefined ? [] : [['id', String(id)]]), ...q.map((x) => ['q', x])])}`),
   reco: (body: { top: string[]; followed: string[]; known: string[]; hiddenArtists: string[]; hiddenTracks: string[] }) => send<Reco>('POST', '/api/reco', body),
   uploadCover: async (file: File) => {
     const res = await fetch('/api/me/covers', { method: 'POST', body: file, headers: { 'content-type': file.type || 'application/octet-stream' }, credentials: 'same-origin' });

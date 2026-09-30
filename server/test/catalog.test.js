@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { artistPage, recommendations } from '../src/catalog.js';
+import { artistPage, recommendations, genrePlaylists } from '../src/catalog.js';
 
 // Fake Deezer + Wikipedia: the CI never calls the real services.
 const artists = {
@@ -43,6 +43,25 @@ test('artist page: the most followed homonym, top tracks, albums vs singles, sim
     assert.equal(r.mixes.length, 1);
     assert.ok(r.mixes[0].tracks.every((t) => t.author !== 'Masqué'), 'hidden artists never recommended');
     assert.ok(!r.discover || r.discover.tracks.every((t) => t.author === 'Cassius'), 'discoveries = artists not already in the library');
+  } finally {
+    globalThis.fetch = real;
+  }
+});
+
+test('genre playlists: Deezer curators only, keyword matches before the genre chart, no duplicates', async () => {
+  const real = globalThis.fetch;
+  const pl = (id, user, nb = 50) => ({ id, title: `P${id}`, nb_tracks: nb, picture_big: null, user: { name: user } });
+  globalThis.fetch = async (url) => {
+    const p = new URL(url).pathname;
+    const json = (body) => ({ ok: true, status: 200, json: async () => body });
+    if (p === '/chart/9116/playlists') return json({ data: [pl(1, 'Laeti - Deezer Pop Editor'), pl(2, 'Narjes - Deezer Rap & R&B Editrice France')] });
+    if (p === '/search/playlist') return json({ data: [pl(2, 'Narjes - Deezer Rap & R&B Editrice France'), pl(3, 'kevin93'), pl(4, 'Deezer Best Of'), pl(5, 'Deezer Editors', 0)] });
+    return json({ data: [] });
+  };
+  try {
+    const { playlists } = await genrePlaylists(9116, ['rap fr test']);
+    assert.deepEqual(playlists.map((x) => x.id), [2, 4, 1], 'community (3) and empty (5) dropped, 2 once, search first');
+    assert.equal(playlists[0].by, 'Narjes - Deezer Rap & R&B Editrice France');
   } finally {
     globalThis.fetch = real;
   }

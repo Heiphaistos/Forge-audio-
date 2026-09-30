@@ -27,7 +27,7 @@ Téléchargez la version pour votre système dans les [Releases](https://github.
 |---|---|---|
 | Windows | `ForgeAudio-x.y.z-win-x64-nsis.exe` | `ForgeAudio-x.y.z-win-portable.exe` (un seul .exe) ou le `.zip` |
 | macOS (Intel / Apple Silicon) | `.dmg` | `.zip` (décompresser et lancer) |
-| Linux | `.deb` | `.AppImage` (rendre exécutable et lancer) ou `.tar.gz` |
+| Linux | `.deb` (Debian, Ubuntu) ou `.rpm` (Fedora, openSUSE) | `.AppImage` (rendre exécutable et lancer) ou `.tar.gz` |
 
 L'application embarque son serveur et ffmpeg ; **yt-dlp est téléchargé automatiquement** au premier lancement puis mis à jour tous les 3 jours. En version portable Windows, les données sont rangées dans `ForgeAudio-data` à côté de l'exécutable.
 

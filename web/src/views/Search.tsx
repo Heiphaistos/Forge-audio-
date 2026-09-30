@@ -1,5 +1,5 @@
 import { Search as SearchIcon, X, Loader2, Play, ListEnd, ListMusic, Save, Clock } from 'lucide-react';
-import { ArtistCard, AlbumCard } from './Catalog';
+import { ArtistCard, AlbumCard, CatalogPlaylistCard } from './Catalog';
 import type { CatalogSearch } from '../lib/api';
 import { useEffect, useRef, useState } from 'react';
 import { api, isUrl, type ResolveResult } from '../lib/api';
@@ -183,13 +183,7 @@ export function Search() {
             <div className="card-grid">
               {kind === 'artists' && cat.data.artists.map((a) => <ArtistCard key={a.id} a={a} />)}
               {kind === 'albums' && cat.data.albums.map((a) => <AlbumCard key={a.id} a={a} showArtist />)}
-              {kind === 'playlists' && cat.data.playlists.map((p) => (
-                <div key={p.id} className="card" onClick={() => navigate({ name: 'search', q: p.url })}>
-                  <div className="card-cover"><Cover src={p.cover} size="100%" radius={8} /></div>
-                  <div className="card-title ellipsis">{p.title}</div>
-                  <div className="card-sub">{p.tracks ?? '?'} titres · Deezer</div>
-                </div>
-              ))}
+              {kind === 'playlists' && cat.data.playlists.map((p) => <CatalogPlaylistCard key={p.id} p={p} />)}
             </div>
           )}
           {cat.data && !cat.data[kind].length && <div className="empty">Aucun résultat pour « {q} »</div>}

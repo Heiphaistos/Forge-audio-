@@ -1,4 +1,4 @@
-import { ChevronDown, Heart, ListMusic, Mic2, MonitorPlay, MoreHorizontal, Disc3 } from 'lucide-react';
+import { ChevronDown, Heart, ListMusic, Users, Mic2, MonitorPlay, MoreHorizontal, Disc3 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useCurrentTrack } from '../store/player';
 import { useUi, useSettings } from '../store/ui';
@@ -9,6 +9,7 @@ import { TransportControls, VolumeControl } from './PlayerBar';
 import { LyricsView, QueuePanel, VideoView } from './Panels';
 import { Visualizer } from './Visualizer';
 import { SourceBadge } from './SourceBadge';
+import { useShared } from '../store/social';
 
 type Side = 'lyrics' | 'queue' | 'video' | 'cover';
 
@@ -56,6 +57,7 @@ export function NowPlaying() {
             </div>
             <button className={`icon-btn tr-like ${liked ? 'liked' : ''}`} onClick={() => toggleLike(track)} aria-label="J'aime"><Heart size={26} fill={liked ? 'currentColor' : 'none'} /></button>
           </div>
+          <InPlaylists url={track.url} onGo={() => setOpen(false)} />
           <SeekBar />
           <div className="np-controls">
             <TransportControls size={64} />
@@ -80,6 +82,24 @@ export function NowPlaying() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** « Ce titre est dans » : the user's playlists (and shared ones) holding the current track, one tap to open them. */
+function InPlaylists({ url, onGo }: { url: string; onGo: () => void }) {
+  const playlists = useLibrary((s) => s.playlists);
+  const shared = useShared((s) => s.list);
+  const navigate = useUi((s) => s.navigate);
+  const mine = playlists.filter((p) => p.tracks.some((t) => t.url === url));
+  const theirs = shared.filter((p) => p.tracks.some((t) => t.url === url));
+  if (!mine.length && !theirs.length) return null;
+  const go = (v: { name: 'playlist' | 'shared'; id: string }) => { onGo(); navigate(v); };
+  return (
+    <div className="np-in">
+      <span className="muted small">Ce titre est dans</span>
+      {mine.map((p) => <button key={p.id} className="chip" onClick={() => go({ name: 'playlist', id: p.id })}><ListMusic size={13} /> {p.name}</button>)}
+      {theirs.map((p) => <button key={`s-${p.id}`} className="chip" onClick={() => go({ name: 'shared', id: p.id })}><Users size={13} /> {p.name}</button>)}
     </div>
   );
 }

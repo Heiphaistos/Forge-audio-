@@ -12,7 +12,7 @@ import { Equalizer } from './components/Equalizer';
 import { Toasts } from './components/Toasts';
 import { Home } from './views/Home';
 import { Search } from './views/Search';
-import { ArtistView, AlbumView, MixView } from './views/Catalog';
+import { ArtistView, AlbumView, MixView, GenreView } from './views/Catalog';
 import { StatsView, BlendView } from './views/Stats';
 import { openLink } from './views/Home';
 import { Library, PlaylistView, Liked, HistoryView } from './views/Library';
@@ -33,6 +33,7 @@ function CurrentView() {
     case 'album': return <AlbumView key={view.id} />;
     case 'mix': return <MixView key={view.id} />;
     case 'stats': return <StatsView />;
+    case 'genre': return <GenreView key={view.id} />;
     case 'blend': return <BlendView key={view.id} />;
     case 'library': return <Library />;
     case 'playlist': return <PlaylistView key={view.id} />;

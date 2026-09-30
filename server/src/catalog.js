@@ -115,8 +115,34 @@ export async function searchCatalog(q) {
   return {
     artists: (artists.data || []).map(artistCard),
     albums: (albums.data || []).map((x) => albumCard(x)),
-    playlists: (playlists.data || []).map((p) => ({ id: p.id, title: p.title, cover: p.picture_big || p.picture_medium || null, tracks: p.nb_tracks ?? null, url: p.link || `https://www.deezer.com/playlist/${p.id}` })),
+    playlists: (playlists.data || []).map(playlistCard),
   };
+}
+
+const playlistCard = (p) => ({ id: p.id, title: p.title, cover: p.picture_big || p.picture_medium || null, tracks: p.nb_tracks ?? null, by: p.user?.name || null, url: p.link || `https://www.deezer.com/playlist/${p.id}` });
+/** Deezer's own curators (« Narjes - Deezer Rap & R&B Editrice France », « Deezer Best Of », « Alexandre - Pop & Hits Editor »). */
+export const isEditorial = (p) => /deezer|\beditor\b|[ée]ditrice|[ée]diteur/i.test(p?.user?.name || '');
+
+/**
+ * Official playlists of a genre (Home genre cards): the genre's chart of playlists plus editorial
+ * playlists found by keyword, curators' only (community playlists stay in the regular search).
+ */
+export async function genrePlaylists(genreId, queries = []) {
+  const id = Number.isInteger(Number(genreId)) && Number(genreId) >= 0 ? Number(genreId) : null;
+  const qs = queries.map((q) => String(q).trim()).filter(Boolean).slice(0, 4);
+  // Keyword matches first (on topic), then the genre chart (popular but broader: « 00s Hits » under rap).
+  const lists = await Promise.all([
+    ...qs.map((q) => dz(`/search/playlist?q=${encodeURIComponent(q)}&limit=100`).catch(() => ({ data: [] }))),
+    id === null ? { data: [] } : dz(`/chart/${id}/playlists?limit=50`).catch(() => ({ data: [] })),
+  ]);
+  const seen = new Set();
+  const out = [];
+  for (const p of lists.flatMap((l) => l.data || [])) {
+    if (!isEditorial(p) || seen.has(p.id) || !(p.nb_tracks > 0)) continue;
+    seen.add(p.id);
+    out.push(playlistCard(p));
+  }
+  return { playlists: out.slice(0, 60) };
 }
 
 // ---------------------------------------------------------------- recommendations
@@ -200,6 +226,7 @@ export function registerCatalog(app) {
   app.get('/api/catalog/artist', async (request) => artistPage({ id: request.query.id, name: request.query.name }));
   app.get('/api/catalog/album/:id', async (request) => albumPage(request.params.id));
   app.get('/api/catalog/search', async (request) => searchCatalog(request.query.q));
+  app.get('/api/catalog/genre', async (request) => genrePlaylists(request.query.id, [].concat(request.query.q || [])));
   app.post('/api/reco', async (request) => {
     const b = request.body || {};
     const list = (v, n) => (Array.isArray(v) ? v.slice(0, n).map((x) => String(x).slice(0, 200)) : []);

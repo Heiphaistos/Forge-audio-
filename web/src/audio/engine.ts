@@ -69,9 +69,13 @@ class AudioEngine {
     this.el = this.createElement();
   }
 
-  /** Element volume: user volume × loudness correction. */
+  /**
+   * Element volume: slider position on a perceptual curve × loudness correction. The ear hears
+   * amplitude logarithmically: a linear slider barely changes anything from 100 to 75 % and cuts hard
+   * below 20 %. Squaring (-5 dB at 75 %, -12 dB at 50 %, -20 dB at 10 %) makes every step sound alike.
+   */
   private get outVol() {
-    return this.volume * this.norm;
+    return this.volume * this.volume * this.norm;
   }
 
   private createElement(attach = true) {
