@@ -12,6 +12,15 @@ export interface Track {
   source: Source;
   isLive?: boolean;
   views?: number | null;
+  /** When it was liked or added to the playlist (ms). */
+  addedAt?: number;
+}
+
+export interface Artist {
+  name: string;
+  thumbnail: string | null;
+  /** When it was followed (ms). */
+  at: number;
 }
 
 export interface Playlist {

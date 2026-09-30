@@ -14,7 +14,7 @@ export const MAX_BYTES = 8 * 1024 * 1024;
 const MAX_TRACKS_PER_LIST = 5000;
 const MAX_HISTORY = 1000;
 
-const TRACK_KEYS = ['id', 'title', 'url', 'duration', 'thumbnail', 'author', 'album', 'source', 'isLive'];
+const TRACK_KEYS = ['id', 'title', 'url', 'duration', 'thumbnail', 'author', 'album', 'source', 'isLive', 'addedAt'];
 
 function isRemoteTrack(t) {
   return t && typeof t === 'object' && typeof t.url === 'string' && /^https?:\/\//i.test(t.url) && t.source !== 'local' && typeof t.title === 'string';
@@ -24,10 +24,25 @@ function cleanTrack(t) {
   const out = {};
   for (const k of TRACK_KEYS) if (t[k] !== undefined) out[k] = t[k];
   out.title = String(out.title).slice(0, 300);
+  if (out.addedAt !== undefined && !(Number(out.addedAt) > 0)) delete out.addedAt;
+  else if (out.addedAt !== undefined) out.addedAt = Math.floor(Number(out.addedAt));
   return out;
 }
 
 const tracks = (list, max = MAX_TRACKS_PER_LIST) => (Array.isArray(list) ? list.filter(isRemoteTrack).slice(0, max).map(cleanTrack) : []);
+
+/** { key: time } maps (deleted playlists, un-liked tracks, unfollowed artists): positive times only, capped. */
+const tombstones = (obj) => Object.fromEntries(Object.entries(obj && typeof obj === 'object' ? obj : {})
+  .filter(([k, v]) => k.length <= 2000 && Number(v) > 0).slice(0, 5000).map(([k, v]) => [k, Math.floor(Number(v))]));
+
+const artists = (list) => (Array.isArray(list) ? list : [])
+  .filter((a) => a && typeof a.name === 'string' && a.name.trim())
+  .slice(0, 2000)
+  .map((a) => ({
+    name: a.name.trim().slice(0, 200),
+    thumbnail: typeof a.thumbnail === 'string' && /^https?:\/\//.test(a.thumbnail) ? a.thumbnail : null,
+    at: Number(a.at) || Date.now(),
+  }));
 
 /** Validate and strip a library document sent by a client. */
 export function sanitizeData(data) {
@@ -45,8 +60,11 @@ export function sanitizeData(data) {
         createdAt: Number(p.createdAt) || Date.now(),
         updatedAt: Number(p.updatedAt) || Date.now(),
       })),
-      deletedPlaylists: Object.fromEntries(Object.entries(lib.deletedPlaylists || {}).filter(([k, v]) => typeof k === 'string' && Number(v) > 0).slice(0, 5000)),
+      deletedPlaylists: tombstones(lib.deletedPlaylists),
       liked: tracks(lib.liked),
+      unliked: tombstones(lib.unliked),
+      followedArtists: artists(lib.followedArtists),
+      unfollowed: tombstones(lib.unfollowed),
       history: (Array.isArray(lib.history) ? lib.history : []).filter((h) => h && isRemoteTrack(h.track)).slice(0, MAX_HISTORY).map((h) => ({ track: cleanTrack(h.track), at: Number(h.at) || 0 })),
       playCounts: Object.fromEntries(Object.entries(lib.playCounts || {}).filter(([k, v]) => /^https?:\/\//.test(k) && Number(v) > 0).slice(0, 20000).map(([k, v]) => [k, Math.floor(Number(v))])),
     },

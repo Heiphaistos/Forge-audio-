@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { engine } from './audio/engine';
 import { usePlayer } from './store/player';
+import { useLibrary } from './store/library';
 import { useUi, useSettings, ACCENTS } from './store/ui';
 import { dominantColor } from './lib/color';
 import { openLink } from './views/Home';
@@ -18,9 +19,9 @@ export function useEscape(open: boolean, close: () => void) {
 declare global {
   interface Window {
     /** Remote control used by the desktop tray and the mobile apps' notification buttons. */
-    __forgeRemote?: (action: 'toggle' | 'play' | 'pause' | 'next' | 'prev' | 'seek', value?: number) => void;
+    __forgeRemote?: (action: 'toggle' | 'play' | 'pause' | 'next' | 'prev' | 'seek' | 'like', value?: number) => void;
     /** Current track for native notifications (position and duration in seconds, duration null when unknown or live). */
-    __forgeNowPlaying?: () => { title: string; author: string; thumbnail: string | null; playing: boolean; position: number; duration: number | null } | null;
+    __forgeNowPlaying?: () => { title: string; author: string; thumbnail: string | null; playing: boolean; position: number; duration: number | null; liked: boolean } | null;
     /** Mobile apps' share target: plays or imports the first link found in the shared text. */
     __forgeOpenLink?: (text: string) => void;
     /** Android Back button: closes the topmost overlay or goes back one view. Returns false when there is nothing left to close. */
@@ -38,13 +39,15 @@ export function useRemoteControl() {
       else if (action === 'next') p.next(false);
       else if (action === 'prev') p.prev();
       else if (action === 'seek' && Number.isFinite(value)) p.seek(value!);
+      else if (action === 'like') { const t = p.queue[p.index]; if (t && t.source !== 'local') useLibrary.getState().toggleLike(t); }
     };
     window.__forgeNowPlaying = () => {
       const p = usePlayer.getState();
       const t = p.queue[p.index];
       if (!t) return null;
       const duration = t.isLive ? null : engine.duration;
-      return { title: t.title, author: t.author || '', thumbnail: t.thumbnail, playing: p.playing, position: engine.currentTime, duration: Number.isFinite(duration) ? duration : null };
+      const liked = useLibrary.getState().liked.some((l) => l.url === t.url);
+      return { title: t.title, author: t.author || '', thumbnail: t.thumbnail, playing: p.playing, position: engine.currentTime, duration: Number.isFinite(duration) ? duration : null, liked };
     };
     window.__forgeBack = () => {
       const ui = useUi.getState();
@@ -130,6 +133,7 @@ export function useShortcuts() {
         case 'v': case 'V': ui.togglePanel('video'); break;
         case 'i': case 'I': ui.setMiniVideo(!ui.miniVideo); break;
         case 'e': case 'E': ui.setEqOpen(!ui.eqOpen); break;
+        case 'j': case 'J': { const t = p.queue[p.index]; if (t && t.source !== 'local') useLibrary.getState().toggleLike(t); break; }
         case 'f': case 'F': if (p.queue[p.index]) ui.setNowPlaying(!ui.nowPlaying); break;
         case '/': e.preventDefault(); focusSearch(); break;
         default:

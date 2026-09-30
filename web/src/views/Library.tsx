@@ -6,6 +6,8 @@ import { useUi } from '../store/ui';
 import { PlaylistCard } from '../components/Cards';
 import { Mosaic } from '../components/Cover';
 import { TrackList } from '../components/TrackList';
+import { AddTracks } from '../components/AddTracks';
+import { Cover } from '../components/Cover';
 import { ImportBox } from './Home';
 import { api } from '../lib/api';
 import { formatTotal, timeAgo, uid } from '../lib/format';
@@ -41,6 +43,7 @@ export function LocalFilesButton() {
 export function Library() {
   const playlists = useLibrary((s) => s.playlists);
   const liked = useLibrary((s) => s.liked);
+  const artists = useLibrary((s) => s.followedArtists);
   const { createPlaylist, exportData, importData } = useLibrary.getState();
   const navigate = useUi((s) => s.navigate);
   const toast = useUi((s) => s.toast);
@@ -103,15 +106,30 @@ export function Library() {
         ))}
       </div>
       {!playlists.length && <p className="muted">Créez une playlist, ou collez le lien d'une playlist YouTube / SoundCloud ci-dessus pour l'importer.</p>}
+      {artists.length > 0 && (
+        <>
+          <div className="row gap shelf-head"><h2 className="grow">Artistes suivis</h2></div>
+          <div className="card-grid">
+            {artists.map((a) => (
+              <div key={a.name} className="card artist-card" onClick={() => navigate({ name: 'artist', q: a.name })}>
+                <Cover src={a.thumbnail} size="100%" radius={999} />
+                <div className="card-title ellipsis">{a.name}</div>
+                <div className="card-sub">Artiste</div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
-type SortKey = 'custom' | 'title' | 'author' | 'duration';
+type SortKey = 'custom' | 'added' | 'title' | 'author' | 'duration';
 
 function sortTracks(tracks: Track[], key: SortKey) {
   if (key === 'custom') return tracks;
   const list = [...tracks];
+  if (key === 'added') list.sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0));
   if (key === 'title') list.sort((a, b) => a.title.localeCompare(b.title, 'fr'));
   if (key === 'author') list.sort((a, b) => (a.author || '').localeCompare(b.author || '', 'fr'));
   if (key === 'duration') list.sort((a, b) => (a.duration || 0) - (b.duration || 0));
@@ -196,12 +214,16 @@ export function PlaylistView() {
           <div className="filter-input"><SearchIcon size={14} /><input placeholder="Filtrer dans la playlist" value={filter} onChange={(e) => setFilter(e.target.value)} /></div>
           <select className="select" value={sort} onChange={(e) => setSort(e.target.value as SortKey)} aria-label="Trier">
             <option value="custom">Ordre personnalisé</option>
+            <option value="added">Date d'ajout</option>
             <option value="title">Titre</option>
             <option value="author">Artiste</option>
             <option value="duration">Durée</option>
           </select>
         </div>
       )}
+      <AddTracks have={new Set(pl.tracks.map((t) => t.url))} startOpen={!pl.tracks.length} onAdd={(t) => {
+        if (addToPlaylist(pl.id, [t])) toast(`Ajouté à « ${pl.name} »`, 'success');
+      }} />
       <TrackList
         tracks={shown}
         playlistId={reorderable ? pl.id : undefined}
@@ -215,7 +237,15 @@ export function PlaylistView() {
 export function Liked() {
   const liked = useLibrary((s) => s.liked);
   const { playList, enqueue } = usePlayer.getState();
+  const toast = useUi((s) => s.toast);
+  const [filter, setFilter] = useState('');
+  const [sort, setSort] = useState<SortKey>('custom');
   const total = liked.reduce((a, t) => a + (t.duration || 0), 0);
+  // "custom" = newest like first, the order they are stored in.
+  const shown = useMemo(() => {
+    const f = filter.trim().toLowerCase();
+    return sortTracks(f ? liked.filter((t) => `${t.title} ${t.author || ''}`.toLowerCase().includes(f)) : liked, sort);
+  }, [liked, filter, sort]);
   return (
     <div className="page">
       <div className="hero">
@@ -227,11 +257,25 @@ export function Liked() {
         </div>
       </div>
       <div className="actions">
-        <button className="play-btn big" disabled={!liked.length} onClick={() => playList(liked)} aria-label="Lire"><Play size={26} fill="currentColor" className="nudge" /></button>
-        <button className="icon-btn big" disabled={!liked.length} onClick={() => playList(liked, 0, { shuffle: true })} aria-label="Lecture aléatoire"><Shuffle size={24} /></button>
-        <button className="btn btn-ghost" disabled={!liked.length} onClick={() => enqueue(liked)}><ListEnd size={16} /> File d'attente</button>
+        <button className="play-btn big" disabled={!liked.length} onClick={() => playList(shown)} aria-label="Lire"><Play size={26} fill="currentColor" className="nudge" /></button>
+        <button className="icon-btn big" disabled={!liked.length} onClick={() => playList(shown, 0, { shuffle: true })} aria-label="Lecture aléatoire"><Shuffle size={24} /></button>
+        <button className="btn btn-ghost" disabled={!liked.length} onClick={() => enqueue(shown)}><ListEnd size={16} /> File d'attente</button>
       </div>
-      <TrackList tracks={liked} empty="Les titres que vous aimez apparaîtront ici. Cliquez sur ♥ à côté d'un titre." />
+      {liked.length > 0 && (
+        <div className="row gap list-tools">
+          <div className="filter-input"><SearchIcon size={14} /><input placeholder="Filtrer dans les titres likés" value={filter} onChange={(e) => setFilter(e.target.value)} /></div>
+          <select className="select" value={sort} onChange={(e) => setSort(e.target.value as SortKey)} aria-label="Trier">
+            <option value="custom">Ajoutés récemment</option>
+            <option value="title">Titre</option>
+            <option value="author">Artiste</option>
+            <option value="duration">Durée</option>
+          </select>
+        </div>
+      )}
+      <AddTracks have={new Set(liked.map((t) => t.url))} startOpen={!liked.length} onAdd={(t) => {
+        if (useLibrary.getState().likeTracks([t])) toast('Ajouté aux titres likés', 'success');
+      }} />
+      <TrackList tracks={shown} empty={liked.length ? `Aucun titre liké ne correspond à « ${filter} »` : 'Les titres que vous aimez apparaîtront ici : touchez ♥ à côté d\'un titre, ou ajoutez-en ci-dessus.'} />
     </div>
   );
 }

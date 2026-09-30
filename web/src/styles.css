@@ -583,3 +583,16 @@ kbd {
 .sync-status { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); }
 .sync-status.bad { color: var(--danger); }
 .wrap { flex-wrap: wrap; }
+
+/* Liked tracks in the "add to playlist" picker, in-page search, followed artists */
+.picker-liked { width: 44px; height: 44px; border-radius: 6px; display: grid; place-items: center; color: #fff; flex: none; }
+.picker-item .accent { color: var(--accent); flex: none; }
+.add-tracks { border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin: 8px 0 18px; display: grid; gap: 10px; background: var(--surface); }
+.add-tracks h2 { font-size: 17px; margin: 0; }
+.add-list { display: grid; gap: 4px; }
+.add-row { display: flex; align-items: center; gap: 12px; padding: 6px; border-radius: 8px; min-width: 0; }
+.add-row:hover { background: var(--surface-2, rgba(255,255,255,.04)); }
+.add-row .btn { flex: none; }
+.artist-card { text-align: center; }
+.artist-card .cover { aspect-ratio: 1; width: 100%; height: auto !important; margin-bottom: 10px; }
+.btn.following { border-color: var(--accent); color: var(--accent); }

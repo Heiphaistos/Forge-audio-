@@ -1,11 +1,11 @@
-import { Search as SearchIcon, X, Loader2, Play, ListEnd, ListMusic, Save, Clock } from 'lucide-react';
+import { Search as SearchIcon, X, Loader2, Play, ListEnd, ListMusic, Save, Clock, Check, UserPlus } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { api, isUrl, type ResolveResult } from '../lib/api';
 import type { Track } from '../lib/types';
 import { SOURCE_LABELS } from '../lib/format';
 import { useUi, useSettings } from '../store/ui';
 import { usePlayer } from '../store/player';
-import { useLibrary } from '../store/library';
+import { useLibrary, useIsFollowed } from '../store/library';
 import { TrackList } from '../components/TrackList';
 import { Cover } from '../components/Cover';
 import { SourceBadge } from '../components/SourceBadge';
@@ -197,6 +197,9 @@ export function Artist() {
   const name = view.q || '';
   const [state, setState] = useState<{ loading: boolean; tracks: Track[]; error: string | null }>({ loading: true, tracks: [], error: null });
   const playList = usePlayer((s) => s.playList);
+  const artistName = name.replace(/\s*-\s*Topic$/i, '');
+  const followed = useIsFollowed(artistName);
+  const toast = useUi((s) => s.toast);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -213,10 +216,14 @@ export function Artist() {
     <div className="page">
       <div className="hero artist-hero" style={{ ['--hero-img' as string]: state.tracks[0]?.thumbnail ? `url("${state.tracks[0].thumbnail}")` : 'none' }}>
         <div className="muted small">ARTISTE</div>
-        <h1 className="hero-title">{name.replace(/\s*-\s*Topic$/i, '')}</h1>
+        <h1 className="hero-title">{artistName}</h1>
         <div className="actions">
           <button className="btn btn-primary" disabled={!state.tracks.length} onClick={() => playList(state.tracks)}><Play size={16} fill="currentColor" /> Lecture</button>
           <button className="btn btn-ghost" disabled={!state.tracks.length} onClick={() => playList(state.tracks, 0, { shuffle: true })}>Aléatoire</button>
+          <button className={`btn ${followed ? 'btn-ghost following' : 'btn-ghost'}`} aria-pressed={followed} onClick={() => {
+            const on = useLibrary.getState().toggleFollow(artistName, state.tracks[0]?.thumbnail ?? null);
+            toast(on ? 'Artiste ajouté à votre bibliothèque' : 'Vous ne suivez plus cet artiste', 'success');
+          }}>{followed ? <><Check size={16} /> Abonné</> : <><UserPlus size={16} /> Suivre</>}</button>
         </div>
       </div>
       {state.loading && <div className="empty"><Loader2 className="spin" size={28} /> Chargement…</div>}

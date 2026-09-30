@@ -18,6 +18,7 @@ export const SHORTCUTS: [string, string][] = [
   ['V', 'Vidéo'],
   ['I', 'Lecteur vidéo réduit'],
   ['E', 'Égaliseur'],
+  ['J', 'Ajouter aux titres likés / retirer'],
   ['F', 'Lecteur plein écran'],
   ['Ctrl + K ou /', 'Rechercher'],
 ];

@@ -134,6 +134,12 @@ export function PlayerBar() {
       <div className="pb-right">
         {visualizer && <Visualizer bars={16} className="pb-viz" />}
         <MoreControls />
+        {track && track.source !== 'local' && (
+          <button className={`icon-btn ${liked ? 'on liked' : ''}`} onClick={() => toggleLike(track)} aria-pressed={liked}
+            aria-label={liked ? 'Retirer des titres likés' : 'Ajouter aux titres likés'} title={liked ? 'Retirer des titres likés (J)' : 'Ajouter aux titres likés (J)'}>
+            <Heart size={18} fill={liked ? 'currentColor' : 'none'} />
+          </button>
+        )}
         <button className={`icon-btn ${panel === 'lyrics' ? 'on' : ''}`} onClick={() => togglePanel('lyrics')} aria-label="Paroles" title="Paroles (L)"><Mic2 size={18} /></button>
         <button className={`icon-btn ${panel === 'video' ? 'on' : ''}`} onClick={() => togglePanel('video')} aria-label="Vidéo" title="Vidéo (V)"><MonitorPlay size={18} /></button>
         <button className={`icon-btn ${panel === 'queue' ? 'on' : ''}`} onClick={() => togglePanel('queue')} aria-label="File d'attente" title="File d'attente (Q)"><ListMusic size={18} /></button>

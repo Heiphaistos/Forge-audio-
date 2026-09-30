@@ -1,4 +1,4 @@
-import { Plus, X } from 'lucide-react';
+import { Check, Heart, Plus, X } from 'lucide-react';
 import { useState } from 'react';
 import { useUi } from '../store/ui';
 import { useLibrary } from '../store/library';
@@ -10,23 +10,28 @@ export function PlaylistPicker() {
   const openPicker = useUi((s) => s.openPicker);
   const toast = useUi((s) => s.toast);
   const playlists = useLibrary((s) => s.playlists);
-  const { addToPlaylist, createPlaylist } = useLibrary.getState();
+  const liked = useLibrary((s) => s.liked);
+  const { addToPlaylist, createPlaylist, likeTracks } = useLibrary.getState();
   const [name, setName] = useState('');
   const close = () => { openPicker(null); setName(''); };
   useEscape(!!tracks, close);
 
   if (!tracks) return null;
-  const add = (id: string, plName: string) => {
-    const n = addToPlaylist(id, tracks);
+  const done = (n: number, plName: string) => {
     toast(n ? `${n > 1 ? `${n} titres ajoutés` : 'Ajouté'} à « ${plName} »` : `Déjà dans « ${plName} »`, n ? 'success' : 'info');
     close();
+  };
+  // Already there: every picked track is in the list (shown as a check, like Spotify).
+  const contains = (list: { url: string }[]) => {
+    const urls = new Set(list.map((t) => t.url));
+    return tracks.every((t) => urls.has(t.url));
   };
 
   return (
     <div className="modal-backdrop" onClick={close}>
       <div className="modal picker" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Ajouter à une playlist">
         <div className="modal-head">
-          <h2>Ajouter à une playlist</h2>
+          <h2>{tracks.length > 1 ? `Ajouter ${tracks.length} titres` : 'Ajouter à une playlist'}</h2>
           <button className="icon-btn" onClick={close} aria-label="Fermer"><X size={20} /></button>
         </div>
         <form className="row gap" onSubmit={(e) => {
@@ -39,14 +44,21 @@ export function PlaylistPicker() {
           <button className="btn btn-primary" type="submit"><Plus size={16} /> Créer</button>
         </form>
         <div className="picker-list">
+          <button className="picker-item" onClick={() => done(likeTracks(tracks), 'Titres likés')}>
+            <span className="picker-liked liked-gradient"><Heart size={20} fill="currentColor" /></span>
+            <span className="grow ellipsis">Titres likés</span>
+            <span className="muted small">{liked.length} titres</span>
+            {contains(liked) && <Check size={18} className="accent" aria-label="Déjà ajouté" />}
+          </button>
           {playlists.map((p) => (
-            <button key={p.id} className="picker-item" onClick={() => add(p.id, p.name)}>
+            <button key={p.id} className="picker-item" onClick={() => done(addToPlaylist(p.id, tracks), p.name)}>
               <Mosaic covers={p.tracks.map((t) => t.thumbnail)} size={44} radius={6} />
               <span className="grow ellipsis">{p.name}</span>
               <span className="muted small">{p.tracks.length} titres</span>
+              {contains(p.tracks) && <Check size={18} className="accent" aria-label="Déjà ajouté" />}
             </button>
           ))}
-          {!playlists.length && <p className="muted">Aucune playlist pour l'instant.</p>}
+          {!playlists.length && <p className="muted small">Aucune autre playlist pour l'instant : créez-en une ci-dessus.</p>}
         </div>
       </div>
     </div>

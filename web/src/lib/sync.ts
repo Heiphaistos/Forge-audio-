@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { api, ApiError, type User } from './api';
-import type { HistoryEntry, Playlist, RepeatMode, Track } from './types';
+import type { Track } from './types';
+import { merge, type SyncData } from './merge';
 import { useLibrary, slimTrack } from '../store/library';
 import { usePlayer } from '../store/player';
 import { useSettings } from '../store/ui';
@@ -16,25 +17,7 @@ import { flushStorage } from './storage';
  * never sent: they only exist in this browser for the session.
  */
 
-export interface SyncData {
-  library: {
-    playlists: Playlist[];
-    deletedPlaylists: Record<string, number>;
-    liked: Track[];
-    history: HistoryEntry[];
-    playCounts: Record<string, number>;
-  };
-  settings: Record<string, unknown>;
-  player: {
-    queue: Track[];
-    index: number;
-    shuffle: boolean;
-    repeat: RepeatMode;
-    volume: number;
-    rate: number;
-    position: number;
-  } | null;
-}
+export type { SyncData } from './merge';
 
 type Status = 'off' | 'loading' | 'saved' | 'saving' | 'pending' | 'offline' | 'error';
 
@@ -66,6 +49,9 @@ export function collect(): SyncData {
       playlists: lib.playlists.map((p) => ({ ...p, tracks: p.tracks.filter(remote) })),
       deletedPlaylists: lib.deletedPlaylists,
       liked: lib.liked.filter(remote),
+      unliked: lib.unliked,
+      followedArtists: lib.followedArtists,
+      unfollowed: lib.unfollowed,
       history: lib.history.filter((h) => remote(h.track)),
       playCounts: lib.playCounts,
     },
@@ -91,6 +77,9 @@ function apply(data: SyncData) {
       playlists: lib.playlists || [],
       deletedPlaylists: lib.deletedPlaylists || {},
       liked: lib.liked || [],
+      unliked: lib.unliked || {},
+      followedArtists: lib.followedArtists || [],
+      unfollowed: lib.unfollowed || {},
       history: lib.history || [],
       playCounts: lib.playCounts || {},
     });
@@ -107,32 +96,6 @@ function apply(data: SyncData) {
   } finally {
     applying = false;
   }
-}
-
-/** Combine two copies after a conflict: newest playlist wins, deletions are kept, lists are unioned. */
-export function merge(local: SyncData, server: SyncData): SyncData {
-  const tomb: Record<string, number> = { ...server.library.deletedPlaylists };
-  for (const [id, at] of Object.entries(local.library.deletedPlaylists || {})) tomb[id] = Math.max(tomb[id] || 0, at);
-  const byId = new Map<string, Playlist>();
-  for (const p of [...(server.library.playlists || []), ...(local.library.playlists || [])]) {
-    const have = byId.get(p.id);
-    if (!have || p.updatedAt >= have.updatedAt) byId.set(p.id, p);
-  }
-  const playlists = [...byId.values()].filter((p) => !(tomb[p.id] && tomb[p.id] >= p.updatedAt)).sort((a, b) => b.createdAt - a.createdAt);
-
-  const likedUrls = new Set(local.library.liked.map((t) => t.url));
-  const liked = [...local.library.liked, ...server.library.liked.filter((t) => !likedUrls.has(t.url))];
-
-  const seen = new Set<string>();
-  const history = [...local.library.history, ...server.library.history]
-    .filter((h) => { const k = `${h.track.url}|${h.at}`; return !seen.has(k) && !!seen.add(k); })
-    .sort((a, b) => b.at - a.at)
-    .slice(0, 1000);
-
-  const playCounts: Record<string, number> = { ...server.library.playCounts };
-  for (const [u, n] of Object.entries(local.library.playCounts)) playCounts[u] = Math.max(playCounts[u] || 0, n);
-
-  return { library: { playlists, deletedPlaylists: tomb, liked, history, playCounts }, settings: local.settings, player: local.player };
 }
 
 function hasContent(d: SyncData) {
@@ -204,7 +167,7 @@ function beacon() {
 
 function resetLocal() {
   applying = true;
-  useLibrary.setState({ playlists: [], deletedPlaylists: {}, liked: [], history: [], playCounts: {} });
+  useLibrary.setState({ playlists: [], deletedPlaylists: {}, liked: [], unliked: {}, followedArtists: [], unfollowed: {}, history: [], playCounts: {} });
   usePlayer.setState({ queue: [], index: -1, unshuffled: null, position: 0 });
   localStorage.removeItem(POSITION_KEY);
   applying = false;
