@@ -9,7 +9,7 @@ import { HttpError, TtlCache } from './util.js';
 const TIMEOUT = 10_000;
 const UA = 'ForgeAudio/0.1 (+https://github.com/Heiphaistos/Forge-audio-)';
 
-async function getJson(url, service) {
+export async function getJson(url, service) {
   let res;
   try {
     res = await fetch(url, { headers: { 'user-agent': UA, accept: 'application/json' }, signal: AbortSignal.timeout(TIMEOUT) });
@@ -94,12 +94,12 @@ async function resolveSpotify(ref) {
   return { title: [entity.name || entity.title, entity.subtitle].filter(Boolean).join(' — '), tracks };
 }
 
-const dzTrack = (t, album) => (t?.id && t.readable !== false ? track({
+export const dzTrack = (t, album) => (t?.id && t.readable !== false ? track({
   title: t.title, artists: [t.artist?.name], durationMs: (t.duration || 0) * 1000, source: 'deezer',
   thumbnail: (album || t.album)?.cover_medium || null, url: t.link || `https://www.deezer.com/track/${t.id}`,
 }) : null);
 
-async function deezerPaged(first, max, map) {
+export async function deezerPaged(first, max, map) {
   const out = [];
   let next = first;
   while (next && out.length < max) {

@@ -13,8 +13,9 @@ import { Accounts, Sessions, LoginLimiter } from './accounts.js';
 import { UserData } from './userdata.js';
 import { registerSocial } from './social.js';
 import { registerCovers } from './covers.js';
+import { registerCatalog } from './catalog.js';
 
-export const VERSION = '0.7.0';
+export const VERSION = '0.8.0';
 
 const IMAGE_HOSTS = /(^|\.)(ytimg\.com|ggpht\.com|googleusercontent\.com|sndcdn\.com|dmcdn\.net|dailymotion\.com|bcbits\.com|vimeocdn\.com|jtvnw\.net|scdn\.co|spotifycdn\.com|dzcdn\.net|mzstatic\.com)$/i;
 
@@ -138,6 +139,7 @@ export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null,
   // Shared playlists, Jam, live events, link with the Discord bot.
   registerSocial(app, { accounts, userData, dataDir });
   registerCovers(app, { dataDir });
+  registerCatalog(app);
 
   // ---------- API ----------
   app.get('/api/health', async (request, reply) => {

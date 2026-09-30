@@ -70,7 +70,7 @@ export const usePlayer = create<PlayerState>()(
       const toast = (text: string, kind?: 'info' | 'error' | 'success') => useUi.getState().toast(text, kind);
 
       /** Load queue[i] into the engine. */
-      const loadIndex = async (i: number, { autoplay = true, startAt = 0 } = {}) => {
+      const loadIndex = async (i: number, { autoplay = true, startAt = 0, retry = false } = {}) => {
         const track = get().queue[i];
         if (!track) return;
         const seq = ++loadSeq;
@@ -80,6 +80,12 @@ export const usePlayer = create<PlayerState>()(
           if (seq === loadSeq && !autoplay) set({ buffering: false });
         } catch (err) {
           if (seq !== loadSeq) return;
+          // A server hiccup on the first request (stream 502 while yt-dlp warms up) surfaces as
+          // « no supported source »: resolve again once before giving up on the track.
+          if (!retry && err instanceof DOMException && err.name === 'NotSupportedError') {
+            engine.forget(track);
+            return loadIndex(i, { autoplay, startAt, retry: true });
+          }
           const message = err instanceof DOMException && err.name === 'NotSupportedError'
             ? 'format non pris en charge par ce navigateur'
             : err instanceof Error ? err.message : 'Lecture impossible';

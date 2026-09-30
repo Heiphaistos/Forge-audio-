@@ -1,9 +1,11 @@
 import { Heart, Link2, Loader2, Play } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLibrary } from '../store/library';
 import { usePlayer } from '../store/player';
 import { useUi } from '../store/ui';
 import { GenreGrid, PlaylistCard, Shelf, TrackCard } from '../components/Cards';
+import { AlbumCard } from './Catalog';
+import { loadReco, useReco } from '../store/reco';
 import { Mosaic } from '../components/Cover';
 import { api, isUrl } from '../lib/api';
 import type { Track } from '../lib/types';
@@ -78,6 +80,10 @@ export function Home() {
   }, [history, counts]);
 
   const quick = playlists.slice(0, 5);
+  const reco = useReco((s) => s.data);
+  const recoLoading = useReco((s) => s.loading);
+  useEffect(() => { loadReco(); }, []);
+  const mixes = reco ? [...reco.mixes, ...(reco.discover ? [reco.discover] : [])] : [];
 
   return (
     <div className="page">
@@ -98,6 +104,20 @@ export function Home() {
       </div>
 
       <ImportBox />
+
+      {(mixes.length > 0 || recoLoading) && (
+        <Shelf title="Conçu pour vous" action={recoLoading ? <span className="muted small"><Loader2 size={13} className="spin" /> Préparation de vos mix…</span> : undefined}>
+          {mixes.map((m) => (
+            <PlaylistCard key={m.id} name={m.title} sub={m.subtitle} covers={m.cover ? [m.cover] : m.tracks.map((t) => t.thumbnail)}
+              onOpen={() => navigate({ name: 'mix', id: m.id })} onPlay={() => playList(m.tracks)} />
+          ))}
+        </Shelf>
+      )}
+      {reco && reco.radar.length > 0 && (
+        <Shelf title="Radar des sorties">
+          {reco.radar.map((a) => <AlbumCard key={a.id} a={a} showArtist />)}
+        </Shelf>
+      )}
 
       {recent.length > 0 && (
         <Shelf title="Écoutés récemment" action={<button className="link muted" onClick={() => navigate({ name: 'history' })}>Tout afficher</button>}>

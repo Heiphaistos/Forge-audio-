@@ -11,7 +11,8 @@ import { PlaylistPicker } from './components/PlaylistPicker';
 import { Equalizer } from './components/Equalizer';
 import { Toasts } from './components/Toasts';
 import { Home } from './views/Home';
-import { Search, Artist } from './views/Search';
+import { Search } from './views/Search';
+import { ArtistView, AlbumView, MixView } from './views/Catalog';
 import { Library, PlaylistView, Liked, HistoryView } from './views/Library';
 import { Settings } from './views/Settings';
 import { SharedPlaylistView } from './views/Shared';
@@ -26,7 +27,9 @@ function CurrentView() {
   const view = useUi((s) => s.view);
   switch (view.name) {
     case 'search': return <Search />;
-    case 'artist': return <Artist key={view.q} />;
+    case 'artist': return <ArtistView key={`${view.q}:${view.id || ''}`} />;
+    case 'album': return <AlbumView key={view.id} />;
+    case 'mix': return <MixView key={view.id} />;
     case 'library': return <Library />;
     case 'playlist': return <PlaylistView key={view.id} />;
     case 'shared': return <SharedPlaylistView key={view.id} />;

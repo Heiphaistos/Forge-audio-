@@ -1,17 +1,22 @@
-import { Search as SearchIcon, X, Loader2, Play, ListEnd, ListMusic, Save, Clock, Check, UserPlus } from 'lucide-react';
+import { Search as SearchIcon, X, Loader2, Play, ListEnd, ListMusic, Save, Clock } from 'lucide-react';
+import { ArtistCard, AlbumCard } from './Catalog';
+import type { CatalogSearch } from '../lib/api';
 import { useEffect, useRef, useState } from 'react';
 import { api, isUrl, type ResolveResult } from '../lib/api';
 import type { Track } from '../lib/types';
 import { SOURCE_LABELS } from '../lib/format';
 import { useUi, useSettings } from '../store/ui';
 import { usePlayer } from '../store/player';
-import { useLibrary, useIsFollowed } from '../store/library';
+import { useLibrary } from '../store/library';
 import { TrackList } from '../components/TrackList';
 import { Cover } from '../components/Cover';
 import { SourceBadge } from '../components/SourceBadge';
 import { GenreGrid } from '../components/Cards';
 
 const TABS = ['all', 'youtube', 'ytmusic', 'soundcloud', 'dailymotion'];
+/** Catalogue tabs (Deezer): artists, albums and playlists instead of tracks. */
+const KINDS = { artists: 'Artistes', albums: 'Albums', playlists: 'Playlists' } as const;
+type Kind = keyof typeof KINDS;
 const RECENT_KEY = 'forge.recentSearches';
 
 function loadRecent(): string[] {
@@ -103,7 +108,21 @@ export function Search() {
   const [state, setState] = useState<{ loading: boolean; error: string | null; tracks: Track[]; resolved: ResolveResult | null; errors: Record<string, string> }>({ loading: false, error: null, tracks: [], resolved: null, errors: {} });
   const playList = usePlayer((s) => s.playList);
   const [recent, setRecent] = useState(loadRecent);
+  const [kind, setKind] = useState<Kind | null>(null);
+  const [cat, setCat] = useState<{ loading: boolean; data: CatalogSearch | null; error: string | null }>({ loading: false, data: null, error: null });
   const q = view.q || '';
+  // A pasted / opened link always shows its content, whatever catalogue tab was active.
+  const catMode = !!kind && !!q && !isUrl(q);
+
+  useEffect(() => {
+    if (!kind || !q || isUrl(q)) return;
+    const ctrl = new AbortController();
+    setCat({ loading: true, data: null, error: null });
+    api.catalogSearch(q, ctrl.signal)
+      .then((data) => setCat({ loading: false, data, error: null }))
+      .catch((err) => { if (!ctrl.signal.aborted) setCat({ loading: false, data: null, error: err.message }); });
+    return () => ctrl.abort();
+  }, [kind, q]);
 
   useEffect(() => {
     if (!q) { setState({ loading: false, error: null, tracks: [], resolved: null, errors: {} }); return; }
@@ -131,7 +150,8 @@ export function Search() {
       <SearchInput value={q} autoFocus={!q} onSubmit={(nq) => navigate({ name: 'search', q: nq })} />
       {!isUrl(q) && (
         <div className="chips tabs">
-          {TABS.map((t) => <button key={t} className={`chip ${source === t ? 'active' : ''}`} onClick={() => setSource(t)}>{SOURCE_LABELS[t]}</button>)}
+          {TABS.map((t) => <button key={t} className={`chip ${!kind && source === t ? 'active' : ''}`} onClick={() => { setKind(null); setSource(t); }}>{SOURCE_LABELS[t]}</button>)}
+          {(Object.keys(KINDS) as Kind[]).map((k) => <button key={k} className={`chip ${kind === k ? 'active' : ''}`} onClick={() => setKind(k)}>{KINDS[k]}</button>)}
         </div>
       )}
 
@@ -155,10 +175,30 @@ export function Search() {
         </>
       )}
 
-      {state.loading && <div className="empty"><Loader2 className="spin" size={28} /> Recherche en cours…</div>}
+      {catMode && kind && (
+        <>
+          {cat.loading && <div className="empty"><Loader2 className="spin" size={28} /> Recherche en cours…</div>}
+          {cat.error && <div className="empty error">{cat.error}</div>}
+          {cat.data && (
+            <div className="card-grid">
+              {kind === 'artists' && cat.data.artists.map((a) => <ArtistCard key={a.id} a={a} />)}
+              {kind === 'albums' && cat.data.albums.map((a) => <AlbumCard key={a.id} a={a} showArtist />)}
+              {kind === 'playlists' && cat.data.playlists.map((p) => (
+                <div key={p.id} className="card" onClick={() => navigate({ name: 'search', q: p.url })}>
+                  <div className="card-cover"><Cover src={p.cover} size="100%" radius={8} /></div>
+                  <div className="card-title ellipsis">{p.title}</div>
+                  <div className="card-sub">{p.tracks ?? '?'} titres · Deezer</div>
+                </div>
+              ))}
+            </div>
+          )}
+          {cat.data && !cat.data[kind].length && <div className="empty">Aucun résultat pour « {q} »</div>}
+        </>
+      )}
+      {!catMode && state.loading && <div className="empty"><Loader2 className="spin" size={28} /> Recherche en cours…</div>}
       {state.error && !state.loading && <div className="empty error">{state.error}</div>}
 
-      {!state.loading && state.resolved && state.resolved.type === 'playlist' && (
+      {!catMode && !state.loading && state.resolved && state.resolved.type === 'playlist' && (
         <div className="resolved-head">
           <Cover src={state.resolved.thumbnail} size={120} radius={8} />
           <div>
@@ -169,7 +209,7 @@ export function Search() {
         </div>
       )}
 
-      {!state.loading && !state.resolved && top && (
+      {!catMode && !state.loading && !state.resolved && top && (
         <div className="search-top">
           <div className="top-result" onClick={() => playList(state.tracks, 0)}>
             <h2 className="muted-title">Meilleur résultat</h2>
@@ -185,50 +225,9 @@ export function Search() {
         </div>
       )}
 
-      {!state.loading && q && !state.error && (
+      {!catMode && !state.loading && q && !state.error && (
         <TrackList tracks={state.tracks} listKey={`search:${q}`} showViews empty={`Aucun résultat pour « ${q} »`} />
       )}
-    </div>
-  );
-}
-
-export function Artist() {
-  const view = useUi((s) => s.view);
-  const name = view.q || '';
-  const [state, setState] = useState<{ loading: boolean; tracks: Track[]; error: string | null }>({ loading: true, tracks: [], error: null });
-  const playList = usePlayer((s) => s.playList);
-  const artistName = name.replace(/\s*-\s*Topic$/i, '');
-  const followed = useIsFollowed(artistName);
-  const toast = useUi((s) => s.toast);
-
-  useEffect(() => {
-    const ctrl = new AbortController();
-    setState({ loading: true, tracks: [], error: null });
-    const clean = name.replace(/\s*-\s*Topic$/i, '').replace(/VEVO$/i, '');
-    api.search(clean, 'ytmusic', 30, ctrl.signal)
-      .catch(() => api.search(clean, 'youtube', 30, ctrl.signal))
-      .then((r) => setState({ loading: false, tracks: r.tracks, error: null }))
-      .catch((err) => { if (!ctrl.signal.aborted) setState({ loading: false, tracks: [], error: err.message }); });
-    return () => ctrl.abort();
-  }, [name]);
-
-  return (
-    <div className="page">
-      <div className="hero artist-hero" style={{ ['--hero-img' as string]: state.tracks[0]?.thumbnail ? `url("${state.tracks[0].thumbnail}")` : 'none' }}>
-        <div className="muted small">ARTISTE</div>
-        <h1 className="hero-title">{artistName}</h1>
-        <div className="actions">
-          <button className="btn btn-primary" disabled={!state.tracks.length} onClick={() => playList(state.tracks)}><Play size={16} fill="currentColor" /> Lecture</button>
-          <button className="btn btn-ghost" disabled={!state.tracks.length} onClick={() => playList(state.tracks, 0, { shuffle: true })}>Aléatoire</button>
-          <button className={`btn ${followed ? 'btn-ghost following' : 'btn-ghost'}`} aria-pressed={followed} onClick={() => {
-            const on = useLibrary.getState().toggleFollow(artistName, state.tracks[0]?.thumbnail ?? null);
-            toast(on ? 'Artiste ajouté à votre bibliothèque' : 'Vous ne suivez plus cet artiste', 'success');
-          }}>{followed ? <><Check size={16} /> Abonné</> : <><UserPlus size={16} /> Suivre</>}</button>
-        </div>
-      </div>
-      {state.loading && <div className="empty"><Loader2 className="spin" size={28} /> Chargement…</div>}
-      {state.error && <div className="empty error">{state.error}</div>}
-      {!state.loading && <TrackList tracks={state.tracks} listKey={`artist:${name}`} showViews />}
     </div>
   );
 }
