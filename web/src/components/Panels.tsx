@@ -1,3 +1,4 @@
+import { FriendsPanel } from './Friends';
 import { X, Trash2, Loader2, Maximize, Minimize, Maximize2, Radio, GripVertical, GripHorizontal, PictureInPicture2, AppWindow } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { usePlayer, useCurrentTrack } from '../store/player';
@@ -290,7 +291,7 @@ export function RightPanel() {
   const panel = useUi((s) => s.panel);
   const setPanel = useUi((s) => s.setPanel);
   if (!panel) return null;
-  const titles = { queue: "File d'attente", lyrics: 'Paroles', video: 'Vidéo' };
+  const titles = { queue: "File d'attente", lyrics: 'Paroles', video: 'Vidéo', friends: 'Activité des amis' };
   return (
     <aside className={`right-panel panel-${panel}`}>
       <div className="panel-head">
@@ -300,6 +301,7 @@ export function RightPanel() {
       {panel === 'queue' && <QueuePanel />}
       {panel === 'lyrics' && <div className="panel-body"><LyricsView /></div>}
       {panel === 'video' && <div className="panel-body"><VideoView /></div>}
+      {panel === 'friends' && <FriendsPanel />}
     </aside>
   );
 }

@@ -1,10 +1,11 @@
 import { create } from 'zustand';
-import { api, type DiscordLink, type Jam, type SharedPlaylist, type User } from '../lib/api';
+import { api, type DiscordLink, type FriendActivity, type Jam, type SharedPlaylist, type User } from '../lib/api';
+import { useLibrary } from './library';
 import { pullNow } from '../lib/sync';
 import { engine } from '../audio/engine';
 import type { Track } from '../lib/types';
 import { usePlayer, setJamRouter } from './player';
-import { useUi } from './ui';
+import { useSettings, useUi } from './ui';
 
 /**
  * Between accounts: shared playlists, Jam (group listening) and the Discord link, all kept up to
@@ -17,6 +18,9 @@ const fail = (err: unknown) => toast((err as Error).message, 'error');
 export const useShared = create<{ list: SharedPlaylist[]; loaded: boolean }>(() => ({ list: [], loaded: false }));
 export const useDiscord = create<{ link: DiscordLink | null; botEnabled: boolean }>(() => ({ link: null, botEnabled: false }));
 /** `offset` = server clock - this device's clock (ms), to place the shared playback position. */
+export const useFriends = create<{ list: FriendActivity[]; loaded: boolean }>(() => ({ list: [], loaded: false }));
+const putFriend = (f: FriendActivity) => useFriends.setState((s) => ({ list: [f, ...s.list.filter((x) => x.user !== f.user)] }));
+
 export const useJam = create<{ jam: Jam | null; offset: number; me: string | null }>(() => ({ jam: null, offset: 0, me: null }));
 
 let accountsCache: User[] | null = null;
@@ -162,8 +166,9 @@ export const discord = {
 let source: EventSource | null = null;
 
 async function refreshAll() {
-  const [s, j] = await Promise.allSettled([api.shared(), api.jam(), discord.refresh(), otherAccounts()]);
+  const [s, j, , , f] = await Promise.allSettled([api.shared(), api.jam(), discord.refresh(), otherAccounts(), api.friends()]);
   if (s.status === 'fulfilled') useShared.setState({ list: s.value.playlists, loaded: true });
+  if (f.status === 'fulfilled') useFriends.setState({ list: f.value.friends, loaded: true });
   if (j.status === 'fulfilled') setJam(j.value.jam);
 }
 
@@ -171,6 +176,12 @@ async function refreshAll() {
 export function startSocial(user: User) {
   useJam.setState({ me: user.username });
   if (source || typeof EventSource === 'undefined') return;
+  // Report each track started here (the history entry is pushed when playback really starts).
+  useLibrary.subscribe((st, prev) => {
+    const h = st.history[0];
+    if (!h || h === prev.history[0] || Date.now() - h.at > 10_000 || !useSettings.getState().shareActivity) return;
+    api.activity(h.track).catch(() => {});
+  });
   source = new EventSource('/api/events');
   source.onmessage = (m) => {
     let e: { type: string; [k: string]: unknown };
@@ -178,6 +189,7 @@ export function startSocial(user: User) {
     if (e.type === 'hello') refreshAll();
     else if (e.type === 'library') pullNow();
     else if (e.type === 'discord') discord.refresh().catch(() => {});
+    else if (e.type === 'activity') putFriend(e as unknown as FriendActivity);
     else if (e.type === 'shared') {
       if (e.playlist) {
         const p = e.playlist as SharedPlaylist;

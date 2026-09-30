@@ -1,3 +1,4 @@
+import { registerActivity } from './activity.js';
 import { HttpError } from './util.js';
 import { EventHub, streamEvents } from './events.js';
 import { SharedPlaylists } from './shared.js';
@@ -16,6 +17,7 @@ export function registerSocial(app, { accounts, userData, dataDir, botToken = pr
   const links = new DiscordLinks(dataDir);
   const isAccount = (u) => !!accounts.get(u);
   const me = (request) => request.user.username;
+  registerActivity(app, { accounts, userData, hub });
   const sharedEvent = (users, playlist, extra = {}) => hub.emit(users, { type: 'shared', id: playlist?.id ?? extra.id, playlist: playlist ?? null, ...extra });
 
   // ---------- Live events ----------

@@ -639,3 +639,20 @@ kbd {
 
 /* Artist page */
 .about p { max-width: 72ch; line-height: 1.6; color: var(--muted); margin: 0 0 8px; }
+
+/* ---------- friends activity, stats ---------- */
+.friends { display: flex; flex-direction: column; gap: 14px; }
+.friends .notice { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2, rgba(255,255,255,.05)); }
+.friend { display: flex; gap: 10px; align-items: flex-start; }
+.friend-avatar { position: relative; flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; background: rgba(var(--accent-rgb, 255, 120, 60), .25); }
+.live-dot { position: absolute; right: -1px; bottom: -1px; width: 11px; height: 11px; border-radius: 50%; background: #1dcd84; border: 2px solid var(--bg, #111); }
+.friend-head { display: flex; justify-content: space-between; gap: 8px; }
+.friend-track { display: flex; align-items: center; gap: 8px; max-width: 100%; margin: 4px 0 2px; padding: 0; background: none; border: 0; color: inherit; font: inherit; cursor: pointer; text-align: left; }
+.friend-track:hover span { text-decoration: underline; }
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 16px 0 8px; }
+.stat { display: flex; flex-direction: column; gap: 4px; padding: 16px; border-radius: 12px; background: var(--surface-2, rgba(255,255,255,.05)); }
+.stat b { font-size: 28px; line-height: 1.1; }
+.stat span { color: var(--muted); font-size: 13px; }
+.rank { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.rank li { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.rank-n { width: 22px; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }

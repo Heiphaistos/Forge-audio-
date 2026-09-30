@@ -4,7 +4,7 @@ import { lazyStorage } from '../lib/storage';
 import type { Track } from '../lib/types';
 import { EQ_PRESETS } from '../audio/engine';
 
-export type ViewName = 'home' | 'search' | 'library' | 'playlist' | 'shared' | 'liked' | 'history' | 'settings' | 'artist' | 'album' | 'mix';
+export type ViewName = 'home' | 'search' | 'library' | 'playlist' | 'shared' | 'liked' | 'history' | 'settings' | 'artist' | 'album' | 'mix' | 'stats' | 'blend';
 
 export interface View {
   name: ViewName;
@@ -12,7 +12,7 @@ export interface View {
   q?: string;
 }
 
-export type Panel = 'queue' | 'lyrics' | 'video' | null;
+export type Panel = 'queue' | 'lyrics' | 'video' | 'friends' | null;
 
 export interface Toast {
   id: number;
@@ -141,6 +141,8 @@ interface SettingsState {
   quality: 'high' | 'normal' | 'low';
   /** Data saver: low quality and no prefetch — on mobile data only (auto), always, or never. */
   dataSaver: 'off' | 'auto' | 'on';
+  /** Friends see what I play and can make a Blend with me. */
+  shareActivity: boolean;
   set: (patch: Partial<Omit<SettingsState, 'set'>>) => void;
 }
 
@@ -160,6 +162,7 @@ export const useSettings = create<SettingsState>()(
       normalize: true,
       quality: 'high',
       dataSaver: 'auto',
+      shareActivity: true,
       set: (patch) => set(patch),
     }),
     {

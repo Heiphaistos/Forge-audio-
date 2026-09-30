@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Play, ListPlus, ListEnd, ListMusic, Heart, Radio, User, Download, ExternalLink, Link2, Trash2, Film, FileAudio, EyeOff, Eye, UserX } from 'lucide-react';
+import { Play, ListPlus, ListEnd, ListMusic, Heart, Radio, User, Download, ExternalLink, Link2, Share2, Trash2, Film, FileAudio, EyeOff, Eye, UserX } from 'lucide-react';
 import { useUi } from '../store/ui';
 import { usePlayer } from '../store/player';
 import { useLibrary, artistKey } from '../store/library';
@@ -99,10 +99,19 @@ export function ContextMenu() {
           <>
             <div className="menu-sep" />
             <button role="menuitem" onClick={act(() => window.open(t.url, '_blank', 'noopener'))}><ExternalLink size={16} /> Ouvrir la source</button>
+            <button role="menuitem" onClick={act(() => shareLink(t.title, t.url))}><Share2 size={16} /> Partager</button>
             <button role="menuitem" onClick={act(() => { navigator.clipboard?.writeText(t.url).then(() => toast('Lien copié', 'success')).catch(() => toast('Copie impossible', 'error')); })}><Link2 size={16} /> Copier le lien</button>
           </>
         )}
       </div>
     </div>
   );
+}
+
+/** Share a Forge Audio link (opens the track in the player once signed in): system share sheet, else the clipboard. */
+export function shareLink(title: string, url: string) {
+  const link = `${location.origin}/?open=${encodeURIComponent(url)}`;
+  const { toast } = useUi.getState();
+  if (navigator.share) { navigator.share({ title, text: `${title} sur Forge Audio`, url: link }).catch(() => {}); return; }
+  navigator.clipboard?.writeText(link).then(() => toast('Lien Forge Audio copié', 'success')).catch(() => toast('Copie impossible', 'error'));
 }

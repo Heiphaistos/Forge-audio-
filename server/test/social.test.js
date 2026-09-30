@@ -168,3 +168,29 @@ test('playlist covers: real images only, served to signed-in users; library keep
   assert.deepEqual(lib.hiddenTracks, { 'https://youtu.be/x': { at: 5, label: 'Titre' } });
   assert.equal(lib.hiddenArtists['daft punk'].at, -7, 'shown again: negative time kept for merging');
 });
+
+test('friend activity and Blend follow the « share my activity » setting', async () => {
+  const { evan, polo, lohan } = await setup();
+  const lib = (liked, extra = {}) => ({ library: { liked, history: liked.map((t, i) => ({ track: t, at: 1000 - i })), playCounts: {} }, settings: extra });
+  assert.equal((await evan('PUT', '/api/me/data', { baseRev: 0, data: lib([track(1), track(2), track(3)]) })).status, 200);
+  assert.equal((await polo('PUT', '/api/me/data', { baseRev: 0, data: lib([track(3), track(4)]) })).status, 200);
+  await lohan('PUT', '/api/me/data', { baseRev: 0, data: lib([track(5)], { shareActivity: false }) });
+
+  // Last history entry after a restart, then the live report wins.
+  let friends = (await polo('GET', '/api/activity')).body.friends;
+  assert.deepEqual(friends.map((f) => [f.user, f.track.url]), [['evan', track(1).url]], 'lohan hides their activity');
+  assert.equal((await evan('POST', '/api/activity', { track: track(9) })).body.shared, true);
+  friends = (await polo('GET', '/api/activity')).body.friends;
+  assert.equal(friends[0].track.url, track(9).url);
+  assert.equal(friends[0].live, true);
+  assert.equal((await lohan('POST', '/api/activity', { track: track(9) })).body.shared, false, 'not reported when off');
+  assert.equal((await evan('POST', '/api/activity', { track: { title: 'x', url: 'file:///etc/passwd' } })).status, 400);
+
+  const b = (await evan('GET', '/api/blend/polo')).body;
+  assert.equal(b.tracks[0].url, track(3).url, 'shared track first');
+  assert.equal(b.common, 1);
+  assert.deepEqual(new Set(b.tracks.map((t) => t.url)).size, 4, 'both tastes, no duplicate');
+  assert.equal((await evan('GET', '/api/blend/lohan')).status, 403);
+  assert.equal((await lohan('GET', '/api/blend/evan')).status, 403, 'blending requires sharing yourself');
+  assert.equal((await evan('GET', '/api/blend/evan')).status, 404);
+});

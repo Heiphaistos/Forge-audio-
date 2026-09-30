@@ -195,6 +195,7 @@ export function Settings() {
             {['all', 'youtube', 'ytmusic', 'soundcloud', 'dailymotion'].map((k) => <option key={k} value={k}>{SOURCE_LABELS[k]}</option>)}
           </select>
         </div>
+        <Toggle checked={s.shareActivity} onChange={(v) => s.set({ shareActivity: v })} label="Partager mon activité d’écoute" hint="Vos amis voient ce que vous écoutez et peuvent créer un Blend avec vous" />
         <Toggle checked={s.autoplay} onChange={(v) => s.set({ autoplay: v })} label="Lecture automatique" hint="Quand la file est terminée, enchaîne sur des titres similaires (radio)" />
         <Toggle checked={s.eqEnabled} onChange={(v) => s.set({ eqEnabled: v })} label="Égaliseur activé" hint={`Préréglage : ${s.eqPreset}`} />
         <div className="setting">

@@ -138,6 +138,9 @@ export const api = {
   imageUrl: (url: string) => `/api/image?${new URLSearchParams({ url })}`,
   // Between accounts (server/src/social.js)
   users: () => get<{ users: User[] }>('/api/users'),
+  activity: (track: Track) => send<{ ok: boolean }>('POST', '/api/activity', { track }),
+  friends: () => get<{ friends: FriendActivity[] }>('/api/activity'),
+  blend: (username: string) => get<BlendResult>(`/api/blend/${encodeURIComponent(username)}`),
   shared: () => get<{ playlists: SharedPlaylist[] }>('/api/shared'),
   sharedCreate: (p: { name: string; description?: string; cover?: string | null; tracks: Track[]; members: string[] }) => send<{ playlist: SharedPlaylist }>('POST', '/api/shared', p),
   sharedUpdate: (id: string, patch: Partial<Pick<SharedPlaylist, 'name' | 'description' | 'members' | 'cover'>>) => send<{ playlist: SharedPlaylist }>('PATCH', `/api/shared/${id}`, patch),
@@ -177,3 +180,6 @@ export function isUrl(str: string): boolean {
     return false;
   }
 }
+
+export interface FriendActivity { user: string; displayName: string; track: Track; at: number; live: boolean }
+export interface BlendResult { with: User; tracks: Track[]; common: number; match: number }

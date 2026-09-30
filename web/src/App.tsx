@@ -13,6 +13,8 @@ import { Toasts } from './components/Toasts';
 import { Home } from './views/Home';
 import { Search } from './views/Search';
 import { ArtistView, AlbumView, MixView } from './views/Catalog';
+import { StatsView, BlendView } from './views/Stats';
+import { openLink } from './views/Home';
 import { Library, PlaylistView, Liked, HistoryView } from './views/Library';
 import { Settings } from './views/Settings';
 import { SharedPlaylistView } from './views/Shared';
@@ -30,6 +32,8 @@ function CurrentView() {
     case 'artist': return <ArtistView key={`${view.q}:${view.id || ''}`} />;
     case 'album': return <AlbumView key={view.id} />;
     case 'mix': return <MixView key={view.id} />;
+    case 'stats': return <StatsView />;
+    case 'blend': return <BlendView key={view.id} />;
     case 'library': return <Library />;
     case 'playlist': return <PlaylistView key={view.id} />;
     case 'shared': return <SharedPlaylistView key={view.id} />;
@@ -127,6 +131,12 @@ export function App() {
   const enter = async (user: User | null, sync: boolean) => {
     // Shared playlists, Jam and the Discord link need real accounts (not the desktop app's local mode).
     if (user && user.username !== 'local') startSocial(user);
+    // Share links: https://…/?open=<url of a track or playlist>
+    const shared = user ? new URLSearchParams(location.search).get('open') : null;
+    if (shared && /^https?:\/\//.test(shared)) {
+      history.replaceState(null, '', location.pathname);
+      openLink(shared).catch((err) => useUi.getState().toast((err as Error).message, 'error'));
+    }
     if (user && sync) {
       // Load the saved library before showing the app, so it never flashes empty.
       await Promise.race([startSync(user).catch(() => useUi.getState().toast('Bibliothèque en ligne indisponible, nouvel essai automatique', 'error')), new Promise((r) => setTimeout(r, 8000))]);

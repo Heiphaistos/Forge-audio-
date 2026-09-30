@@ -16,7 +16,7 @@ import { registerCovers } from './covers.js';
 import { registerCatalog } from './catalog.js';
 import { registerLoudness } from './loudness.js';
 
-export const VERSION = '0.9.1';
+export const VERSION = '0.10.0';
 
 const IMAGE_HOSTS = /(^|\.)(ytimg\.com|ggpht\.com|googleusercontent\.com|sndcdn\.com|dmcdn\.net|dailymotion\.com|bcbits\.com|vimeocdn\.com|jtvnw\.net|scdn\.co|spotifycdn\.com|dzcdn\.net|mzstatic\.com)$/i;
 

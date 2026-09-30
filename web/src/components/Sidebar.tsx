@@ -1,4 +1,4 @@
-import { Home, Search, Library, Heart, History, Plus, Settings, X, LogOut, Cloud, CloudOff, Loader2, Radio, Users, Pin, Folder } from 'lucide-react';
+import { Home, Search, Library, Heart, History, Plus, Settings, X, LogOut, Cloud, CloudOff, Loader2, Radio, Users, Pin, Folder, BarChart3 } from 'lucide-react';
 import type { Playlist } from '../lib/types';
 import { useJam, useShared } from '../store/social';
 import { useSync, logout } from '../lib/sync';
@@ -39,6 +39,8 @@ export function Sidebar() {
   const inJam = useJam((s) => !!s.jam);
   const social = useJam((s) => !!s.me);
   const setJamOpen = useUi((s) => s.setJamOpen);
+  const panel = useUi((s) => s.panel);
+  const togglePanel = useUi((s) => s.togglePanel);
 
   const item = (v: View, icon: React.ReactNode, label: string) => (
     <button className={`nav-item ${view.name === v.name && view.id === v.id ? 'active' : ''}`} onClick={() => navigate(v)}>
@@ -69,6 +71,14 @@ export function Sidebar() {
           <button className={`nav-item ${view.name === 'history' ? 'active' : ''}`} onClick={() => navigate({ name: 'history' })}>
             <span className="nav-square hist"><History size={15} /></span><span>Historique</span>
           </button>
+          <button className={`nav-item ${view.name === 'stats' ? 'active' : ''}`} onClick={() => navigate({ name: 'stats' })}>
+            <span className="nav-square hist"><BarChart3 size={15} /></span><span>Vos stats</span>
+          </button>
+          {social && (
+            <button className={`nav-item ${panel === 'friends' ? 'active' : ''}`} onClick={() => { togglePanel('friends'); setOpen(false); }}>
+              <span className="nav-square jam"><Users size={15} /></span><span>Activité des amis</span>
+            </button>
+          )}
           {social && (
             <button className={`nav-item ${inJam ? 'active' : ''}`} onClick={() => { setJamOpen(true); setOpen(false); }}>
               <span className="nav-square jam"><Radio size={15} /></span><span>{inJam ? 'Jam en cours' : 'Jam : écouter ensemble'}</span>
