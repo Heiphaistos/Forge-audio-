@@ -145,6 +145,7 @@ setJamRouter((op, arg) => {
     case 'enqueue':
       jam.add(arg as Track[]).then(() => toast(`${(arg as Track[]).length > 1 ? `${(arg as Track[]).length} titres ajoutés` : 'Ajouté'} à la file du Jam`, 'success')).catch(fail);
       break;
+    case 'probe': break;
     case 'blocked': toast('Pas disponible pendant un Jam : la file est commune', 'info'); break;
   }
   return true;

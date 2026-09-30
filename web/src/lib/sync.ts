@@ -23,7 +23,7 @@ type Status = 'off' | 'loading' | 'saved' | 'saving' | 'pending' | 'offline' | '
 
 export const useSync = create<{ user: User | null; status: Status; savedAt: number | null }>(() => ({ user: null, status: 'off', savedAt: null }));
 
-const SETTING_KEYS = ['accent', 'defaultSource', 'visualizer', 'dynamicColors', 'eqEnabled', 'eqPreset', 'eqGains', 'autoplay'] as const;
+const SETTING_KEYS = ['accent', 'defaultSource', 'visualizer', 'dynamicColors', 'eqEnabled', 'eqPreset', 'eqGains', 'autoplay', 'crossfade', 'gapless', 'normalize'] as const;
 const OWNER_KEY = 'forge.owner';
 const POSITION_KEY = 'forge.position';
 const DEBOUNCE = 2000;

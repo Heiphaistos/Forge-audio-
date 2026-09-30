@@ -19,7 +19,7 @@ import { SharedPlaylistView } from './views/Shared';
 import { JamPanel, JamBanner } from './components/Jam';
 import { SelectionBar } from './components/SelectionBar';
 import { startSocial } from './store/social';
-import { useAudioEffects, useMediaSession, useRemoteControl, useShortcuts, useTheme } from './hooks';
+import { useAudioEffects, useAudioMix, useMediaSession, useRemoteControl, useShortcuts, useTheme } from './hooks';
 import { api, type User } from './lib/api';
 import { startSync } from './lib/sync';
 
@@ -121,6 +121,7 @@ export function App() {
   useShortcuts();
   useTheme();
   useAudioEffects();
+  useAudioMix();
   useRemoteControl();
 
   const enter = async (user: User | null, sync: boolean) => {

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { engine } from './audio/engine';
 import { usePlayer } from './store/player';
 import { useLibrary } from './store/library';
@@ -155,6 +155,23 @@ export function useAudioEffects() {
   const eqActive = useSettings((s) => s.eqEnabled && s.eqGains.some((g) => g !== 0));
   const visualizer = useSettings((s) => s.visualizer);
   useEffect(() => { engine.setEffects(eqActive || visualizer); }, [eqActive, visualizer]);
+}
+
+type NetInfo = EventTarget & { type?: string; saveData?: boolean };
+/** Push the transition / loudness / quality settings to the engine (data saver follows the network in « auto »). */
+export function useAudioMix() {
+  const { crossfade, gapless, normalize, quality, dataSaver } = useSettings();
+  const [metered, setMetered] = useState(false);
+  useEffect(() => {
+    const c = (navigator as Navigator & { connection?: NetInfo }).connection;
+    if (!c) return;
+    const upd = () => setMetered(c.type === 'cellular' || !!c.saveData);
+    upd();
+    c.addEventListener('change', upd);
+    return () => c.removeEventListener('change', upd);
+  }, []);
+  const saver = dataSaver === 'on' || (dataSaver === 'auto' && metered);
+  useEffect(() => { engine.setMix({ crossfade, gapless, normalize, quality, saver }); }, [crossfade, gapless, normalize, quality, saver]);
 }
 
 /** Accent color + background tint from the current cover. */

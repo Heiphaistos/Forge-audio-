@@ -20,6 +20,10 @@ type Listener = () => void;
 type MediaEventName = keyof HTMLMediaElementEventMap;
 
 const FADE_MS = 140;
+/** « Volume harmonisé » target, like YouTube / Spotify « normal ». Quieter tracks are never boosted (no clipping). */
+const TARGET_LUFS = -14;
+export type Quality = 'high' | 'normal' | 'low';
+export interface Mix { crossfade: number; gapless: boolean; normalize: boolean; quality: Quality; saver: boolean }
 
 /**
  * Audio playback.
@@ -32,6 +36,10 @@ const FADE_MS = 140;
  *
  * Streams that are not seekable by HTTP Range (HLS sources transcoded by the server)
  * are restarted with `?start=` and tracked with an offset.
+ *
+ * Crossfade / gapless start the next track on a second element and ramp the two volumes (still no
+ * Web Audio); with the effects chain on, tracks change the classic way. Loudness normalisation only
+ * scales the element volume from a server-side EBU R128 measurement.
  */
 class AudioEngine {
   private el: HTMLAudioElement;
@@ -49,7 +57,11 @@ class AudioEngine {
   private volume = 1;
   private fadeTimer: ReturnType<typeof setInterval> | undefined;
   private idleTimer: ReturnType<typeof setTimeout> | undefined;
-  private prefetched = new Map<string, { at: number; promise: Promise<Playback> }>();
+  private prefetched = new Map<string, { at: number; q: Quality; promise: Promise<Playback> }>();
+  private mix: Mix = { crossfade: 0, gapless: true, normalize: true, quality: 'high', saver: false };
+  private norm = 1;
+  private loudness = new Map<string, Promise<number>>();
+  private xfade: { timer: ReturnType<typeof setInterval>; old: HTMLAudioElement } | null = null;
   private listeners = new Set<Listener>();
   private mediaListeners: [MediaEventName, EventListener][] = [];
 
@@ -57,7 +69,12 @@ class AudioEngine {
     this.el = this.createElement();
   }
 
-  private createElement() {
+  /** Element volume: user volume × loudness correction. */
+  private get outVol() {
+    return this.volume * this.norm;
+  }
+
+  private createElement(attach = true) {
     const el = new Audio();
     el.preload = 'auto';
     el.crossOrigin = 'anonymous';
@@ -69,7 +86,7 @@ class AudioEngine {
     };
     for (const e of ['pause', 'ended', 'emptied', 'error'] as const) el.addEventListener(e, sleep);
     el.addEventListener('play', () => { clearTimeout(this.idleTimer); if (this.ctx?.state === 'suspended') this.ctx.resume().catch(() => {}); });
-    for (const [name, fn] of this.mediaListeners) el.addEventListener(name, fn);
+    if (attach) for (const [name, fn] of this.mediaListeners) el.addEventListener(name, fn);
     return el;
   }
 
@@ -149,7 +166,7 @@ class AudioEngine {
     old.removeAttribute('src');
     old.load();
     this.el = this.createElement();
-    this.el.volume = this.volume;
+    this.el.volume = this.outVol;
     this.el.muted = old.muted;
     this.el.playbackRate = rate;
     if (src) {
@@ -194,17 +211,113 @@ class AudioEngine {
     if (track.source === 'local' || track.url.startsWith('blob:')) {
       return Promise.resolve({ src: track.url, seekable: true, duration: track.duration, isLive: false, mime: 'audio/*' });
     }
+    const q = this.quality;
     const hit = this.prefetched.get(track.url);
-    if (hit && Date.now() - hit.at < 60 * 60 * 1000) return hit.promise;
-    const promise = api.playback(track.url, 'audio');
-    this.prefetched.set(track.url, { at: Date.now(), promise });
+    if (hit && hit.q === q && Date.now() - hit.at < 60 * 60 * 1000) return hit.promise;
+    const promise = api.playback(track.url, 'audio', undefined, q);
+    this.prefetched.set(track.url, { at: Date.now(), q, promise });
     promise.catch(() => this.prefetched.delete(track.url));
     if (this.prefetched.size > 50) this.prefetched.delete(this.prefetched.keys().next().value!);
     return promise;
   }
 
   prefetch(track: Track | undefined) {
-    if (track && !track.isLive) this.resolve(track).catch(() => {});
+    if (!track || track.isLive || this.mix.saver) return;
+    this.resolve(track).catch(() => {});
+    this.gainFor(track);
+  }
+
+  // ---------- mix: quality, transitions, loudness ----------
+
+  setMix(mix: Mix) {
+    const normChanged = mix.normalize !== this.mix.normalize;
+    this.mix = { ...mix, crossfade: Math.max(0, Math.min(12, mix.crossfade)) };
+    if (normChanged && this.track) this.applyGain(this.track, this.gainFor(this.track));
+  }
+
+  get quality(): Quality {
+    return this.mix.saver ? 'low' : this.mix.quality;
+  }
+
+  /** Seconds before the end at which the next track starts (0 = at the end, the classic way). */
+  get transitionWindow() {
+    if (this.ctx || !this.playback || this.playback.isLive || this.xfade) return 0;
+    return this.mix.crossfade > 0 ? this.mix.crossfade : this.mix.gapless ? 0.45 : 0;
+  }
+
+  /** Loudness correction of a track (1 = unchanged), measured once by the server. */
+  private gainFor(track: Track): Promise<number> {
+    if (!this.mix.normalize || track.isLive || track.source === 'local' || track.url.startsWith('blob:')) return Promise.resolve(1);
+    let p = this.loudness.get(track.url);
+    if (!p) {
+      p = api.loudness(track.url)
+        .then(({ lufs }) => (lufs == null || lufs <= TARGET_LUFS ? 1 : Math.max(0.2, Math.pow(10, (TARGET_LUFS - lufs) / 20))))
+        .catch(() => { this.loudness.delete(track.url); return 1; });
+      this.loudness.set(track.url, p);
+      if (this.loudness.size > 500) this.loudness.delete(this.loudness.keys().next().value!);
+    }
+    return p;
+  }
+
+  /** Apply a correction that arrives after playback started (first play of a track): short ramp, no jump. */
+  private applyGain(track: Track, p: Promise<number>) {
+    p.then((g) => {
+      if (this.track !== track || g === this.norm) return;
+      this.norm = g;
+      if (this.xfade) return;
+      if (this.el.paused) this.el.volume = this.outVol; else this.fade(this.outVol, undefined, 600);
+    });
+  }
+
+  private endCrossfade() {
+    if (!this.xfade) return;
+    clearInterval(this.xfade.timer);
+    const { old } = this.xfade;
+    this.xfade = null;
+    old.pause();
+    old.removeAttribute('src');
+    old.load();
+    this.el.volume = this.outVol;
+  }
+
+  /**
+   * Start `track` on a second element while the current one ends, equal-power volume ramps.
+   * Resolves false (nothing changed: the current track ends normally) when it cannot start in time.
+   */
+  async crossfade(track: Track): Promise<boolean> {
+    if (this.ctx || this.xfade) return false;
+    const token = ++this.loadToken;
+    let pb: Playback;
+    try { pb = await this.resolve(track); } catch { return false; }
+    const gain = await Promise.race([this.gainFor(track), new Promise<number>((r) => setTimeout(() => r(1), 800))]);
+    if (token !== this.loadToken || pb.isLive || this.ctx) return false;
+    const old = this.el;
+    const next = this.createElement(false);
+    next.volume = 0;
+    next.muted = old.muted;
+    next.src = pb.src;
+    next.playbackRate = old.playbackRate;
+    try { await next.play(); } catch { next.removeAttribute('src'); next.load(); return false; }
+    if (token !== this.loadToken) { next.pause(); next.removeAttribute('src'); next.load(); return false; }
+    for (const [name, fn] of this.mediaListeners) { old.removeEventListener(name, fn); next.addEventListener(name, fn); }
+    this.el = next;
+    this.track = track;
+    this.playback = pb;
+    this.offset = 0;
+    this.norm = gain;
+    this.applyGain(track, this.gainFor(track));
+    const from = old.volume;
+    const ms = Math.max(300, Math.min(this.mix.crossfade > 0 ? this.mix.crossfade * 1000 : 450, (old.duration - old.currentTime) * 1000 || 450));
+    const start = performance.now();
+    const timer = setInterval(() => {
+      const k = Math.min(1, (performance.now() - start) / ms);
+      old.volume = from * Math.cos((k * Math.PI) / 2);
+      next.volume = Math.min(1, this.outVol * Math.sin((k * Math.PI) / 2));
+      if (k >= 1) this.endCrossfade();
+    }, 30);
+    this.xfade = { timer, old };
+    this.emit();
+    return true;
   }
 
   forget(track: Track) {
@@ -223,15 +336,21 @@ class AudioEngine {
   /** Load a track; resolves once the source is set (playback may still be buffering). */
   async load(track: Track, { autoplay = true, startAt = 0 } = {}) {
     const token = ++this.loadToken;
+    this.endCrossfade();
     this.activate();
     this.el.pause();
     this.track = track;
     this.playback = null;
     this.offset = 0;
     this.emit();
+    const gain = this.gainFor(track);
     const pb = await this.resolve(track);
     if (token !== this.loadToken) return false;
     this.playback = pb;
+    // Known loudness (prefetched): start at the right level; otherwise correct as soon as it is measured.
+    this.norm = await Promise.race([gain, new Promise<number>((r) => setTimeout(() => r(this.norm), 250))]);
+    if (token !== this.loadToken) return false;
+    this.applyGain(track, gain);
     this.setSource(startAt);
     if (autoplay) await this.play();
     return true;
@@ -254,11 +373,11 @@ class AudioEngine {
   }
 
   /** Ramp the element volume to avoid clicks on play / pause. */
-  private fade(to: number, done?: () => void) {
+  private fade(to: number, done?: () => void, ms = FADE_MS) {
     clearInterval(this.fadeTimer);
     const el = this.el;
     const from = el.volume;
-    const steps = Math.max(1, Math.round(FADE_MS / 16));
+    const steps = Math.max(1, Math.round(ms / 16));
     let i = 0;
     this.fadeTimer = setInterval(() => {
       i += 1;
@@ -282,21 +401,23 @@ class AudioEngine {
     try {
       await this.el.play();
     } catch (err) {
-      this.el.volume = this.volume;
+      this.el.volume = this.outVol;
       if ((err as DOMException).name !== 'AbortError') throw err;
       return;
     }
-    if (fadeIn) this.fade(this.volume); else this.el.volume = this.volume;
+    if (fadeIn) this.fade(this.outVol); else this.el.volume = this.outVol;
   }
 
   pause() {
+    this.endCrossfade();
     if (this.el.paused) return;
     const el = this.el;
-    this.fade(0, () => { el.pause(); el.volume = this.volume; });
+    this.fade(0, () => { el.pause(); el.volume = this.outVol; });
   }
 
   stop() {
     this.loadToken += 1;
+    this.endCrossfade();
     clearInterval(this.fadeTimer);
     this.el.pause();
     this.el.removeAttribute('src');
@@ -330,6 +451,7 @@ class AudioEngine {
 
   seek(time: number) {
     if (!this.playback || this.playback.isLive) return;
+    this.endCrossfade();
     const t = Math.max(0, Math.min(time, (this.duration ?? time) - 0.25));
     if (this.playback.seekable) {
       this.el.currentTime = t;
@@ -344,11 +466,12 @@ class AudioEngine {
   setVolume(v: number) {
     this.volume = Math.max(0, Math.min(1, v));
     clearInterval(this.fadeTimer);
-    this.el.volume = this.volume;
+    if (!this.xfade) this.el.volume = this.outVol;
   }
 
   setMuted(m: boolean) {
     this.el.muted = m;
+    if (this.xfade) this.xfade.old.muted = m;
   }
 
   setRate(r: number) {

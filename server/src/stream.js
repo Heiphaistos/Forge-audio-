@@ -28,14 +28,28 @@ export const FORMATS = {
 
 export const PREFS = ['webm', 'mp4'];
 
+/**
+ * Stream quality (« Qualité du flux », data saver): caps the audio bitrate. `high` = best available
+ * (Opus ~160 kbit/s on YouTube), `normal` ≈ 128 kbit/s, `low` ≈ 50-70 kbit/s (mobile data).
+ */
+export const QUALITIES = ['high', 'normal', 'low'];
+const ABR = { normal: 130, low: 72 };
+function capAudio(selector, q) {
+  const max = ABR[q];
+  if (!max) return selector;
+  const capped = selector.split('/').filter((s) => s.startsWith('bestaudio')).map((s) => `${s}[abr<=${max}]`);
+  return [...capped, 'worstaudio[abr>=40]', selector].join('/');
+}
+
 // Re-encoding to MP3 overshoots full scale on loud masters (+0.8 dB measured on Dailymotion), which crackles:
 // a -1 dBFS limiter keeps the peaks in range.
 const MP3_LIMIT = ['-af', 'alimiter=limit=0.891:level=disabled'];
 
-function formatFor(kind, pref) {
+function formatFor(kind, pref, quality = 'high') {
   const f = FORMATS[kind];
   if (!f) throw new HttpError(`Type de flux inconnu : ${kind}`);
-  return f[PREFS.includes(pref) ? pref : 'webm'];
+  const base = f[PREFS.includes(pref) ? pref : 'webm'];
+  return kind === 'audio' && QUALITIES.includes(quality) ? capAudio(base, quality) : base;
 }
 
 /** googlevideo throttles long single responses: open-ended ranges are served in chunks of this size. */
@@ -66,8 +80,8 @@ export class MediaService {
   }
 
   /** Resolve (and cache) the direct media for a page URL. */
-  resolve(url, kind = 'audio', pref = 'webm') {
-    const format = formatFor(kind, pref);
+  resolve(url, kind = 'audio', pref = 'webm', quality = 'high') {
+    const format = formatFor(kind, pref, quality);
     return this.cache.wrap(`${kind}|${format}|${url}`, async () => {
       const raw = await runYtdlp(this.ytdlp, buildInfoArgs(url, format), { timeoutMs: 60_000 });
       let info;
@@ -88,15 +102,16 @@ export class MediaService {
     });
   }
 
-  invalidate(url, kind, pref) {
-    this.cache.delete(`${kind}|${formatFor(kind, pref)}|${url}`);
+  invalidate(url, kind, pref, quality) {
+    this.cache.delete(`${kind}|${formatFor(kind, pref, quality)}|${url}`);
   }
 
   /** Describe how the client should play a URL. */
-  async playback(url, kind, pref) {
-    const media = await this.resolve(url, kind, pref);
+  async playback(url, kind, pref, quality) {
+    const media = await this.resolve(url, kind, pref, quality);
     const qs = new URLSearchParams({ url });
     if (pref && pref !== 'webm') qs.set('pref', pref);
+    if (kind === 'audio' && QUALITIES.includes(quality) && quality !== 'high') qs.set('q', quality);
     return {
       src: `/api/stream/${kind}?${qs}`,
       seekable: media.seekable,
@@ -107,15 +122,15 @@ export class MediaService {
   }
 
   /** Fastify handler body for /api/stream/:kind. */
-  async stream(request, reply, url, kind, { start = 0, pref = 'webm' } = {}) {
-    let media = await this.resolve(url, kind, pref);
+  async stream(request, reply, url, kind, { start = 0, pref = 'webm', quality = 'high' } = {}) {
+    let media = await this.resolve(url, kind, pref, quality);
     if (media.seekable) {
       let res = await this.fetchUpstream(request, reply, media);
       if (res.status === 403 || res.status === 410) {
         // Signed URLs expire or get bound to another client: resolve again once.
         res.body?.cancel().catch(() => {});
-        this.invalidate(url, kind, pref);
-        media = await this.resolve(url, kind, pref);
+        this.invalidate(url, kind, pref, quality);
+        media = await this.resolve(url, kind, pref, quality);
         res = await this.fetchUpstream(request, reply, media);
       }
       if (!res.ok) {

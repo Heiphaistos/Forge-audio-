@@ -130,8 +130,9 @@ export const api = {
   suggest: (q: string, signal?: AbortSignal) => get<{ suggestions: string[] }>('/api/suggest', { q }, signal),
   resolve: (url: string, limit = 300) => get<ResolveResult>('/api/resolve', { url, limit }),
   radio: (t: Track) => get<{ tracks: Track[] }>('/api/radio', { url: t.url, title: t.title, author: t.author, source: t.source }),
-  playback: (url: string, kind: 'audio' | 'video' = 'audio', signal?: AbortSignal) =>
-    get<Playback>('/api/playback', { url, kind, pref: CODEC_PREFS[kind] === 'webm' ? undefined : CODEC_PREFS[kind] }, signal),
+  playback: (url: string, kind: 'audio' | 'video' = 'audio', signal?: AbortSignal, q?: 'high' | 'normal' | 'low') =>
+    get<Playback>('/api/playback', { url, kind, pref: CODEC_PREFS[kind] === 'webm' ? undefined : CODEC_PREFS[kind], q: q && q !== 'high' ? q : undefined }, signal),
+  loudness: (url: string) => get<{ lufs: number | null }>('/api/loudness', { url }),
   lyrics: (t: Track, signal?: AbortSignal) => get<LyricsResult>('/api/lyrics', { title: t.title, author: t.author, duration: t.duration }, signal),
   downloadUrl: (url: string, format: 'mp3' | 'audio' | 'video') => `/api/download?${new URLSearchParams({ url, format })}`,
   imageUrl: (url: string) => `/api/image?${new URLSearchParams({ url })}`,

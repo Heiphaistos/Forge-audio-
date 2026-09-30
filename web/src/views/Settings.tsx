@@ -197,6 +197,24 @@ export function Settings() {
         </div>
         <Toggle checked={s.autoplay} onChange={(v) => s.set({ autoplay: v })} label="Lecture automatique" hint="Quand la file est terminée, enchaîne sur des titres similaires (radio)" />
         <Toggle checked={s.eqEnabled} onChange={(v) => s.set({ eqEnabled: v })} label="Égaliseur activé" hint={`Préréglage : ${s.eqPreset}`} />
+        <div className="setting">
+          <div className="grow">Fondu enchaîné<div className="muted small">{s.crossfade ? `Le titre suivant démarre ${s.crossfade} s avant la fin` : 'Désactivé'}{s.eqEnabled && s.eqGains.some((g) => g !== 0) || s.visualizer ? ' · sans effet tant que l’égaliseur ou le visualiseur est actif' : ''}</div></div>
+          <input type="range" className="slider" min={0} max={12} step={1} value={s.crossfade} aria-label="Durée du fondu enchaîné" onChange={(e) => s.set({ crossfade: Number(e.target.value) })} />
+        </div>
+        <Toggle checked={s.gapless} onChange={(v) => s.set({ gapless: v })} label="Enchaînement sans blanc" hint="Démarre le titre suivant juste avant la fin, sans silence entre les deux" />
+        <Toggle checked={s.normalize} onChange={(v) => s.set({ normalize: v })} label="Volume harmonisé" hint="Baisse les titres trop forts pour que tous sonnent au même niveau" />
+        <div className="setting">
+          <div className="grow">Qualité du flux<div className="muted small">Élevée ≈ 160 kbit/s · Normale ≈ 128 kbit/s · Basse ≈ 50 kbit/s</div></div>
+          <select className="select" value={s.quality} onChange={(e) => s.set({ quality: e.target.value as typeof s.quality })}>
+            <option value="high">Élevée</option><option value="normal">Normale</option><option value="low">Basse</option>
+          </select>
+        </div>
+        <div className="setting">
+          <div className="grow">Économie de données<div className="muted small">Qualité basse et pas de préchargement du titre suivant</div></div>
+          <select className="select" value={s.dataSaver} onChange={(e) => s.set({ dataSaver: e.target.value as typeof s.dataSaver })}>
+            <option value="auto">Sur données mobiles</option><option value="on">Toujours</option><option value="off">Jamais</option>
+          </select>
+        </div>
       </section>
 
       <DesktopServer />

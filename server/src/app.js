@@ -14,8 +14,9 @@ import { UserData } from './userdata.js';
 import { registerSocial } from './social.js';
 import { registerCovers } from './covers.js';
 import { registerCatalog } from './catalog.js';
+import { registerLoudness } from './loudness.js';
 
-export const VERSION = '0.8.0';
+export const VERSION = '0.9.0';
 
 const IMAGE_HOSTS = /(^|\.)(ytimg\.com|ggpht\.com|googleusercontent\.com|sndcdn\.com|dmcdn\.net|dailymotion\.com|bcbits\.com|vimeocdn\.com|jtvnw\.net|scdn\.co|spotifycdn\.com|dzcdn\.net|mzstatic\.com)$/i;
 
@@ -140,6 +141,7 @@ export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null,
   registerSocial(app, { accounts, userData, dataDir });
   registerCovers(app, { dataDir });
   registerCatalog(app);
+  registerLoudness(app, { media, ffmpeg, ytdlp });
 
   // ---------- API ----------
   app.get('/api/health', async (request, reply) => {
@@ -186,13 +188,13 @@ export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null,
   app.get('/api/playback', async (request) => {
     const kind = request.query.kind === 'video' ? 'video' : 'audio';
     const url = await playableUrl(ytdlp, requirePublicUrl(request.query.url));
-    return withDrmFallback(ytdlp, url, (u) => media.playback(u, kind, request.query.pref));
+    return withDrmFallback(ytdlp, url, (u) => media.playback(u, kind, request.query.pref, request.query.q));
   });
 
   app.get('/api/stream/:kind', async (request, reply) => {
     const kind = request.params.kind === 'video' ? 'video' : 'audio';
     const start = Math.max(0, Number(request.query.start) || 0);
-    return media.stream(request, reply, await playableUrl(ytdlp, requirePublicUrl(request.query.url)), kind, { start, pref: request.query.pref });
+    return media.stream(request, reply, await playableUrl(ytdlp, requirePublicUrl(request.query.url)), kind, { start, pref: request.query.pref, quality: request.query.q });
   });
 
   app.get('/api/download', async (request, reply) => {

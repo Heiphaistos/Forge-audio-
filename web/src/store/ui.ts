@@ -133,6 +133,14 @@ interface SettingsState {
   eqPreset: string;
   eqGains: number[];
   autoplay: boolean;
+  /** Crossfade between tracks, in seconds (0 = off). */
+  crossfade: number;
+  gapless: boolean;
+  /** « Volume harmonisé »: turn loud tracks down to the same level. */
+  normalize: boolean;
+  quality: 'high' | 'normal' | 'low';
+  /** Data saver: low quality and no prefetch — on mobile data only (auto), always, or never. */
+  dataSaver: 'off' | 'auto' | 'on';
   set: (patch: Partial<Omit<SettingsState, 'set'>>) => void;
 }
 
@@ -147,6 +155,11 @@ export const useSettings = create<SettingsState>()(
       eqPreset: 'Plat',
       eqGains: EQ_PRESETS.Plat,
       autoplay: true,
+      crossfade: 0,
+      gapless: true,
+      normalize: true,
+      quality: 'high',
+      dataSaver: 'auto',
       set: (patch) => set(patch),
     }),
     {

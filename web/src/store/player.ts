@@ -49,13 +49,15 @@ interface PlayerState {
   startRadio: (track: Track) => Promise<void>;
   /** Jam: load a track of the (shared) queue at a position without going through the router. */
   jamLoad: (i: number, startAt: number, autoplay: boolean) => Promise<void>;
+  /** Crossfade / gapless: start the next track while the current one ends. */
+  crossNext: () => Promise<void>;
 }
 
 /**
  * Set while in a Jam (store/social.ts): playback and queue actions go to the shared session, whose
  * state then drives this player. Returns true when it handled the action.
  */
-type JamOp = 'toggle' | 'next' | 'ended' | 'prev' | 'seek' | 'jump' | 'playNow' | 'addNext' | 'enqueue' | 'playList' | 'remove' | 'blocked';
+type JamOp = 'toggle' | 'next' | 'ended' | 'prev' | 'seek' | 'jump' | 'playNow' | 'addNext' | 'enqueue' | 'playList' | 'remove' | 'blocked' | 'probe';
 let jamRouter: ((op: JamOp, arg?: unknown) => boolean) | null = null;
 export function setJamRouter(fn: typeof jamRouter) { jamRouter = fn; }
 const jam = (op: JamOp, arg?: unknown) => !!jamRouter && jamRouter(op, arg);
@@ -192,6 +194,22 @@ export const usePlayer = create<PlayerState>()(
 
         jumpTo: (i) => { if (!jam('jump', i)) loadIndex(i); },
         jamLoad: (i, startAt, autoplay) => loadIndex(i, { startAt, autoplay }),
+
+        crossNext: async () => {
+          // In a Jam every device follows the shared session: no local early start.
+          if (jam('probe')) return;
+          const { queue, index, repeat, sleepAfterTrack } = get();
+          if (sleepAfterTrack || repeat === 'one') return;
+          const i = index < queue.length - 1 ? index + 1 : repeat === 'all' ? 0 : -1;
+          const track = queue[i];
+          if (!track || track.isLive || !(await engine.crossfade(track))) return;
+          const seq = ++loadSeq;
+          historyPushedFor = seq;
+          retriedUrl = null;
+          set({ index: i, position: 0, duration: track.duration, error: null, buffering: false, playing: true });
+          useLibrary.getState().pushHistory(track);
+          engine.prefetch(get().queue[i + 1]);
+        },
 
         next: async (auto = false) => {
           if (jam(auto ? 'ended' : 'next')) return;
@@ -333,9 +351,16 @@ export function bindEngine() {
   usePlayer.setState({ position: Number(localStorage.getItem(POSITION_KEY)) || 0 });
 
   let lastSave = 0;
+  let crossedFor = -1;
   engine.on('timeupdate', () => {
     const position = engine.currentTime;
-    usePlayer.setState({ position, duration: engine.duration });
+    const duration = engine.duration;
+    usePlayer.setState({ position, duration });
+    const w = engine.transitionWindow;
+    if (w > 0 && duration && crossedFor !== loadSeq && duration > 2 * w + 5 && duration - position <= w) {
+      crossedFor = loadSeq;
+      usePlayer.getState().crossNext();
+    }
     if (Date.now() - lastSave > 3000) {
       lastSave = Date.now();
       try { localStorage.setItem(POSITION_KEY, String(Math.floor(position))); } catch { /* quota */ }
