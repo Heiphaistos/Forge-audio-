@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { ensureYtdlp } from './ytdlp-manager.js';
+import { startUpdates } from './updater.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -54,6 +55,10 @@ if (!app.requestSingleInstanceLock()) {
   const configFile = () => path.join(app.getPath('userData'), 'config.json');
   const readConfig = () => { try { return JSON.parse(fs.readFileSync(configFile(), 'utf8')); } catch { return {}; } };
   const writeConfig = (c) => { fs.mkdirSync(path.dirname(configFile()), { recursive: true }); fs.writeFileSync(configFile(), JSON.stringify(c, null, 2)); };
+  // Same login page and library as the website and the mobile app by default; « local mode » (a library kept on this
+  // computer, no account) only when chosen, saved as an empty serverUrl.
+  const DEFAULT_SERVER = 'https://connect.forgeaudio.heiphaistos.org';
+  const serverOf = (c) => (c.serverUrl === undefined ? DEFAULT_SERVER : c.serverUrl || null);
 
   function normalizeServer(url) {
     const u = new URL(String(url).trim());
@@ -71,7 +76,7 @@ if (!app.requestSingleInstanceLock()) {
     }
   }
 
-  ipcMain.handle('forge:get-server', () => readConfig().serverUrl || null);
+  ipcMain.handle('forge:get-server', () => serverOf(readConfig()));
   ipcMain.handle('forge:set-server', async (event, url) => {
     if (!win || event.sender !== win.webContents) throw new Error('Refusé');
     const config = readConfig();
@@ -80,11 +85,11 @@ if (!app.requestSingleInstanceLock()) {
       if (!(await reachable(origin))) throw new Error(`Serveur Forge Audio injoignable à ${origin}`);
       config.serverUrl = origin;
     } else {
-      delete config.serverUrl;
+      config.serverUrl = '';
     }
     writeConfig(config);
     setTimeout(() => openApp().catch(() => {}), 50);
-    return config.serverUrl || null;
+    return serverOf(config);
   });
 
   const remote = (action) => win?.webContents.executeJavaScript(`window.__forgeRemote && window.__forgeRemote(${JSON.stringify(action)})`).catch(() => {});
@@ -168,7 +173,7 @@ if (!app.requestSingleInstanceLock()) {
   /** Load the configured remote server, or start (once) and load the built-in local server. */
   async function openApp() {
     if (!win) return;
-    const remote = readConfig().serverUrl;
+    const remote = serverOf(readConfig());
     if (remote) {
       win.loadURL(splash(`Connexion à ${remote}…`));
       if (await reachable(remote)) {
@@ -204,6 +209,7 @@ if (!app.requestSingleInstanceLock()) {
     process.env.FORGE_AUDIO_VERSION = app.getVersion();
     if (process.platform !== 'darwin') Menu.setApplicationMenu(null);
     createWindow();
+    startUpdates(() => win);
     app.on('activate', () => showWindow());
   });
 

@@ -16,7 +16,7 @@ import { ArtistView, AlbumView, MixView, GenreView } from './views/Catalog';
 import { StatsView, BlendView } from './views/Stats';
 import { openLink } from './views/Home';
 import { Library, PlaylistView, Liked, HistoryView } from './views/Library';
-import { Settings } from './views/Settings';
+import { Settings, inMobileApp, changeServerUrl } from './views/Settings';
 import { SharedPlaylistView } from './views/Shared';
 import { JamPanel, JamBanner } from './components/Jam';
 import { SelectionBar } from './components/SelectionBar';
@@ -113,6 +113,8 @@ function Login({ onDone }: { onDone: (user: User) => void }) {
         {error && <p className="bad small">{error}</p>}
         <button className="btn btn-primary full" disabled={loading || !username || !password}>{loading ? <Loader2 size={16} className="spin" /> : 'Se connecter'}</button>
         <p className="muted small center-text">Astuce : laissez votre navigateur enregistrer le mot de passe.</p>
+        {inMobileApp() && <p className="muted small center-text">Serveur : <b>{location.host}</b> · <a className="link accent" href={changeServerUrl()}>Changer</a></p>}
+        {window.forgeDesktop && <p className="muted small center-text">Serveur : <b>{location.host}</b> · <button type="button" className="link accent" onClick={() => window.forgeDesktop?.setServer(null)}>Utiliser sans compte (bibliothèque locale)</button></p>}
       </form>
     </div>
   );

@@ -57,8 +57,10 @@ function DesktopServer() {
 const DESKTOP_RELEASES = 'https://github.com/Heiphaistos/Forge-audio-/releases/latest';
 export const MOBILE_RELEASES = 'https://github.com/Heiphaistos/Forge-Audio-Android/releases/latest';
 
-const inMobileApp = () => /ForgeAudioApp/.test(navigator.userAgent);
+export const inMobileApp = () => /ForgeAudioApp/.test(navigator.userAgent);
 const isIos = () => /iPhone|iPad|iPod/.test(navigator.userAgent);
+/** The mobile app's server screen (bundled page), reached from the login page and Settings. */
+export const changeServerUrl = () => `${isIos() ? 'capacitor://localhost' : 'https://localhost'}/?change=1`;
 
 /** Inside the Android / iOS app: go back to the bundled server setup screen. */
 /** « Masquer ce titre » / « Ne plus recommander » : list, and show again. */
@@ -119,12 +121,11 @@ function DiscordLinkCard() {
 
 function MobileServer() {
   if (!inMobileApp()) return null;
-  const local = isIos() ? 'capacitor://localhost' : 'https://localhost';
   return (
     <section className="settings-card">
       <h2>Application mobile</h2>
       <p className="muted">Connecté au serveur <b>{location.origin}</b>. La musique continue écran verrouillé ou dans une autre application, avec les commandes dans la notification et sur l'écran de verrouillage.</p>
-      <a className="btn btn-ghost" href={`${local}/?change=1`}>Changer de serveur</a>
+      <a className="btn btn-ghost" href={changeServerUrl()}>Changer de serveur</a>
     </section>
   );
 }
