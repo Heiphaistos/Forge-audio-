@@ -139,7 +139,7 @@ function DownloadApps() {
   return (
     <section className="settings-card">
       <h2>Applications</h2>
-      <p className="muted">Un navigateur fermé arrête la musique. Les applications, elles, continuent en arrière-plan : zone de notification sur ordinateur, notification et écran de verrouillage sur téléphone.</p>
+      <p className="muted">Un navigateur fermé arrête la musique. Les applications peuvent continuer en arrière-plan : sur téléphone avec la notification et l’écran de verrouillage, sur ordinateur si vous l’activez (clic droit sur l’icône Forge Audio de la zone de notification).</p>
       <div className="row gap wrap">
         <a className="btn btn-primary" href={MOBILE_RELEASES} target="_blank" rel="noreferrer">Android (APK)</a>
         <a className="btn btn-ghost" href={MOBILE_RELEASES} target="_blank" rel="noreferrer">iPhone / iPad</a>

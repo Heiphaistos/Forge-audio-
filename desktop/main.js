@@ -115,7 +115,7 @@ if (!app.requestSingleInstanceLock()) {
       {
         label: 'Continuer la lecture quand la fenêtre est fermée',
         type: 'checkbox',
-        checked: readConfig().closeToTray !== false,
+        checked: readConfig().closeToTray === true,
         click: (item) => writeConfig({ ...readConfig(), closeToTray: item.checked }),
       },
       { label: 'Quitter', click: () => { quitting = true; app.quit(); } },
@@ -155,9 +155,10 @@ if (!app.requestSingleInstanceLock()) {
       return { action: 'deny' };
     });
 
-    // Closing the window keeps the music playing: the app lives on in the system tray.
+    // Closing the window quits the app. Keeping the music playing in the system tray is opt-in (tray menu): many
+    // Linux desktops (GNOME) show no tray icon, and a hidden app with no icon could not be quit at all.
     win.on('close', (e) => {
-      if (quitting || readConfig().closeToTray === false) return;
+      if (quitting || readConfig().closeToTray !== true) return;
       e.preventDefault();
       win.hide();
       if (!trayHintShown && Notification.isSupported()) {
@@ -214,7 +215,8 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin' && (quitting || !tray)) app.quit();
+    // A window hidden in the tray is not closed: reaching this means the user closed it for good.
+    if (process.platform !== 'darwin') app.quit();
   });
 
   app.on('before-quit', () => { quitting = true; server?.close().catch(() => {}); });
