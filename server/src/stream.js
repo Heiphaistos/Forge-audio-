@@ -52,8 +52,11 @@ function formatFor(kind, pref, quality = 'high') {
   return kind === 'audio' && QUALITIES.includes(quality) ? capAudio(base, quality) : base;
 }
 
-/** googlevideo throttles long single responses: open-ended ranges are served in chunks of this size. */
-const CHUNK = 10 * 1024 * 1024;
+/**
+ * googlevideo refuses (403) any range over ~1 MiB since 2026-09-30 (checked: 0-1 MiB and 2-2.5 MB pass, 0-2 MB
+ * does not): every upstream request is at most one chunk, the player asks for the next ones as it plays.
+ */
+const CHUNK = 1024 * 1024;
 const RESOLVE_TTL = 2 * 60 * 60 * 1000;
 
 function headerString(headers = {}) {
@@ -68,7 +71,7 @@ export function upstreamRange(range) {
   if (!m) return null;
   const start = Number(m[1]);
   const end = m[2] ? Number(m[2]) : start + CHUNK - 1;
-  return `bytes=${start}-${Math.min(end, start + CHUNK * 4 - 1)}`;
+  return `bytes=${start}-${Math.min(end, start + CHUNK - 1)}`;
 }
 
 export class MediaService {
@@ -167,7 +170,9 @@ export class MediaService {
   inputArgs(media, start = 0) {
     const args = [];
     const seek = start > 0 && !media.isLive ? ['-ss', String(start)] : [];
-    if (media.direct && (media.direct.progressive || media.direct.protocol.startsWith('m3u8'))) {
+    // googlevideo refuses ffmpeg's single open-ended request (> 1 MiB, see CHUNK): yt-dlp downloads it in small parts.
+    const googlevideo = /(^|\.)googlevideo\.com$/.test(new URL(media.direct?.url || 'http://x').hostname);
+    if (media.direct && !googlevideo && (media.direct.progressive || media.direct.protocol.startsWith('m3u8'))) {
       const hdr = headerString(media.direct.headers);
       if (hdr) args.push('-headers', hdr);
       args.push('-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5', ...seek, '-i', media.direct.url);

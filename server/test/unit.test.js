@@ -96,8 +96,9 @@ test('parseLrc handles multiple timestamps per line', () => {
 });
 
 test('upstreamRange bounds open-ended ranges', () => {
-  assert.equal(upstreamRange(undefined), 'bytes=0-10485759');
-  assert.equal(upstreamRange('bytes=100-'), 'bytes=100-10485859');
+  assert.equal(upstreamRange(undefined), 'bytes=0-1048575');
+  assert.equal(upstreamRange('bytes=100-'), 'bytes=100-1048675');
+  assert.equal(upstreamRange('bytes=0-5000000'), 'bytes=0-1048575', 'large explicit ranges are cut too');
   assert.equal(upstreamRange('bytes=0-99'), 'bytes=0-99');
   assert.equal(upstreamRange('bytes=-500'), null);
   assert.equal(safeFilename('a/b:c?"d"'), 'a b c d');

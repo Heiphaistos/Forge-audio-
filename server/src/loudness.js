@@ -18,18 +18,21 @@ export function parseIntegrated(stderr) {
   return Number.isFinite(v) && v > -70 && v < 0 ? v : null;
 }
 
-function measure(ffmpeg, media) {
+/**
+ * yt-dlp downloads (it splits the file into the small requests googlevideo accepts) and pipes the audio
+ * into ffmpeg, which measures the first 90 s; yt-dlp is stopped as soon as ffmpeg is done.
+ */
+function measure(ytdlp, ffmpeg, url) {
   return new Promise((resolve) => {
-    const args = ['-hide_banner', '-nostats', '-t', '90'];
-    const hdr = Object.entries(media.direct.headers || {}).filter(([k]) => !/^(accept-encoding|range)$/i.test(k)).map(([k, v]) => `${k}: ${v}\r\n`).join('');
-    if (hdr) args.push('-headers', hdr);
-    args.push('-i', media.direct.url, '-vn', '-af', 'ebur128=framelog=verbose', '-f', 'null', '-');
-    const proc = spawn(ffmpeg, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+    const yt = spawn(ytdlp, ['-q', '--no-warnings', '--no-part', '--no-playlist', '-f', 'bestaudio[abr<=72]/worstaudio/bestaudio', '-o', '-', '--', url], { stdio: ['ignore', 'pipe', 'ignore'] });
+    const ff = spawn(ffmpeg, ['-hide_banner', '-nostats', '-t', '90', '-i', 'pipe:0', '-vn', '-af', 'ebur128=framelog=verbose', '-f', 'null', '-'], { stdio: ['pipe', 'ignore', 'pipe'] });
+    yt.stdout.pipe(ff.stdin).on('error', () => {});
+    yt.on('error', () => ff.kill('SIGKILL'));
     let err = '';
-    proc.stderr.on('data', (d) => { err += d; if (err.length > 200000) err = err.slice(-50000); });
-    const timer = setTimeout(() => proc.kill('SIGKILL'), 60_000);
-    proc.on('close', (code) => { clearTimeout(timer); resolve(code === 0 ? parseIntegrated(err) : null); });
-    proc.on('error', () => { clearTimeout(timer); resolve(null); });
+    ff.stderr.on('data', (d) => { err += d; if (err.length > 200000) err = err.slice(-50000); });
+    const timer = setTimeout(() => { ff.kill('SIGKILL'); yt.kill('SIGKILL'); }, 90_000);
+    ff.on('close', (code) => { clearTimeout(timer); yt.kill('SIGKILL'); resolve(code === 0 ? parseIntegrated(err) : null); });
+    ff.on('error', () => { clearTimeout(timer); yt.kill('SIGKILL'); resolve(null); });
   });
 }
 
@@ -45,8 +48,8 @@ export function registerLoudness(app, { media, ffmpeg, ytdlp }) {
       let lufs = null;
       try {
         const url = await playableUrl(ytdlp, raw);
-        const m = await media.resolve(url, 'audio', 'webm', 'low');
-        if (m.direct?.url && !m.isLive) lufs = await measure(ffmpeg, m);
+        const m = await media.resolve(url, 'audio', 'webm', 'high');
+        if (!m.isLive) lufs = await measure(ytdlp, ffmpeg, url);
       } catch { /* unavailable: played as is */ }
       cache.set(raw, lufs);
       return lufs;
