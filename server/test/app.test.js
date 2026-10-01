@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
@@ -212,4 +213,28 @@ test('client IP and protocol come from the reverse proxy, not from the client', 
   const out = await app.inject({ method: 'POST', url: '/api/logout', remoteAddress: '10.80.0.1', headers: { 'x-forwarded-proto': 'https' } });
   assert.match(out.headers['set-cookie'], /; Secure/);
   await app.close();
+});
+
+test('sealed login: password encrypted with /api/login-key, nonce single use, plain still accepted', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'forge-'));
+  const accountsFile = path.join(dir, 'accounts.json');
+  const pw = generatePassword(100);
+  await new Accounts(accountsFile).set('loan', 'Loan', pw);
+  const app = make({ dataDir: dir, accountsFile });
+  const seal = async (password) => {
+    const { key, nonce } = (await app.inject('/api/login-key')).json();
+    const pub = crypto.createPublicKey({ key: Buffer.from(key, 'base64'), format: 'der', type: 'spki' });
+    const data = Buffer.from(JSON.stringify({ p: password, n: nonce }));
+    return crypto.publicEncrypt({ key: pub, padding: crypto.constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha256' }, data).toString('base64');
+  };
+  const login = (payload) => app.inject({ method: 'POST', url: '/api/login', payload });
+
+  const sealed = await seal(pw);
+  assert.equal((await login({ username: 'loan', sealed })).statusCode, 200);
+  assert.equal((await login({ username: 'loan', sealed })).statusCode, 401, 'a nonce cannot be replayed');
+  assert.equal((await login({ username: 'loan', sealed: await seal(`${pw}x`) })).statusCode, 401);
+  const tampered = Buffer.from(await seal(pw), 'base64');
+  tampered[10] ^= 1;
+  assert.equal((await login({ username: 'loan', sealed: tampered.toString('base64') })).statusCode, 401);
+  assert.equal((await login({ username: 'loan', password: pw })).statusCode, 200, 'desktop/Android plain login still works');
 });

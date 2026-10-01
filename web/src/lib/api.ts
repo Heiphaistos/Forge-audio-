@@ -30,6 +30,29 @@ async function send<T>(method: string, path: string, payload: unknown): Promise<
   return body as T;
 }
 
+/**
+ * Seals the password with the server's RSA-OAEP key (+ single-use nonce) so it never shows in clear
+ * in the browser's network tools. Falls back to the plain password (still over HTTPS) if Web Crypto
+ * or the key endpoint is unavailable.
+ */
+async function sealPassword(password: string): Promise<{ sealed: string } | { password: string }> {
+  try {
+    if (!globalThis.crypto?.subtle) return { password };
+    const { key, nonce } = await get<{ key: string | null; nonce: string | null }>('/api/login-key');
+    if (!key || !nonce) return { password };
+    const der = Uint8Array.from(atob(key), (c) => c.charCodeAt(0));
+    const pub = await crypto.subtle.importKey('spki', der, { name: 'RSA-OAEP', hash: 'SHA-256' }, false, ['encrypt']);
+    const data = new TextEncoder().encode(JSON.stringify({ p: password, n: nonce }));
+    if (data.length > 446) return { password }; // RSA-OAEP 4096 / SHA-256 limit
+    const out = new Uint8Array(await crypto.subtle.encrypt({ name: 'RSA-OAEP' }, pub, data));
+    let bin = '';
+    for (const b of out) bin += String.fromCharCode(b);
+    return { sealed: btoa(bin) };
+  } catch {
+    return { password };
+  }
+}
+
 export interface User {
   username: string;
   displayName: string;
@@ -122,7 +145,8 @@ export const CODEC_PREFS = detectPrefs();
 
 export const api = {
   health: () => get<Health>('/api/health'),
-  login: (username: string, password: string) => send<{ ok: true; user: User }>('POST', '/api/login', { username, password }),
+  login: async (username: string, password: string) =>
+    send<{ ok: true; user: User }>('POST', '/api/login', { username, ...(await sealPassword(password)) }),
   logout: () => send<{ ok: true }>('POST', '/api/logout', {}),
   getData: <D>() => get<ServerDoc<D>>('/api/me/data'),
   putData: <D>(baseRev: number, data: D) => send<{ rev: number; updatedAt: number }>('PUT', '/api/me/data', { baseRev, data }),

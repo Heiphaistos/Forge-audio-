@@ -10,13 +10,14 @@ import { findLyrics } from './lyrics.js';
 import { resolveStreamingLink, playableUrl, withDrmFallback, withBotFallback } from './streaming.js';
 import { HttpError, isPublicUrl, clampInt, TtlCache } from './util.js';
 import { Accounts, Sessions, LoginLimiter } from './accounts.js';
+import { LoginSeal } from './login-seal.js';
 import { UserData } from './userdata.js';
 import { registerSocial } from './social.js';
 import { registerCovers } from './covers.js';
 import { registerCatalog } from './catalog.js';
 import { registerLoudness } from './loudness.js';
 
-export const VERSION = '0.13.0';
+export const VERSION = '0.14.0';
 
 const IMAGE_HOSTS = /(^|\.)(ytimg\.com|ggpht\.com|googleusercontent\.com|sndcdn\.com|dmcdn\.net|dailymotion\.com|bcbits\.com|vimeocdn\.com|jtvnw\.net|scdn\.co|spotifycdn\.com|dzcdn\.net|mzstatic\.com)$/i;
 
@@ -50,6 +51,7 @@ export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null,
   const accounts = new Accounts(accountsFile);
   const sessions = new Sessions(dataDir ? path.join(dataDir, 'sessions.json') : null);
   const limiter = new LoginLimiter();
+  let seal = null; // created on first use: a 4096-bit key takes about a second to generate
   const userData = dataDir ? new UserData(dataDir) : null;
   const LOCAL_USER = { username: 'local', displayName: 'Moi' };
   const media = new MediaService({ ytdlp, ffmpeg, log: app.log });
@@ -75,7 +77,7 @@ export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null,
     return u && s.created >= u.since ? { username: u.username, displayName: u.displayName } : null;
   };
 
-  const PUBLIC = new Set(['/api/health', '/api/login', '/api/logout']);
+  const PUBLIC = new Set(['/api/health', '/api/login', '/api/login-key', '/api/logout']);
   app.addHook('onRequest', async (request, reply) => {
     const p = request.url.split('?')[0];
     if (!p.startsWith('/api/')) return;
@@ -93,8 +95,10 @@ export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null,
     if (!accounts.enabled) return { ok: true, user: LOCAL_USER };
     const wait = limiter.blocked(request.ip);
     if (wait) throw new HttpError(`Trop de tentatives, réessayez dans ${wait} min`, 429, 'RATE_LIMITED');
-    const { username, password } = request.body || {};
-    const user = await accounts.authenticate(String(username || ''), String(password || ''));
+    const { username, password, sealed } = request.body || {};
+    // Web client: password sealed with /api/login-key. Desktop/Android: plain `password` (HTTPS).
+    const clear = sealed ? (seal ? seal.open(sealed) : null) : password;
+    const user = clear === null ? null : await accounts.authenticate(String(username || ''), String(clear || ''));
     if (!user) {
       limiter.fail(request.ip);
       throw new HttpError('Identifiant ou mot de passe incorrect', 401, 'AUTH_FAILED');
@@ -103,6 +107,12 @@ export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null,
     const token = sessions.create(user.username);
     reply.header('set-cookie', cookie(request, token, 180 * 24 * 3600));
     return { ok: true, user };
+  });
+
+  app.get('/api/login-key', async () => {
+    if (!accounts.enabled) return { key: null, nonce: null };
+    seal ??= new LoginSeal();
+    return seal.issue();
   });
 
   app.post('/api/logout', async (request, reply) => {
