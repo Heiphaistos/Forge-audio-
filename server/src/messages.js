@@ -16,10 +16,13 @@ import { targetName } from './friends.js';
 export const MAX_TEXT = 1000;
 const KEEP = 500;
 
+/** Control and bidi/zero-width characters (newline and tab kept). */
+export const CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f​-‏‪-‮⁦-⁩]/g;
+
 /** Plain text, 1 to 1000 characters, control characters removed (newlines and tabs kept). */
 export function cleanText(raw) {
   if (typeof raw !== 'string') throw new HttpError('Message vide', 400, 'EMPTY');
-  const text = raw.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000b-\u001f\u007f​-‏‪-‮⁦-⁩]/g, '').trim();
+  const text = raw.replace(/\r\n?/g, '\n').replace(CONTROL, '').trim();
   if (!text) throw new HttpError('Message vide', 400, 'EMPTY');
   if (text.length > MAX_TEXT) throw new HttpError(`${MAX_TEXT} caractères au maximum`, 400, 'TOO_LONG');
   return text;

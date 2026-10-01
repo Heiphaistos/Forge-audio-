@@ -34,6 +34,8 @@ export interface Playlist {
   folder?: string | null;
   /** Pinned at the top of the sidebar and the library. */
   pinned?: boolean;
+  /** « Afficher sur mon profil »: friends see it on my profile (off by default). */
+  onProfile?: boolean;
   createdAt: number;
   updatedAt: number;
 }

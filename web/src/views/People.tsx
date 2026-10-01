@@ -77,8 +77,10 @@ export function FriendsView() {
           <div className="admin-list">
             {friends.map((f) => (
               <div key={f.username} className="admin-row">
-                <span className="avatar sm" aria-hidden>{f.displayName.slice(0, 1).toUpperCase()}</span>
-                <div className="grow"><b>{f.displayName}</b> <span className="muted">@{f.username}</span></div>
+                <button className="friend-link grow" onClick={() => navigate({ name: 'profile', id: f.username })} title={`Profil de ${f.displayName}`}>
+                  <span className="avatar sm" aria-hidden>{f.displayName.slice(0, 1).toUpperCase()}</span>
+                  <span className="ellipsis"><b>{f.displayName}</b> <span className="muted">@{f.username}</span></span>
+                </button>
                 <button className="icon-btn" title="Message" aria-label={`Écrire à ${f.displayName}`} onClick={() => navigate({ name: 'messages', id: f.username })}><MessageCircle size={17} /></button>
                 <button className="icon-btn" title="Blend" aria-label={`Blend avec ${f.displayName}`} onClick={() => navigate({ name: 'blend', id: f.username })}><Blend size={17} /></button>
                 <button className="icon-btn" title="Retirer des amis" aria-label={`Retirer ${f.displayName} des amis`} onClick={() => { if (confirm(`Retirer ${f.displayName} de vos amis ?`)) act(() => people.remove(f.username)); }}><UserMinus size={17} /></button>
@@ -183,8 +185,17 @@ function Thread({ username }: { username: string }) {
     <div className="page people thread-page">
       <div className="row gap thread-head">
         <button className="icon-btn" onClick={() => navigate({ name: 'messages' })} aria-label="Toutes les conversations"><ArrowLeft size={20} /></button>
-        <span className="avatar sm" aria-hidden>{name.slice(0, 1).toUpperCase()}</span>
-        <h1 className="grow ellipsis thread-title">{name}</h1>
+        {other?.friend ? (
+          <button className="friend-link grow" onClick={() => navigate({ name: 'profile', id: username })} title={`Profil de ${name}`}>
+            <span className="avatar sm" aria-hidden>{name.slice(0, 1).toUpperCase()}</span>
+            <h1 className="ellipsis thread-title">{name}</h1>
+          </button>
+        ) : (
+          <>
+            <span className="avatar sm" aria-hidden>{name.slice(0, 1).toUpperCase()}</span>
+            <h1 className="grow ellipsis thread-title">{name}</h1>
+          </>
+        )}
         {thread.length > 0 && (
           <button className="icon-btn" title="Supprimer la conversation" aria-label="Supprimer la conversation" onClick={() => {
             if (confirm(`Supprimer la conversation avec ${name} ? Elle disparaît pour vous ; les messages sont effacés du serveur quand vous l’avez supprimée tous les deux.`)) act(() => inbox.clear(username), 'Conversation supprimée');

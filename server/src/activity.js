@@ -81,17 +81,20 @@ export function registerActivity(app, { accounts, userData, hub, friends }) {
     return { ok: true, shared: true };
   });
 
-  const friendsOf = (username) => {
-    const now = Date.now();
-    return accounts.list().filter((a) => friends.are(username, a.username)).map((a) => {
-      const data = dataOf(a.username);
-      if (!sharing(data)) return null;
-      const l = live.get(a.username);
-      const last = data?.library?.history?.[0];
-      const entry = l && (!last || l.at >= last.at) ? l : last ? { track: last.track, at: last.at } : null;
-      return entry ? { user: a.username, displayName: a.displayName, ...entry, live: now - entry.at < LIVE_MS } : null;
-    }).filter(Boolean).sort((x, y) => y.at - x.at);
+  /** What `username` plays now or played last, or null (nothing yet, or activity not shared). */
+  const nowOf = (username) => {
+    const data = dataOf(username);
+    if (!sharing(data)) return null;
+    const l = live.get(username);
+    const last = data?.library?.history?.[0];
+    const entry = l && (!last || l.at >= last.at) ? l : last ? { track: last.track, at: last.at } : null;
+    return entry ? { ...entry, live: Date.now() - entry.at < LIVE_MS } : null;
   };
+
+  const friendsOf = (username) => accounts.list().filter((a) => friends.are(username, a.username)).map((a) => {
+    const entry = nowOf(a.username);
+    return entry ? { user: a.username, displayName: a.displayName, ...entry } : null;
+  }).filter(Boolean).sort((x, y) => y.at - x.at);
 
   const blendOf = (username, otherName) => {
     const other = String(otherName || '').toLowerCase();
@@ -108,5 +111,5 @@ export function registerActivity(app, { accounts, userData, hub, friends }) {
   app.get('/api/activity', async (request) => ({ friends: friendsOf(me(request)) }));
   app.get('/api/blend/:username', async (request) => blendOf(me(request), request.params.username));
 
-  return { friendsOf, blendOf, statsOf: (username, days) => statsOf(dataOf(username)?.library, days) };
+  return { friendsOf, blendOf, nowOf, statsOf: (username, days) => statsOf(dataOf(username)?.library, days) };
 }

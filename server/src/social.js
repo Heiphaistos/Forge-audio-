@@ -7,6 +7,7 @@ import { DiscordLinks, checkBotToken } from './links.js';
 import { cleanTracks } from './userdata.js';
 import { Friends, registerFriends } from './friends.js';
 import { Messages, registerMessages, messageLimiter, checkRate } from './messages.js';
+import { Profiles, registerProfiles } from './profiles.js';
 
 /**
  * Everything between accounts: friends, private messages, live events, shared playlists, Jam, and
@@ -21,6 +22,7 @@ export function registerSocial(app, { accounts, userData, dataDir, botToken = pr
   const links = new DiscordLinks(dataDir);
   const friends = new Friends(dataDir);
   const messages = new Messages(dataDir);
+  const profiles = new Profiles(dataDir);
   const isAccount = (u) => !!accounts.get(u);
   const me = (request) => request.user.username;
   const friendOf = (u) => (other) => isAccount(other) && friends.are(u, other);
@@ -43,6 +45,7 @@ export function registerSocial(app, { accounts, userData, dataDir, botToken = pr
     },
   });
   registerMessages(app, { accounts, friends, messages, hub });
+  registerProfiles(app, { accounts, userData, friends, activity, profiles, hub });
 
   // Accounts one can share with / invite: friends only (names only).
   app.get('/api/users', async (request) => ({ users: accounts.list().filter((u) => friends.are(me(request), u.username)) }));
@@ -179,5 +182,5 @@ export function registerSocial(app, { accounts, userData, dataDir, botToken = pr
     return result;
   });
 
-  return { hub, shared, jams, links, friends, messages };
+  return { hub, shared, jams, links, friends, messages, profiles };
 }

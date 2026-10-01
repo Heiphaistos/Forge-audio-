@@ -1,4 +1,4 @@
-# Forge Audio : API nouvelle ou modifiée depuis la 0.14.0 (serveur 0.16.0)
+# Forge Audio : API nouvelle ou modifiée depuis la 0.14.0 (serveur 0.17.0)
 
 Référence pour adapter les clients Android et bureau. Tout le reste de l'API (recherche, lecture,
 bibliothèque `/api/me/data`, catalogue, playlists partagées, Jam hors chat, Discord) est inchangé
@@ -168,10 +168,57 @@ Au (re)branchement, `{ "type": "hello" }` : recharger l'état (amis, messages, J
 Événements existants inchangés : `hello`, `library`, `discord`, `activity` (désormais envoyé aux amis seulement),
 `shared`, `jam`, `jam-invite` (désormais seulement de la part d'un ami).
 
-## 9. Côté clients
+## 9. Profils (0.17.0, nouveau)
+
+Un profil n'est visible **que par ses amis et par soi-même**. Non-ami, compte bloqué (dans un sens ou
+dans l'autre), identifiant inexistant ou mal formé : **même réponse** `404 { "error": "Profil introuvable", "code": "NOT_FOUND" }`
+(pas d'énumération). Même règle pour la photo et les playlists d'un profil, même avec leur adresse exacte.
+
+`Profile = { username, displayName, bio, avatar: "/api/avatars/<user>/<fichier>"|null, self: bool,
+friendsSince: <ms>|null, playlists: [ProfilePlaylist], activity: null | { now: { track, at, live }|null,
+stats: { days: 28, plays, minutes, topArtists: [{ name, n }] (5), topTracks: [{ track, n }] (5) } } }`
+`ProfilePlaylist = { id, name, description, cover, count, duration (s), thumbnails: [4 au plus] }`
+
+### `GET /api/profiles/:username` → `200 { "profile": Profile }` ; 404 `NOT_FOUND`.
+`activity` vaut `null` sauf si la personne a **les deux** réglages : `shareActivity` (bibliothèque, Paramètres > Lecture)
+et `showStats` (profil). `playlists` = playlists de sa bibliothèque marquées `onProfile: true`.
+### `GET /api/profiles/:username/playlists/:id` → `200 { "playlist": { id, name, description, cover, owner, tracks: [Track] } }`
+404 si le profil n'est pas visible ou si la playlist n'est pas affichée (`onProfile` absent/faux).
+### `GET /api/avatars/:username/:fichier` → l'image (`image/png|jpeg|webp`, `nosniff`, `cache-control: private, max-age=3600`)
+404 si le profil n'est pas visible, ou si ce n'est pas la photo **actuelle** (ancienne adresse = 404).
+
+### Mon profil
+- `GET /api/me/profile` → `200 { "profile": { username, displayName, bio, avatar, showStats, shareActivity } }`.
+- `PATCH /api/me/profile` `{ "displayName"?: "…", "bio"?: "…", "showStats"?: bool }` → `200 { "profile": … }`.
+  `displayName` : 1 à 40 caractères (caractères de contrôle retirés, espaces autour retirés), enregistré dans le compte :
+  nouveau nom partout (amis, messages, Jam). `bio` : texte brut 0 à 300 caractères (retours à la ligne gardés,
+  caractères de contrôle/bidi retirés) — **à afficher comme du texte, jamais en HTML**. Tout est validé avant
+  d'écrire quoi que ce soit : 400 `BAD_REQUEST` / `TOO_LONG`.
+- `POST /api/me/avatar` corps = l'image brute, `content-type: image/png|image/jpeg|image/webp` → `200 { "avatar": "/api/avatars/…" }`.
+  Type vérifié par les **octets magiques** (le `content-type` déclaré ne suffit pas) : 415 `BAD_TYPE` (SVG, GIF, autre) ;
+  > 1 Mo : 413 `TOO_LARGE`. Remplace et efface l'ancienne photo ; nom de fichier aléatoire (144 bits).
+- `DELETE /api/me/avatar` → `200 { "ok": true }` (fichier effacé du disque).
+- Débit : 30 écritures (PATCH, POST/DELETE avatar) par heure et par compte → 429 `RATE_LIMITED`.
+
+### Playlists affichées : champ `onProfile` dans `/api/me/data`
+Chaque playlist de `library.playlists` accepte `"onProfile": true` (« Afficher sur mon profil », absent = faux).
+Comme les autres champs, il passe par la synchronisation de la bibliothèque (`PUT /api/me/data`, modifier `updatedAt`).
+
+### Temps réel
+Nouvel événement SSE `{ "type": "profile", "user": "<username>" }` envoyé à la personne et à ses amis quand elle
+modifie son profil : recharger `GET /api/friends` (noms) et le profil affiché.
+
+### Divers (0.17.0)
+Les erreurs « client » de Fastify ne répondent plus 500 : corps trop gros → 413 `TOO_LARGE`, `content-type` non pris
+en charge → 415 `BAD_TYPE`, JSON illisible → 400 `BAD_REQUEST`.
+
+## 10. Côté clients
 
 - **Bureau** (`desktop/`, Electron) : charge par défaut l'interface **distante**
   `https://connect.forgeaudio.heiphaistos.org` (`win.loadURL`) : amis, messages et chat du Jam y apparaissent
   dès le déploiement du serveur, sans nouvelle version. Le mode local (sans compte) embarque le build web
   et le serveur (`desktop/app/`, `npm run prepare-app`) : pas de fonctions sociales (un seul utilisateur).
 - **Android** : coque WebView sur le même serveur → idem ; pour une interface native, utiliser les routes ci-dessus.
+- **Flux `/api/events`** (0.16.1) : un `EventSource` du navigateur abandonne **définitivement** après une réponse HTTP
+  d'erreur (nginx renvoie 502 pendant un redémarrage du serveur). Tout client doit le rouvrir lui-même (le web : 2 s puis
+  jusqu'à 30 s, et au retour au premier plan) puis, au `hello`, tout recharger.

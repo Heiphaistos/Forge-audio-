@@ -2,7 +2,7 @@ import { Copy, Crown, Loader2, LogOut, Radio, Send, Users, X } from 'lucide-reac
 import { useEffect, useRef, useState } from 'react';
 import type { User } from '../lib/api';
 import { useUi } from '../store/ui';
-import { jam, jamSay, nameOf, otherAccounts, useJam, useJamChat } from '../store/social';
+import { jam, jamSay, nameOf, otherAccounts, useJam, useJamChat, usePeople } from '../store/social';
 import { Composer } from '../views/People';
 import { useEscape } from '../hooks';
 
@@ -16,7 +16,7 @@ export function JamBanner() {
   return (
     <button className="jam-banner" onClick={() => setOpen(true)}>
       <Radio size={15} />
-      <span className="ellipsis grow">{j.host === me ? 'Votre Jam' : `Jam de ${nameOf(j.host)}`} · {j.participants.length} participant{j.participants.length > 1 ? 's' : ''} · code <b>{j.code}</b></span>
+      <span className="ellipsis grow">{j.host === me ? 'Votre Jam' : `Jam de ${nameOf(j.host)}`} · code <b>{j.code}</b> · {j.participants.length} participant{j.participants.length > 1 ? 's' : ''}</span>
       {unread > 0 && <span className="badge" aria-label={`${unread} message${unread > 1 ? 's' : ''} non lu${unread > 1 ? 's' : ''} dans le Jam`}>{unread}</span>}
     </button>
   );
@@ -68,6 +68,9 @@ export function JamPanel() {
   };
   const host = j?.host === me;
   const inJam = new Set(j?.participants.map((p) => p.username));
+  // A participant's profile opens for friends (and oneself): others joined with the code.
+  const profileOf = (username: string) => (username === me || usePeople.getState().friends.some((f) => f.username === username)
+    ? () => { close(); useUi.getState().navigate({ name: 'profile', id: username }); } : undefined);
 
   return (
     <div className="modal-backdrop" onClick={close}>
@@ -99,8 +102,10 @@ export function JamPanel() {
               <ul className="jam-people">
                 {j.participants.map((p) => (
                   <li key={p.username}>
-                    <span className="avatar sm" aria-hidden>{p.displayName.slice(0, 1).toUpperCase()}</span>
-                    <span className="grow">{p.displayName}{p.username === me ? ' (vous)' : ''}</span>
+                    <button className="friend-link grow" disabled={!profileOf(p.username)} onClick={profileOf(p.username)} title={profileOf(p.username) ? `Profil de ${p.displayName}` : undefined}>
+                      <span className="avatar sm" aria-hidden>{p.displayName.slice(0, 1).toUpperCase()}</span>
+                      <span className="ellipsis">{p.displayName}{p.username === me ? ' (vous)' : ''}</span>
+                    </button>
                     {p.username === j.host && <span className="muted small"><Crown size={13} /> hôte</span>}
                   </li>
                 ))}

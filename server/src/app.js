@@ -18,7 +18,7 @@ import { registerCovers } from './covers.js';
 import { registerCatalog } from './catalog.js';
 import { registerLoudness } from './loudness.js';
 
-export const VERSION = '0.16.1';
+export const VERSION = '0.17.0';
 
 const IMAGE_HOSTS = /(^|\.)(ytimg\.com|ggpht\.com|googleusercontent\.com|sndcdn\.com|dmcdn\.net|dailymotion\.com|bcbits\.com|vimeocdn\.com|jtvnw\.net|scdn\.co|spotifycdn\.com|dzcdn\.net|mzstatic\.com)$/i;
 
@@ -64,6 +64,11 @@ export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null,
   app.setErrorHandler((err, request, reply) => {
     if (err.userFacing) return reply.code(err.status || 400).send({ error: err.message, code: err.code, ...(err.current ? { current: err.current } : {}) });
     if (err.validation) return reply.code(400).send({ error: err.message, code: 'BAD_REQUEST' });
+    // Fastify's own client errors (body too large, unsupported content type, broken JSON) were answered 500.
+    if (err.statusCode >= 400 && err.statusCode < 500) {
+      const [error, code] = { 413: ['Fichier trop volumineux', 'TOO_LARGE'], 415: ['Type de contenu non pris en charge', 'BAD_TYPE'] }[err.statusCode] || ['Requête invalide', 'BAD_REQUEST'];
+      return reply.code(err.statusCode).send({ error, code });
+    }
     if (err.name === 'AbortError') return reply.code(499).send();
     request.log.error({ err }, 'Erreur serveur');
     return reply.code(500).send({ error: 'Erreur interne du serveur', code: 'INTERNAL' });

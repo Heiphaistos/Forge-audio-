@@ -34,7 +34,7 @@ interface LibraryState {
   hiddenTracks: Record<string, HiddenEntry>;
   hiddenArtists: Record<string, HiddenEntry>;
   createPlaylist: (name: string, tracks?: Track[], extra?: Partial<Playlist>) => Playlist;
-  updatePlaylist: (id: string, patch: Partial<Pick<Playlist, 'name' | 'description' | 'cover' | 'folder' | 'pinned'>>) => void;
+  updatePlaylist: (id: string, patch: Partial<Pick<Playlist, 'name' | 'description' | 'cover' | 'folder' | 'pinned' | 'onProfile'>>) => void;
   /** Several playlists (and/or tracks such as the liked ones) into a new one, duplicates removed. */
   mergeIntoNew: (name: string, sources: Track[][], removeIds?: string[]) => Playlist;
   setHidden: (kind: 'track' | 'artist', key: string, label: string, hidden: boolean) => void;

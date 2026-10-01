@@ -726,3 +726,23 @@ kbd {
 .send-btn { flex: none; width: 44px; height: 44px; }
 .notice-line { padding: 10px 0; }
 .people form.row .input { min-width: 200px; }
+
+/* ---------- profiles ---------- */
+.avatar-img { border-radius: 50%; object-fit: cover; flex-shrink: 0; background: var(--surface-3); }
+.profile-hero > .avatar, .profile-hero > .avatar-img { box-shadow: 0 12px 40px rgba(0, 0, 0, .55); }
+.profile-bio { white-space: pre-wrap; overflow-wrap: anywhere; margin: 4px 0 0; max-width: 60ch; }
+.section-title { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; margin: 24px 0 12px; }
+.profile-pls { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr)); gap: 10px; }
+.profile-pl { display: flex; align-items: center; gap: 12px; padding: 8px; border-radius: 10px; background: var(--surface-2); text-align: left; min-width: 0; min-height: 44px; }
+.profile-pl:hover, .profile-pl.active { background: var(--surface-3); }
+.profile-pl .grow, .profile-now .grow { display: flex; flex-direction: column; min-width: 0; }
+.profile-open { margin-top: 16px; }
+.profile-open h3 { font-size: 20px; margin: 0 0 4px; }
+.friend-track.profile-now { width: 100%; padding: 8px; border-radius: 10px; background: var(--surface-2); gap: 10px; margin: 4px 0 8px; }
+.profile-editor textarea { resize: vertical; font: inherit; }
+.friend-link { background: none; border: 0; padding: 0; color: inherit; font: inherit; cursor: pointer; text-align: left; display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
+.friend-link:hover b, .friend-link:hover .ellipsis { text-decoration: underline; }
+@media (max-width: 820px) {
+  .profile-hero > .avatar, .profile-hero > .avatar-img { width: 120px !important; height: 120px !important; font-size: 50px !important; }
+}
+.friend-link.user-name { display: block; max-width: 100%; }

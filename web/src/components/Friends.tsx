@@ -37,7 +37,7 @@ export function FriendsPanel() {
         <div key={f.user} className="friend">
           <div className="friend-avatar" aria-hidden>{f.displayName.slice(0, 1).toUpperCase()}{f.live && <span className="live-dot" title="En écoute" />}</div>
           <div className="grow ellipsis">
-            <div className="friend-head"><b>{f.displayName}</b><span className="muted small">{f.live ? 'en écoute' : ago(f.at)}</span></div>
+            <div className="friend-head"><button className="friend-link" onClick={() => navigate({ name: 'profile', id: f.user })} title={`Profil de ${f.displayName}`}><b>{f.displayName}</b></button><span className="muted small">{f.live ? 'en écoute' : ago(f.at)}</span></div>
             <button className="friend-track ellipsis" onClick={() => playNow(f.track)} title={`Écouter « ${f.track.title} »`}>
               <Cover src={f.track.thumbnail} size={28} radius={4} /><span className="ellipsis">{f.track.title}</span><Play size={13} fill="currentColor" />
             </button>

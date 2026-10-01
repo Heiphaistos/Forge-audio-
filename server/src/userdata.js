@@ -72,6 +72,8 @@ export function sanitizeData(data) {
         cover: cleanCover(p.cover),
         folder: typeof p.folder === 'string' && p.folder.trim() ? p.folder.trim().slice(0, 60) : null,
         pinned: !!p.pinned,
+        // « Afficher sur mon profil » (friends only, see profiles.js); off unless chosen.
+        onProfile: p.onProfile === true,
         sourceUrl: typeof p.sourceUrl === 'string' && /^https?:\/\//.test(p.sourceUrl) ? p.sourceUrl : null,
         tracks: tracks(p.tracks),
         createdAt: Number(p.createdAt) || Date.now(),

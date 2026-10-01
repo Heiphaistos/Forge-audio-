@@ -286,6 +286,12 @@ export function startSocial(user: User) {
     if (e.type === 'hello') refreshAll();
     else if (e.type === 'library') pullNow();
     else if (e.type === 'discord') discord.refresh().catch(() => {});
+    else if (e.type === 'profile') {
+      // A friend (or I, elsewhere) changed name, bio, picture or options.
+      window.dispatchEvent(new CustomEvent('forge:profile', { detail: String(e.user) }));
+      refreshPeople().catch(() => {});
+      accountsCache = null;
+    }
     else if (e.type === 'activity') putFriend(e as unknown as FriendActivity);
     else if (e.type === 'friends') {
       const before = new Set(usePeople.getState().incoming.map((r) => r.username));

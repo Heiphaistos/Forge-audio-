@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { CheckCircle2, XCircle, Github, Loader2 } from 'lucide-react';
 import { ACCENTS, useSettings, useUi } from '../store/ui';
 import { discord, useDiscord, useJam } from '../store/social';
+import { useSync } from '../lib/sync';
 import { useLibrary } from '../store/library';
 import { api, type Health, type Invite, type AdminAccount } from '../lib/api';
 import { SOURCE_LABELS } from '../lib/format';
@@ -230,6 +231,21 @@ function AdminCard() {
   );
 }
 
+/** Link to « Mon profil » (name, bio, picture, playlists shown to friends). */
+function MyProfileCard() {
+  const user = useSync((s) => s.user);
+  const social = useJam((s) => !!s.me);
+  const navigate = useUi((s) => s.navigate);
+  if (!user || !social) return null;
+  return (
+    <section className="settings-card">
+      <h2>Mon profil</h2>
+      <p className="muted small">Nom affiché, biographie, photo, playlists et activité que vos amis voient sur votre profil. Personne d’autre ne peut le voir.</p>
+      <button className="btn btn-ghost" onClick={() => navigate({ name: 'profile', id: user.username })}>Voir et modifier mon profil</button>
+    </section>
+  );
+}
+
 function Toggle({ checked, onChange, label, hint }: { checked: boolean; onChange: (v: boolean) => void; label: string; hint?: string }) {
   return (
     <label className="setting">
@@ -257,6 +273,7 @@ export function Settings() {
   return (
     <div className="page settings">
       <h1 className="page-title">Paramètres</h1>
+      <MyProfileCard />
 
       <section className="settings-card">
         <h2>Apparence</h2>

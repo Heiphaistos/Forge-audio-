@@ -191,6 +191,7 @@ const STATUS: Record<string, string> = {
 function UserBlock() {
   const user = useSync((s) => s.user);
   const status = useSync((s) => s.status);
+  const navigate = useUi((s) => s.navigate);
   if (!user) return null;
   const busy = status === 'saving' || status === 'pending' || status === 'loading';
   const bad = status === 'offline' || status === 'error';
@@ -198,7 +199,9 @@ function UserBlock() {
     <div className="user-block">
       <span className="avatar" aria-hidden>{user.displayName.slice(0, 1).toUpperCase()}</span>
       <div className="grow">
-        <div className="ellipsis user-name">{user.displayName}</div>
+        {user.username !== 'local'
+          ? <button className="friend-link ellipsis user-name" onClick={() => navigate({ name: 'profile', id: user.username })} title="Mon profil">{user.displayName}</button>
+          : <div className="ellipsis user-name">{user.displayName}</div>}
         <div className={`sync-status ${bad ? 'bad' : ''}`} title="Playlists, likes, historique et file d'attente sont sauvegardés sur le serveur">
           {busy ? <Loader2 size={11} className="spin" /> : bad ? <CloudOff size={11} /> : <Cloud size={11} />} {STATUS[status] || ''}
         </div>

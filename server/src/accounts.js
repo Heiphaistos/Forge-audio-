@@ -156,6 +156,15 @@ export class Accounts {
     this.save();
   }
 
+  /** Change the name shown to others (« Mon profil »). */
+  setDisplayName(username, displayName) {
+    const u = this.get(username);
+    if (!u) return false;
+    u.displayName = displayName;
+    this.save();
+    return true;
+  }
+
   setRole(username, role) {
     const u = this.get(username);
     if (!u) return false;

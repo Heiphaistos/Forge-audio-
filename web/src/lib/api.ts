@@ -234,6 +234,17 @@ export const api = {
   sendMessage: (username: string, text: string) => send<{ message: ChatMessage }>('POST', `/api/messages/${encodeURIComponent(username)}`, { text }),
   readMessages: (username: string) => send<{ ok: true }>('POST', `/api/messages/${encodeURIComponent(username)}/read`, {}),
   clearConversation: (username: string) => send<{ ok: true }>('DELETE', `/api/messages/${encodeURIComponent(username)}`, {}),
+  myProfile: () => get<{ profile: MyProfile }>('/api/me/profile'),
+  saveProfile: (patch: Partial<Pick<MyProfile, 'displayName' | 'bio' | 'showStats'>>) => send<{ profile: MyProfile }>('PATCH', '/api/me/profile', patch),
+  uploadAvatar: async (file: File) => {
+    const res = await fetch('/api/me/avatar', { method: 'POST', body: file, headers: { 'content-type': file.type || 'application/octet-stream' }, credentials: 'same-origin' });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new ApiError(body.error || `Erreur ${res.status}`, res.status, body.code);
+    return body as { avatar: string };
+  },
+  deleteAvatar: () => send<{ ok: true }>('DELETE', '/api/me/avatar', {}),
+  profile: (username: string) => get<{ profile: Profile }>(`/api/profiles/${encodeURIComponent(username)}`),
+  profilePlaylist: (username: string, id: string) => get<{ playlist: { id: string; name: string; description: string; cover: string | null; owner: string; tracks: Track[] } }>(`/api/profiles/${encodeURIComponent(username)}/playlists/${encodeURIComponent(id)}`),
   jamChat: (id: string) => get<{ messages: ChatMessage[] }>(`/api/jam/${id}/chat`),
   jamSay: (id: string, text: string) => send<{ message: ChatMessage }>('POST', `/api/jam/${id}/chat`, { text }),
 };
@@ -246,6 +257,21 @@ export interface FriendsState {
 }
 /** A private message or a Jam chat message (`displayName` in the Jam only). Plain text: always rendered as text. */
 export interface ChatMessage { id: string; from: string; text: string; at: number; displayName?: string }
+export interface MyProfile { username: string; displayName: string; bio: string; avatar: string | null; showStats: boolean; shareActivity: boolean }
+export interface ProfilePlaylist { id: string; name: string; description: string; cover: string | null; count: number; duration: number; thumbnails: (string | null)[] }
+export interface Profile {
+  username: string;
+  displayName: string;
+  bio: string;
+  avatar: string | null;
+  self: boolean;
+  friendsSince: number | null;
+  playlists: ProfilePlaylist[];
+  activity: {
+    now: { track: Track; at: number; live: boolean } | null;
+    stats: { days: number; plays: number; minutes: number; topArtists: { name: string; n: number }[]; topTracks: { track: Track; n: number }[] };
+  } | null;
+}
 export interface Correspondent { username: string; displayName: string; friend: boolean }
 export interface Conversation { with: Correspondent; last: ChatMessage; unread: number }
 
