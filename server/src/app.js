@@ -20,8 +20,9 @@ import { registerSocial } from './social.js';
 import { registerCovers } from './covers.js';
 import { registerCatalog } from './catalog.js';
 import { registerLoudness } from './loudness.js';
+import { registerRadio } from './radio.js';
 
-export const VERSION = '0.19.1';
+export const VERSION = '0.20.0';
 
 const IMAGE_HOSTS = /(^|\.)(ytimg\.com|ggpht\.com|googleusercontent\.com|sndcdn\.com|dmcdn\.net|dailymotion\.com|bcbits\.com|vimeocdn\.com|jtvnw\.net|scdn\.co|spotifycdn\.com|dzcdn\.net|mzstatic\.com)$/i;
 
@@ -50,8 +51,9 @@ function readCookie(header, name) {
  * @param {string|null} [opts.accountsFile] accounts JSON; no account = single-user local mode without login
  * @param {boolean|object} [opts.logger]
  * @param {object} [opts.mailer] outgoing mail (mail.js; default: SMTP_* environment variables)
+ * @param {object} [opts.radio] test hooks of the radio module (radio.js)
  */
-export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null, dataDir = null, accountsFile = null, logger = true, mailer = createMailer() } = {}) {
+export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null, dataDir = null, accountsFile = null, logger = true, mailer = createMailer(), radio = {} } = {}) {
   const app = Fastify({ logger, trustProxy: 'loopback,uniquelocal', disableRequestLogging: true, bodyLimit: 10 * 1024 * 1024 });
   const accounts = new Accounts(accountsFile);
   const sessions = new Sessions(dataDir ? path.join(dataDir, 'sessions.json') : null);
@@ -239,6 +241,7 @@ export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null,
   registerCovers(app, { dataDir });
   registerCatalog(app);
   registerLoudness(app, { media, ffmpeg, ytdlp });
+  registerRadio(app, { version: VERSION, dataDir, ffmpeg, ...radio });
 
   // ---------- API ----------
   app.get('/api/health', async (request, reply) => {

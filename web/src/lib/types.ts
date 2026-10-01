@@ -71,3 +71,24 @@ export interface LyricsResult {
 }
 
 export type RepeatMode = 'off' | 'all' | 'one';
+
+/** A radio station (server/src/radio.js card); `at` = when it was saved as favourite / last played. */
+export interface RadioStation {
+  id: string;
+  name: string;
+  country: string | null;
+  countryCode: string | null;
+  group?: string | null;
+  language?: string | null;
+  tags: string[];
+  codec: string | null;
+  bitrate: number | null;
+  homepage: string | null;
+  /** /api/radio/logo/<id> (served by our server), null = initials. */
+  logo: string | null;
+  color?: string | null;
+  featured?: boolean;
+  votes?: number;
+  clicks?: number;
+  at?: number;
+}

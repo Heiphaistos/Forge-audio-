@@ -50,3 +50,14 @@ test('hidden tracks/artists: the latest choice wins, from either device', () => 
   );
   assert.deepEqual(Object.fromEntries(Object.entries(r.library.hiddenTracks!).map(([k, v]) => [k, v.at])), { a: 100, b: -300, c: 10 });
 });
+
+const station = (id: string, at: number) => ({ id, name: id, country: null, countryCode: 'FR', tags: [], codec: null, bitrate: null, homepage: null, logo: null, at });
+
+test('radio favourites merge like likes; recent radios keep the newest of both, once each', () => {
+  const r = merge(
+    doc({ radioFavorites: [station('fr-fip', 300)], radioUnfavorited: { 'fr-rtl': 500 }, radioRecent: [station('fr-fip', 50), station('fr-rtl', 10)] }),
+    doc({ radioFavorites: [station('fr-rtl', 200), station('fr-nova', 100)], radioRecent: [station('fr-rtl', 40)] }),
+  );
+  assert.deepEqual(r.library.radioFavorites!.map((s) => s.id), ['fr-fip', 'fr-nova'], 'removed on this device after it was added elsewhere');
+  assert.deepEqual(r.library.radioRecent!.map((s) => [s.id, s.at]), [['fr-fip', 50], ['fr-rtl', 40]]);
+});

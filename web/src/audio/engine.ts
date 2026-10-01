@@ -217,6 +217,10 @@ class AudioEngine {
     if (track.source === 'local' || track.url.startsWith('blob:')) {
       return Promise.resolve({ src: track.url, seekable: true, duration: track.duration, isLive: false, mime: 'audio/*' });
     }
+    // Radio station (lib/radio.ts): relayed live by the server, by station id only.
+    if (track.source === 'radio') {
+      return Promise.resolve({ src: `/api/radio/listen/${encodeURIComponent(track.url.split('/').pop() || '')}`, seekable: false, duration: null, isLive: true, mime: 'audio/mpeg' });
+    }
     const q = this.quality;
     const hit = this.prefetched.get(track.url);
     if (hit && hit.q === q && Date.now() - hit.at < 60 * 60 * 1000) return hit.promise;

@@ -93,7 +93,7 @@ export function LyricsView({ big = false }: { big?: boolean }) {
   const userScroll = useRef(0);
 
   useEffect(() => {
-    if (!track || track.source === 'local') return;
+    if (!track || track.source === 'local' || track.source === 'radio') return;
     const ctrl = new AbortController();
     setState({ url: track.url, loading: true, data: null });
     api.lyrics(track, ctrl.signal)
@@ -112,6 +112,7 @@ export function LyricsView({ big = false }: { big?: boolean }) {
   }, [active]);
 
   if (!track) return <div className="empty">Aucun titre en cours</div>;
+  if (track.source === 'radio') return <div className="empty">Pas de paroles pour une radio en direct.</div>;
   if (state.loading) return <div className="empty"><Loader2 className="spin" /> Recherche des paroles…</div>;
   const d = state.data;
   if (!d?.found) return <div className="empty">Paroles introuvables pour ce titre.<span className="muted small">Source : LRCLIB</span></div>;
@@ -151,7 +152,7 @@ export function VideoView({ variant = 'panel' }: { variant?: 'panel' | 'mini' | 
 
   useEffect(() => {
     const v = ref.current;
-    if (!v || !track || track.source === 'local') return;
+    if (!v || !track || track.source === 'local' || track.source === 'radio') return;
     const ctrl = new AbortController();
     setStatus('loading');
     api.playback(track.url, 'video', ctrl.signal).then((pb) => {
@@ -226,6 +227,7 @@ export function VideoView({ variant = 'panel' }: { variant?: 'panel' | 'mini' | 
   };
 
   if (!track) return <div className="empty">Aucun titre en cours</div>;
+  if (track.source === 'radio') return <div className="empty">Pas de vidéo pour une radio en direct.</div>;
   const pipSupported = typeof document !== 'undefined' && 'pictureInPictureEnabled' in document && document.pictureInPictureEnabled;
   return (
     <div className={`video-wrap video-${variant} ${isFs ? 'is-fs' : ''}`} ref={wrap} onDoubleClick={toggleFullscreen}>

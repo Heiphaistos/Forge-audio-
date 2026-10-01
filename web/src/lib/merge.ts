@@ -1,4 +1,4 @@
-import type { Artist, HiddenEntry, HistoryEntry, Playlist, RepeatMode, Track } from './types';
+import type { Artist, HiddenEntry, HistoryEntry, Playlist, RadioStation, RepeatMode, Track } from './types';
 
 /**
  * Merging two copies of a library (this device and the server) after a save conflict.
@@ -18,6 +18,9 @@ export interface SyncData {
     unfollowed?: Record<string, number>;
     hiddenTracks?: Record<string, HiddenEntry>;
     hiddenArtists?: Record<string, HiddenEntry>;
+    radioFavorites?: RadioStation[];
+    radioUnfavorited?: Record<string, number>;
+    radioRecent?: RadioStation[];
     history: HistoryEntry[];
     playCounts: Record<string, number>;
   };
@@ -64,7 +67,14 @@ export function merge(local: SyncData, server: SyncData): SyncData {
   const hiddenTracks = latestChoice(local.library.hiddenTracks, server.library.hiddenTracks);
   const hiddenArtists = latestChoice(local.library.hiddenArtists, server.library.hiddenArtists);
 
-  return { library: { playlists, deletedPlaylists: tomb, liked, unliked, followedArtists, unfollowed, hiddenTracks, hiddenArtists, history, playCounts }, settings: local.settings, player: local.player };
+  // Radio favourites like likes; recently played radios: both copies, newest first.
+  const radioUnfavorited = maxTimes(local.library.radioUnfavorited, server.library.radioUnfavorited);
+  const radioFavorites = unionKept(local.library.radioFavorites || [], server.library.radioFavorites || [], (s) => s.id, (s) => s.at || 0, radioUnfavorited)
+    .sort((a, b) => (b.at || 0) - (a.at || 0));
+  const radioRecent = [...(local.library.radioRecent || []), ...(server.library.radioRecent || [])].sort((a, b) => (b.at || 0) - (a.at || 0))
+    .filter((s, i, all) => all.findIndex((x) => x.id === s.id) === i).slice(0, 50);
+
+  return { library: { playlists, deletedPlaylists: tomb, liked, unliked, followedArtists, unfollowed, hiddenTracks, hiddenArtists, radioFavorites, radioUnfavorited, radioRecent, history, playCounts }, settings: local.settings, player: local.player };
 }
 
 /** Hidden / shown again: the most recent choice wins (|at| is the time of the choice). */

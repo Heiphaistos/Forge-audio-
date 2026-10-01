@@ -1,4 +1,4 @@
-import { Home, Search, Library, Heart, History, Plus, Settings, X, LogOut, Cloud, CloudOff, Loader2, Radio, Users, Pin, Folder, BarChart3, UserPlus, MessageCircle, ChevronRight } from 'lucide-react';
+import { Home, Search, Library, RadioTower, Heart, History, Plus, Settings, X, LogOut, Cloud, CloudOff, Loader2, Radio, Users, Pin, Folder, BarChart3, UserPlus, MessageCircle, ChevronRight } from 'lucide-react';
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { Playlist } from '../lib/types';
 import { useInbox, useJam, usePeople, useShared } from '../store/social';
@@ -111,6 +111,7 @@ export function Sidebar() {
           {item({ name: 'home' }, <Home size={20} />, 'Accueil')}
           {item({ name: 'search' }, <Search size={20} />, 'Rechercher')}
           {item({ name: 'library' }, <Library size={20} />, 'Bibliothèque')}
+          <button className={`nav-item ${view.name === 'radio' ? 'active' : ''}`} onClick={() => navigate({ name: 'radio' })}><RadioTower size={20} /><span>Radios</span></button>
         </Section>
         <Section title="Ma musique" {...fold('music')}>
           <button className="nav-item" onClick={() => { const p = createPlaylist(`Ma playlist n°${playlists.length + 1}`); navigate({ name: 'playlist', id: p.id }); }}>

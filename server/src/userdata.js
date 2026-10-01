@@ -59,6 +59,21 @@ const artists = (list) => (Array.isArray(list) ? list : [])
     at: Number(a.at) || Date.now(),
   }));
 
+/** Radio station kept in the library (favourites, recently played): a snapshot of its card (radio.js). */
+const STATION_ID = /^(fr-[a-z0-9]{2,40}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
+const str = (v, max) => (typeof v === 'string' ? v.slice(0, max) : null);
+const stations = (list, max) => (Array.isArray(list) ? list : [])
+  .filter((s) => s && typeof s.id === 'string' && STATION_ID.test(s.id) && typeof s.name === 'string' && s.name.trim())
+  .slice(0, max)
+  .map((s) => ({
+    id: s.id, name: s.name.trim().slice(0, 120), country: str(s.country, 60), countryCode: /^[A-Z]{2}$/.test(s.countryCode) ? s.countryCode : null,
+    group: str(s.group, 60), tags: (Array.isArray(s.tags) ? s.tags : []).filter((t) => typeof t === 'string').slice(0, 6).map((t) => t.slice(0, 30)),
+    codec: str(s.codec, 12), bitrate: Number(s.bitrate) > 0 ? Math.min(9999, Math.floor(Number(s.bitrate))) : null,
+    homepage: typeof s.homepage === 'string' && /^https?:\/\//.test(s.homepage) ? s.homepage.slice(0, 500) : null,
+    logo: s.logo === `/api/radio/logo/${s.id}` ? s.logo : null, color: /^#[0-9a-f]{6}$/i.test(s.color) ? s.color : null,
+    at: Number(s.at) > 0 ? Math.floor(Number(s.at)) : Date.now(),
+  }));
+
 /** Validate and strip a library document sent by a client. */
 export function sanitizeData(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) throw new HttpError('Données invalides');
@@ -87,6 +102,9 @@ export function sanitizeData(data) {
       hiddenTracks: hiddenMap(lib.hiddenTracks),
       hiddenArtists: hiddenMap(lib.hiddenArtists),
       history: (Array.isArray(lib.history) ? lib.history : []).filter((h) => h && isRemoteTrack(h.track)).slice(0, MAX_HISTORY).map((h) => ({ track: cleanTrack(h.track), at: Number(h.at) || 0 })),
+      radioFavorites: stations(lib.radioFavorites, 500),
+      radioUnfavorited: tombstones(lib.radioUnfavorited),
+      radioRecent: stations(lib.radioRecent, 50),
       playCounts: Object.fromEntries(Object.entries(lib.playCounts || {}).filter(([k, v]) => /^https?:\/\//.test(k) && Number(v) > 0).slice(0, 20000).map(([k, v]) => [k, Math.floor(Number(v))])),
     },
     settings: data.settings && typeof data.settings === 'object' ? data.settings : {},

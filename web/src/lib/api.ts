@@ -7,7 +7,7 @@ export class ApiError extends Error {
   }
 }
 
-async function get<T>(path: string, params: Record<string, string | number | undefined | null> = {}, signal?: AbortSignal): Promise<T> {
+export async function get<T>(path: string, params: Record<string, string | number | undefined | null> = {}, signal?: AbortSignal): Promise<T> {
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== null && v !== '') qs.set(k, String(v));
   const res = await fetch(`${path}${qs.toString() ? `?${qs}` : ''}`, { signal, credentials: 'same-origin' });

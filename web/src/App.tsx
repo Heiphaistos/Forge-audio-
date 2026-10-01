@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, Menu, Search as SearchIcon, Loader2, Lock, Eye, EyeOff, User as UserIcon } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { useUi } from './store/ui';
 import { usePlayer } from './store/player';
 import { Sidebar, Logo, LegalLinks } from './components/Sidebar';
@@ -29,6 +29,11 @@ import { initKeys, setupKeys, useKeys } from './store/keys';
 import { useAudioEffects, useAudioMix, useMediaSession, useRemoteControl, useShortcuts, useTheme } from './hooks';
 import { api, type User } from './lib/api';
 import { startSync } from './lib/sync';
+import { startRadioMeta } from './lib/radio';
+
+// Radios: own chunk, fetched the first time the page opens.
+const RadioView = lazy(() => import('./views/Radio'));
+startRadioMeta();
 
 function CurrentView() {
   const view = useUi((s) => s.view);
@@ -49,6 +54,7 @@ function CurrentView() {
     case 'friends': return <FriendsView />;
     case 'messages': return <MessagesView />;
     case 'profile': return <ProfileView key={view.id} />;
+    case 'radio': return <Suspense fallback={<div className="page"><div className="empty"><Loader2 className="spin" size={28} /></div></div>}><RadioView /></Suspense>;
     default: return <Home />;
   }
 }

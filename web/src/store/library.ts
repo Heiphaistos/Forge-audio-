@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { lazyStorage } from '../lib/storage';
-import type { Artist, HiddenEntry, Playlist, Track, HistoryEntry } from '../lib/types';
+import type { Artist, HiddenEntry, Playlist, RadioStation, Track, HistoryEntry } from '../lib/types';
 import { uid } from '../lib/format';
 import { artistKey } from '../lib/merge';
 
@@ -33,6 +33,12 @@ interface LibraryState {
   /** Tracks (by url) and artists (by artistKey) left out of radio, autoplay and recommendations. */
   hiddenTracks: Record<string, HiddenEntry>;
   hiddenArtists: Record<string, HiddenEntry>;
+  /** Radio stations: favourites (+ removal times, like `unliked`) and the last 50 played. */
+  radioFavorites: RadioStation[];
+  radioUnfavorited: Record<string, number>;
+  radioRecent: RadioStation[];
+  toggleRadioFavorite: (s: RadioStation) => boolean;
+  pushRadioRecent: (s: RadioStation) => void;
   createPlaylist: (name: string, tracks?: Track[], extra?: Partial<Playlist>) => Playlist;
   updatePlaylist: (id: string, patch: Partial<Pick<Playlist, 'name' | 'description' | 'cover' | 'folder' | 'pinned' | 'onProfile'>>) => void;
   /** Several playlists (and/or tracks such as the liked ones) into a new one, duplicates removed. */
@@ -66,6 +72,23 @@ export const useLibrary = create<LibraryState>()(
       unfollowed: {},
       hiddenTracks: {},
       hiddenArtists: {},
+      radioFavorites: [],
+      radioUnfavorited: {},
+      radioRecent: [],
+
+      toggleRadioFavorite: (s) => {
+        const list = get().radioFavorites;
+        if (list.some((x) => x.id === s.id)) {
+          set({ radioFavorites: list.filter((x) => x.id !== s.id), radioUnfavorited: { ...get().radioUnfavorited, [s.id]: Date.now() } });
+          return false;
+        }
+        const radioUnfavorited = { ...get().radioUnfavorited };
+        delete radioUnfavorited[s.id];
+        set({ radioFavorites: [{ ...s, at: Date.now() }, ...list], radioUnfavorited });
+        return true;
+      },
+
+      pushRadioRecent: (s) => set({ radioRecent: [{ ...s, at: Date.now() }, ...get().radioRecent.filter((x) => x.id !== s.id)].slice(0, 50) }),
 
       createPlaylist: (name, tracks = [], extra = {}) => {
         const now = Date.now();
@@ -203,4 +226,5 @@ export function isHidden(t: Track) {
   const { hiddenTracks, hiddenArtists } = useLibrary.getState();
   return (hiddenTracks[t.url]?.at || 0) > 0 || (!!t.author && (hiddenArtists[artistKey(t.author)]?.at || 0) > 0);
 }
+export const useIsRadioFavorite = (id: string | undefined) => useLibrary((s) => !!id && s.radioFavorites.some((x) => x.id === id));
 export const useIsFollowed = (name: string | undefined) => useLibrary((s) => !!name && s.followedArtists.some((a) => artistKey(a.name) === artistKey(name)));

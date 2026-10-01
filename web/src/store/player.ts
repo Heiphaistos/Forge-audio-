@@ -88,7 +88,8 @@ export const usePlayer = create<PlayerState>()(
             engine.forget(track);
             return loadIndex(i, { autoplay, startAt, retry: true });
           }
-          const message = err instanceof DOMException && err.name === 'NotSupportedError'
+          const message = track.source === 'radio' ? 'radio indisponible pour le moment'
+            : err instanceof DOMException && err.name === 'NotSupportedError'
             ? 'format non pris en charge par ce navigateur'
             : err instanceof Error ? err.message : 'Lecture impossible';
           set({ error: message, buffering: false, playing: false });
@@ -387,6 +388,12 @@ export function bindEngine() {
     }
   });
   engine.on('ended', () => {
+    // A radio whose server dropped the connection after playing a while: reconnect instead of moving on.
+    const live = engine.currentTrack;
+    if (live?.source === 'radio' && engine.currentTime > 10) {
+      engine.load(live, { autoplay: true }).catch(() => {});
+      return;
+    }
     try { localStorage.setItem(POSITION_KEY, '0'); } catch { /* quota */ }
     usePlayer.getState().next(true);
   });
