@@ -30,6 +30,8 @@ async function main() {
       const password = generatePassword(80);
       await accounts.set(user, rest.join(' ') || undefined, password);
       new Sessions(path.join(dataDir, 'sessions.json')).destroyUser(user.toLowerCase());
+      // The message key was encrypted with the old password, unknown here: keys.js retires it at next use.
+      if (cmd === 'passwd') console.log('Messages privés : la clé de chiffrement de ce compte est perdue. Une nouvelle sera créée à sa prochaine connexion ; ses anciens messages deviennent illisibles pour lui et ses amis verront « la clé a changé ».');
       console.log(`Compte ${user.toLowerCase()} ${cmd === 'add' ? 'créé' : 'mis à jour'}. Mot de passe (à conserver, il n'est stocké que haché) :\n\n${password}\n`);
       break;
     }

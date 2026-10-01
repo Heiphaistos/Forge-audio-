@@ -1,4 +1,5 @@
 import type { Track, Playback, LyricsResult } from './types';
+import type { Wrapped } from './e2e';
 
 export class ApiError extends Error {
   constructor(message: string, public status: number, public code?: string) {
@@ -35,7 +36,7 @@ async function send<T>(method: string, path: string, payload: unknown): Promise<
  * in the browser's network tools. Falls back to the plain password (still over HTTPS) if Web Crypto
  * or the key endpoint is unavailable.
  */
-async function sealPassword(password: string): Promise<{ sealed: string } | { password: string }> {
+export async function sealPassword(password: string): Promise<{ sealed: string } | { password: string }> {
   try {
     if (!globalThis.crypto?.subtle) return { password };
     const { key, nonce } = await get<{ key: string | null; nonce: string | null }>('/api/login-key');
@@ -230,9 +231,22 @@ export const api = {
   block: (username: string) => send<{ ok: true }>('POST', '/api/friends/blocks', { username }),
   unblock: (username: string) => send<{ ok: true }>('DELETE', `/api/friends/blocks/${encodeURIComponent(username)}`, {}),
   conversations: () => get<{ conversations: Conversation[]; unread: number }>('/api/messages'),
-  conversation: (username: string) => get<{ with: Correspondent; messages: ChatMessage[]; readByOther: number }>(`/api/messages/${encodeURIComponent(username)}`),
-  sendMessage: (username: string, text: string) => send<{ message: ChatMessage }>('POST', `/api/messages/${encodeURIComponent(username)}`, { text }),
+  conversation: (username: string) => get<{ with: Correspondent; messages: PrivateMessage[]; readByOther: number }>(`/api/messages/${encodeURIComponent(username)}`),
+  /** End-to-end encrypted (store/keys.ts sealFor): the server never receives the text. */
+  sendMessage: (username: string, sealed: { v: 1; iv: string; ct: string; fp: string; toFp: string }) => send<{ message: PrivateMessage }>('POST', `/api/messages/${encodeURIComponent(username)}`, sealed),
   readMessages: (username: string) => send<{ ok: true }>('POST', `/api/messages/${encodeURIComponent(username)}/read`, {}),
+  myKeys: () => get<{ key: { pub: string; fp: string; wrapped: Wrapped; at: number } | null }>('/api/me/keys'),
+  putKeys: (pub: string, wrapped: Wrapped) => send<{ key: { pub: string; fp: string } }>('PUT', '/api/me/keys', { pub, wrapped }),
+  keysOf: (username: string) => get<{ username: string; current: { pub: string; fp: string } | null; old: { pub: string; fp: string }[] }>(`/api/keys/${encodeURIComponent(username)}`),
+  changePassword: async (oldPw: string, newPw: string, wrapped: Wrapped | null) => {
+    const o = await sealPassword(oldPw);
+    const n = await sealPassword(newPw);
+    return send<{ ok: true }>('POST', '/api/me/password', {
+      ...('sealed' in o ? { oldSealed: o.sealed } : { oldPassword: o.password }),
+      ...('sealed' in n ? { newSealed: n.sealed } : { newPassword: n.password }),
+      wrapped,
+    });
+  },
   clearConversation: (username: string) => send<{ ok: true }>('DELETE', `/api/messages/${encodeURIComponent(username)}`, {}),
   myProfile: () => get<{ profile: MyProfile }>('/api/me/profile'),
   saveProfile: (patch: Partial<Pick<MyProfile, 'displayName' | 'bio' | 'showStats'>>) => send<{ profile: MyProfile }>('PATCH', '/api/me/profile', patch),
@@ -255,7 +269,7 @@ export interface FriendsState {
   outgoing: { username: string; at: number }[];
   blocked: { username: string; at: number }[];
 }
-/** A private message or a Jam chat message (`displayName` in the Jam only). Plain text: always rendered as text. */
+/** A Jam chat message (plain text, in memory on the server): always rendered as text. */
 export interface ChatMessage { id: string; from: string; text: string; at: number; displayName?: string }
 export interface MyProfile { username: string; displayName: string; bio: string; avatar: string | null; showStats: boolean; shareActivity: boolean }
 export interface ProfilePlaylist { id: string; name: string; description: string; cover: string | null; count: number; duration: number; thumbnails: (string | null)[] }
@@ -273,7 +287,9 @@ export interface Profile {
   } | null;
 }
 export interface Correspondent { username: string; displayName: string; friend: boolean }
-export interface Conversation { with: Correspondent; last: ChatMessage; unread: number }
+export interface Conversation { with: Correspondent; last: PrivateMessage; unread: number }
+/** A private message as stored by the server: encrypted (lib/e2e.ts), never any text. */
+export interface PrivateMessage { id: string; from: string; at: number; v: 1; iv: string; ct: string; fp: string; toFp: string }
 
 export function isUrl(str: string): boolean {
   try {

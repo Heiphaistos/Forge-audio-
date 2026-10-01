@@ -1,4 +1,4 @@
-# Forge Audio : API nouvelle ou modifiée depuis la 0.14.0 (serveur 0.17.0)
+# Forge Audio : API nouvelle ou modifiée depuis la 0.14.0 (serveur 0.18.0)
 
 Référence pour adapter les clients Android et bureau. Tout le reste de l'API (recherche, lecture,
 bibliothèque `/api/me/data`, catalogue, playlists partagées, Jam hors chat, Discord) est inchangé
@@ -116,27 +116,63 @@ reste invisible), ni vous écrire, ni rejoindre votre Jam par code (404 `NO_JAM`
 Inchangés : les autres routes `/api/bot/*` (likes, playlists partagées du compte lié, stats, liaison),
 les images `/api/covers/<user>/<fichier>` (adresse aléatoire, toute session), le lien « Partager » `/?open=<url>`.
 
-## 6. Messages privés (0.16.0, nouveau)
+## 6. Messages privés (0.16.0) — chiffrés de bout en bout depuis la 0.18.0
 
-Conversations à deux entre **amis**. Texte brut 1 à 1000 caractères (après suppression des caractères de
-contrôle sauf retour à la ligne et tabulation, et des espaces autour) : à afficher **comme du texte**,
-jamais en HTML. 500 derniers messages gardés par conversation. Débit : 30 messages / minute / compte.
+Conversations à deux entre **amis**. Depuis la 0.18.0, le serveur ne reçoit et ne stocke **jamais le
+texte** : le client chiffre et déchiffre (Web Crypto uniquement). 500 derniers messages gardés par
+conversation. Débit : 30 messages / minute / compte. Les messages en clair des versions précédentes sont
+effacés du disque au démarrage du serveur (fichier réécrit à zéro puis supprimé, une ligne `warn` dans le journal).
 
-`Message = { "id": "<base64url>", "from": "<username>", "text": "<texte>", "at": <ms, strictement croissant dans une conversation> }`
+### Cryptographie (à reproduire à l'identique dans un client natif)
+- **Identité** : paire ECDH P-256 créée par le client. Clé publique = point non compressé (65 octets) en base64 standard.
+  Empreinte `fp` = SHA-256 hex (64 car.) des 65 octets ; « code de sécurité » affiché = `fp` en majuscules par groupes de 4.
+- **Enveloppe** de la clé privée (PKCS#8) : `Wrapped = { v: 1, iter: 600000, salt: <16 o b64>, iv: <12 o b64>, ct: <b64> }`,
+  `ct` = AES-GCM 256 (clé = PBKDF2-SHA-256(mot de passe UTF-8, salt, iter)), données additionnelles
+  `"forge-audio key v1|<username>"`. Le serveur exige `iter` ≥ 600 000.
+- **Clé de conversation** : `ECDH(ma privée, publique de l'autre)` (256 bits) → HKDF-SHA-256 (sel = 32 octets nuls,
+  info = `"forge-audio dm v1|<a>|<b>"`, identifiants triés) → AES-GCM 256.
+- **Message** : IV aléatoire de 12 octets **neuf à chaque message**, AES-GCM du texte UTF-8 (≤ 1000 caractères),
+  données additionnelles `"forge-audio msg v1|<expéditeur>|<destinataire>"`.
+- Sur l'appareil : clé privée importée **non extractible** (IndexedDB `forge-e2e`), effacée à la déconnexion.
+  Mot de passe connu seulement à la connexion / inscription : ouvrir l'enveloppe à ce moment ; sinon écran
+  « Déverrouiller vos messages » (mot de passe utilisé localement).
+
+`Message = { "id", "from", "at": <ms, strictement croissant>, "v": 1, "iv": "<b64>", "ct": "<b64>", "fp": "<empreinte expéditeur>", "toFp": "<empreinte destinataire>" }`
+(pour déchiffrer : ma clé est celle de `toFp` si je suis destinataire, `fp` si je suis l'expéditeur ; la clé publique
+de l'autre se trouve par empreinte dans `GET /api/keys/:username`, `current` ou `old`. Ma clé ne correspond plus
+→ « message chiffré avec une ancienne clé, illisible ».)
 `Correspondent = { "username", "displayName" (= username si pas ami), "friend": bool }`
+
+### `GET /api/me/keys` → `200 { "key": { pub, fp, wrapped: Wrapped, at } | null }`
+`null` : pas encore de clé, ou clé retirée après une **réinitialisation du mot de passe par l'administrateur**
+(`accounts-cli passwd` : l'enveloppe ne s'ouvre plus) → en créer une nouvelle.
+### `PUT /api/me/keys` `{ "pub": "<b64>", "wrapped": Wrapped }`
+→ `200 { "key": … }` ; 400 `BAD_KEY` (point invalide, enveloppe invalide, < 600 000 itérations) ;
+409 `KEY_EXISTS` (jamais écrasée : relire `GET /api/me/keys` et ouvrir l'enveloppe).
+### `GET /api/keys/:username` → `200 { "username", "current": { pub, fp } | null, "old": [{ pub, fp }] }`
+Ami, ou compte avec qui une conversation existe (pour relire l'historique) ; sinon **404** `NOT_FOUND` (inconnu = pareil).
+Jamais l'enveloppe. `old` = clés retirées (20 dernières) : les amis relisent ce qu'ils ont échangé avec elles.
+### `POST /api/me/password` `{ "oldPassword"|"oldSealed", "newPassword"|"newSealed", "wrapped": Wrapped }`
+Changement par l'utilisateur. `*Sealed` comme `/api/login` (un nonce par mot de passe). `wrapped` = la **même** clé
+privée ré-enveloppée avec le nouveau mot de passe (obligatoire si le compte a une clé).
+→ `200 { "ok": true }` + nouveau cookie (toutes les autres sessions sont fermées) ; **403** `BAD_PASSWORD`
+(ancien incorrect : 403 et non 401) ; 400 (mot de passe faible / identique, `BAD_KEY` sans enveloppe) ; 429.
 
 ### `GET /api/messages`
 → `200 { "conversations": [{ "with": Correspondent, "last": Message, "unread": n }], "unread": total }`
-(conversations non vides pour vous, la plus récente d'abord).
+(conversations non vides pour vous, la plus récente d'abord ; aperçu à déchiffrer côté client).
 
 ### `GET /api/messages/:username`
 → `200 { "with": Correspondent, "messages": [Message] (≤ 500, ordre chronologique), "readByOther": <ms lu par l'autre> }`.
 Ne crée rien ; ne lit que **votre** conversation avec `:username` (inconnu = conversation vide, pas d'erreur).
 Ne marque pas comme lu.
 
-### `POST /api/messages/:username` `{ "text": "…" }`
+### `POST /api/messages/:username` `{ "v": 1, "iv", "ct", "fp", "toFp" }`
 → **201** `{ "message": Message }` ; **403** `NOT_FRIENDS` (pas ami, bloqué, ou compte inconnu : même réponse) ;
-400 `EMPTY` (vide ou pas une chaîne) ; 400 `TOO_LONG` (> 1000) ; 429 `RATE_LIMITED`.
+400 `PLAINTEXT_REFUSED` (tout corps contenant `text`) ; 400 `BAD_VERSION` / `BAD_MESSAGE` (IV ≠ 12 octets, base64 invalide,
+empreinte invalide) ; 400 `TOO_LONG` (`ct` > 4016 octets = 1000 caractères UTF-8 + étiquette) ;
+409 `NO_KEY` (l'ami n'a pas encore de clé : il doit se reconnecter) ; 409 `KEY_CHANGED` (`fp`/`toFp` ne sont pas les
+clés actuelles : relire `GET /api/keys/:username` puis rechiffrer) ; 429 `RATE_LIMITED`. Champs inconnus ignorés.
 
 ### `POST /api/messages/:username/read` → `200 { "ok": true }` (marque lu jusqu'au dernier message).
 ### `DELETE /api/messages/:username` → `200 { "ok": true }`
@@ -145,7 +181,7 @@ Retirer un ami ou bloquer empêche d'écrire mais l'historique reste lisible par
 
 ## 7. Discussion du Jam (0.16.0, nouveau)
 
-En mémoire seulement (200 derniers messages), perdue à la fin du Jam ou au redémarrage. Participants seulement.
+**Non** chiffrée de bout en bout (inchangée en 0.18.0). En mémoire seulement (200 derniers messages), perdue à la fin du Jam ou au redémarrage. Participants seulement.
 
 - `GET /api/jam/:id/chat` → `200 { "messages": [JamMessage] }` ; 404 `NO_JAM` (pas participant ou Jam fini).
 - `POST /api/jam/:id/chat` `{ "text": "…" }` → **201** `{ "message": JamMessage }` ; 404 `NO_JAM` ; 400 `EMPTY`/`TOO_LONG` ; 429 `RATE_LIMITED` (30 / minute / compte, compteur séparé des messages privés).
@@ -159,7 +195,7 @@ Au (re)branchement, `{ "type": "hello" }` : recharger l'état (amis, messages, J
 | `type` | Contenu | Quand / quoi faire |
 |---|---|---|
 | `friends` | — | une demande reçue / acceptée / refusée / annulée, ami retiré, blocage : recharger `GET /api/friends` (+ `GET /api/activity`) |
-| `message` | `{ with, displayName?, message: Message }` | nouveau message dans la conversation avec `with` (envoyé par vous sur un autre appareil ou reçu ; `displayName` = nom de l'expéditeur quand c'est l'autre) |
+| `message` | `{ with, displayName?, message: Message }` (chiffré, à déchiffrer ; notification = « Nouveau message de X », sans contenu) | nouveau message dans la conversation avec `with` (envoyé par vous sur un autre appareil ou reçu ; `displayName` = nom de l'expéditeur quand c'est l'autre) |
 | `message-read` | `{ with }` | vous avez lu cette conversation (autre appareil) : recharger le compteur |
 | `message-read-by` | `{ with, at }` | votre ami a lu jusqu'à `at` (afficher « vu ») |
 | `message-cleared` | `{ with }` | vous avez supprimé cette conversation (autre appareil) |

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Copy, Eye, EyeOff, KeyRound, Loader2, Lock, Ticket, User as UserIcon, Wand2 } from 'lucide-react';
 import { api, type User } from '../lib/api';
+import { setupKeys } from '../store/keys';
 
 export const PASSWORD_MIN = 70; // same as server/src/accounts.js
 
@@ -31,7 +32,7 @@ export function generatePassword(length = 80) {
   return chars.join('');
 }
 
-function missing(pw: string) {
+export function missing(pw: string) {
   const out: string[] = [];
   if (pw.length < PASSWORD_MIN) out.push(`${PASSWORD_MIN - pw.length} caractère${PASSWORD_MIN - pw.length > 1 ? 's' : ''} de plus`);
   if (!/[A-Z]/.test(pw)) out.push('une majuscule');
@@ -64,6 +65,7 @@ export function Register({ onDone }: { onDone: (user: User) => void }) {
       setError(null);
       try {
         const { user } = await api.register({ code: code.trim(), username: username.trim(), displayName: displayName.trim(), password });
+        await setupKeys(user.username, password).catch(() => {});
         try { localStorage.setItem('forge.lastUser', user.username); } catch { /* quota */ }
         onDone(user);
       } catch (err) {

@@ -8,6 +8,7 @@ import { cleanTracks } from './userdata.js';
 import { Friends, registerFriends } from './friends.js';
 import { Messages, registerMessages, messageLimiter, checkRate } from './messages.js';
 import { Profiles, registerProfiles } from './profiles.js';
+import { registerKeys } from './keys.js';
 
 /**
  * Everything between accounts: friends, private messages, live events, shared playlists, Jam, and
@@ -15,13 +16,13 @@ import { Profiles, registerProfiles } from './profiles.js';
  * liked track. Social features are between friends only (activity, Blend, invitations, new members
  * of a shared playlist, messages); a Jam code stays an explicit way in, like a link.
  */
-export function registerSocial(app, { accounts, userData, dataDir, botToken = process.env.FORGE_BOT_TOKEN }) {
+export function registerSocial(app, { accounts, userData, dataDir, keys, botToken = process.env.FORGE_BOT_TOKEN }) {
   const hub = new EventHub();
   const shared = new SharedPlaylists(dataDir);
   const jams = new JamHub(hub);
   const links = new DiscordLinks(dataDir);
   const friends = new Friends(dataDir);
-  const messages = new Messages(dataDir);
+  const messages = new Messages(dataDir, app.log);
   const profiles = new Profiles(dataDir);
   const isAccount = (u) => !!accounts.get(u);
   const me = (request) => request.user.username;
@@ -44,7 +45,8 @@ export function registerSocial(app, { accounts, userData, dataDir, botToken = pr
       }
     },
   });
-  registerMessages(app, { accounts, friends, messages, hub });
+  registerMessages(app, { accounts, friends, messages, hub, keys });
+  registerKeys(app, { accounts, friends, messages, keys });
   registerProfiles(app, { accounts, userData, friends, activity, profiles, hub });
 
   // Accounts one can share with / invite: friends only (names only).

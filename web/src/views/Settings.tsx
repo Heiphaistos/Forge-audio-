@@ -6,6 +6,8 @@ import { useSync } from '../lib/sync';
 import { useLibrary } from '../store/library';
 import { api, type Health, type Invite, type AdminAccount } from '../lib/api';
 import { SOURCE_LABELS } from '../lib/format';
+import { changePassword } from '../store/keys';
+import { PASSWORD_MIN, generatePassword, missing } from '../components/Register';
 
 export const SHORTCUTS: [string, string][] = [
   ['Espace', 'Lecture / pause'],
@@ -246,6 +248,50 @@ function MyProfileCard() {
   );
 }
 
+/** Password change. The message key is re-encrypted here with the new password (store/keys.ts). */
+function PasswordCard() {
+  const user = useSync((s) => s.user);
+  const social = useJam((s) => !!s.me);
+  const [oldPw, setOldPw] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [confirmPw, setConfirmPw] = useState('');
+  const [show, setShow] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (!user || !social) return null;
+  const todo = missing(newPw);
+  const ready = oldPw && !todo.length && newPw === confirmPw;
+  return (
+    <section className="settings-card">
+      <h2>Mot de passe</h2>
+      <p className="muted small">Au moins {PASSWORD_MIN} caractères. Vos autres appareils seront déconnectés. Vos messages restent lisibles : leur clé est chiffrée à nouveau, sur cet appareil, avec le nouveau mot de passe.</p>
+      <form className="login-form" onSubmit={async (e) => {
+        e.preventDefault();
+        if (!ready) return;
+        setBusy(true);
+        setError(null);
+        try {
+          await changePassword(oldPw, newPw);
+          setOldPw(''); setNewPw(''); setConfirmPw(''); setShow(false);
+          useUi.getState().toast('Mot de passe changé', 'success');
+        } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
+      }}>
+        <input className="input" type="password" autoComplete="current-password" spellCheck={false} value={oldPw} onChange={(e) => setOldPw(e.target.value)} placeholder="Mot de passe actuel" aria-label="Mot de passe actuel" />
+        <input className="input" type={show ? 'text' : 'password'} autoComplete="new-password" spellCheck={false} value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="Nouveau mot de passe" aria-label="Nouveau mot de passe" />
+        <small className={todo.length ? 'muted hint' : 'ok hint'}>{newPw.length} / {PASSWORD_MIN} caractères{todo.length ? ` · il manque ${todo.join(', ')}` : ' · mot de passe valide'}</small>
+        <input className="input" type={show ? 'text' : 'password'} autoComplete="new-password" spellCheck={false} value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} placeholder="Confirmer le nouveau mot de passe" aria-label="Confirmer le nouveau mot de passe" />
+        {confirmPw && confirmPw !== newPw && <small className="bad hint">Les deux mots de passe ne correspondent pas</small>}
+        <div className="row gap wrap">
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => { const pw = generatePassword(80); setNewPw(pw); setConfirmPw(pw); setShow(true); }}>Générer</button>
+          {newPw && <button type="button" className="btn btn-ghost btn-sm" onClick={() => navigator.clipboard?.writeText(newPw)}>Copier</button>}
+        </div>
+        {error && <p className="bad small">{error}</p>}
+        <button className="btn btn-primary" disabled={busy || !ready}>{busy ? <Loader2 size={16} className="spin" /> : 'Changer le mot de passe'}</button>
+      </form>
+    </section>
+  );
+}
+
 function Toggle({ checked, onChange, label, hint }: { checked: boolean; onChange: (v: boolean) => void; label: string; hint?: string }) {
   return (
     <label className="setting">
@@ -274,6 +320,7 @@ export function Settings() {
     <div className="page settings">
       <h1 className="page-title">Paramètres</h1>
       <MyProfileCard />
+      <PasswordCard />
 
       <section className="settings-card">
         <h2>Apparence</h2>

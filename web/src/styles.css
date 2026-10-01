@@ -718,6 +718,12 @@ kbd {
 .jam-chat .bubble { background: var(--surface-2); }
 .bubble.mine { align-self: flex-end; background: var(--accent); color: #000; border-radius: 14px 14px 4px 14px; }
 .bubble-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.bubble.locked .bubble-text { font-style: italic; opacity: 0.75; }
+.e2e-line { display: flex; align-items: center; justify-content: center; gap: 5px; margin: 0 0 6px; }
+.key-notice { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; padding: 8px 10px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border, rgba(255, 255, 255, 0.08)); }
+.key-notice svg { flex: none; color: var(--accent); }
+.unlock-card h2, .security-code h2 { display: flex; align-items: center; gap: 8px; }
+.security-code code { display: block; font-size: 0.95rem; letter-spacing: 0.04em; word-spacing: 0.3em; line-height: 1.7; overflow-wrap: anywhere; }
 .bubble-meta { font-size: 11px; opacity: .7; margin-top: 2px; }
 .composer { display: flex; align-items: flex-end; gap: 8px; position: sticky; bottom: 0; padding: 8px 0; background: rgba(21, 18, 16, 0.92); backdrop-filter: blur(12px); }
 /* Keeps the newest message above the sticky composer when scrolled into view. */

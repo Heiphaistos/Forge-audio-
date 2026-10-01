@@ -24,6 +24,7 @@ import { ProfileView } from './views/Profile';
 import { JamPanel, JamBanner } from './components/Jam';
 import { SelectionBar } from './components/SelectionBar';
 import { startSocial } from './store/social';
+import { initKeys, setupKeys, useKeys } from './store/keys';
 import { useAudioEffects, useAudioMix, useMediaSession, useRemoteControl, useShortcuts, useTheme } from './hooks';
 import { api, type User } from './lib/api';
 import { startSync } from './lib/sync';
@@ -103,6 +104,8 @@ function Login({ onDone }: { onDone: (user: User) => void }) {
         setError(null);
         try {
           const { user } = await api.login(username.trim(), password);
+          // The password is only known now: open (or create) the message key on this device.
+          await setupKeys(user.username, password).catch(() => {});
           try { localStorage.setItem('forge.lastUser', user.username); } catch { /* quota */ }
           onDone(user);
         } catch (err) {
@@ -149,7 +152,10 @@ export function App() {
 
   const enter = async (user: User | null, sync: boolean) => {
     // Shared playlists, Jam and the Discord link need real accounts (not the desktop app's local mode).
-    if (user && user.username !== 'local') startSocial(user);
+    if (user && user.username !== 'local') {
+      if (useKeys.getState().status !== 'ready') initKeys(user.username);
+      startSocial(user);
+    }
     // Share links: https://…/?open=<url of a track or playlist>
     const shared = user ? new URLSearchParams(location.search).get('open') : null;
     if (shared && /^https?:\/\//.test(shared)) {

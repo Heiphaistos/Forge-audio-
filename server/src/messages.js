@@ -4,12 +4,15 @@ import crypto from 'node:crypto';
 import { HttpError } from './util.js';
 import { readJson, writeJsonAtomic, LoginLimiter } from './accounts.js';
 import { targetName } from './friends.js';
+import { bytesOf } from './keys.js';
 
 /**
  * Private messages between friends (1-to-1) and the text chat of a Jam.
  *
  * Conversations live in <data>/messages/<a>+<b>.json (usernames sorted; `+` is not allowed in a
- * username), at most the last 500 messages each. Deleting a conversation hides it for oneself;
+ * username), at most the last 500 messages each. Private messages are end-to-end encrypted (0.18):
+ * the server only stores { from, at, v, iv, ct, fp, toFp } (AES-GCM, keys made in the browsers,
+ * see keys.js) and never sees the text. The Jam chat stays plain text, in memory only. Deleting a conversation hides it for oneself;
  * once both sides deleted it, the messages are erased from the disk. Only friends can write;
  * anyone keeps reading their own past conversations.
  */
@@ -28,6 +31,21 @@ export function cleanText(raw) {
   return text;
 }
 
+/** 1000 characters of UTF-8 (≤ 4 bytes each) + the 16-byte AES-GCM tag. */
+const MAX_CT = MAX_TEXT * 4 + 16;
+const FP = /^[0-9a-f]{64}$/;
+
+/** An encrypted message as sent by the browser: any clear-text field is refused, sizes are re-checked. */
+export function cleanSealed(body) {
+  if (!body || typeof body !== 'object') throw new HttpError('Message vide', 400, 'EMPTY');
+  if ('text' in body) throw new HttpError('Les messages privés doivent être chiffrés : rechargez la page', 400, 'PLAINTEXT_REFUSED');
+  if (body.v !== 1) throw new HttpError('Version de chiffrement inconnue : rechargez la page', 400, 'BAD_VERSION');
+  if (!bytesOf(body.iv, 12, 12)) throw new HttpError('Message chiffré invalide', 400, 'BAD_MESSAGE');
+  if (!bytesOf(body.ct, 17, MAX_CT)) throw new HttpError(`${MAX_TEXT} caractères au maximum`, 400, 'TOO_LONG');
+  if (!FP.test(String(body.fp)) || !FP.test(String(body.toFp))) throw new HttpError('Message chiffré invalide', 400, 'BAD_MESSAGE');
+  return { v: 1, iv: body.iv, ct: body.ct, fp: body.fp, toFp: body.toFp };
+}
+
 /** 30 messages per minute and per account (private messages and Jam chat counted separately). */
 export const messageLimiter = () => new LoginLimiter({ max: 30, windowMs: 60 * 1000 });
 
@@ -38,11 +56,35 @@ export function checkRate(limiter, username) {
 }
 
 export class Messages {
-  constructor(dataDir) {
+  constructor(dataDir, log = null) {
     this.dir = dataDir ? path.join(dataDir, 'messages') : null;
     /** key -> conversation (loaded on first use) */
     this.cache = new Map();
     this.loadedAll = !this.dir;
+    if (this.dir) this.purgeClear(log);
+  }
+
+  /**
+   * Since 0.18 nothing is kept in clear: messages saved by older versions (plain `text`) are erased
+   * at start-up, file overwritten with zeros before it is deleted.
+   */
+  purgeClear(log) {
+    let files = 0;
+    let count = 0;
+    for (const f of fs.existsSync(this.dir) ? fs.readdirSync(this.dir) : []) {
+      if (!f.endsWith('.json')) continue;
+      const file = path.join(this.dir, f);
+      const saved = readJson(file, null);
+      const plain = (saved?.messages || []).filter((m) => !m?.ct);
+      if (saved && !plain.length) continue;
+      try { fs.writeFileSync(file, Buffer.alloc(fs.statSync(file).size)); } catch { /* deleted below anyway */ }
+      fs.rmSync(file, { force: true });
+      const kept = (saved?.messages || []).filter((m) => m?.ct);
+      if (kept.length) writeJsonAtomic(file, { ...saved, messages: kept });
+      files += 1;
+      count += plain.length;
+    }
+    if (files) log?.warn?.({ conversations: files, messages: count }, 'Messages privés en clair effacés (passage au chiffrement de bout en bout)');
   }
 
   key(a, b) {
@@ -53,6 +95,8 @@ export class Messages {
     if (!this.cache.has(key)) {
       const [a, b] = key.split('+');
       const saved = this.dir && readJson(path.join(this.dir, `${key}.json`), null);
+      // Never hand out anything that is not encrypted.
+      if (saved) saved.messages = (saved.messages || []).filter((m) => m?.ct);
       this.cache.set(key, saved || { a, b, messages: [], read: {}, cleared: {} });
     }
     return this.cache.get(key);
@@ -90,12 +134,12 @@ export class Messages {
     return c.messages.filter((m) => m.at > after && m.from !== username).length;
   }
 
-  send(from, to, text) {
+  send(from, to, sealed) {
     const c = this.load(this.key(from, to));
     const last = c.messages[c.messages.length - 1];
     // Strictly increasing times: « read up to » and « deleted up to » compare them.
     const at = Math.max(Date.now(), (last?.at || 0) + 1);
-    const message = { id: crypto.randomBytes(8).toString('base64url'), from, text, at };
+    const message = { id: crypto.randomBytes(8).toString('base64url'), from, at, ...sealed };
     c.messages.push(message);
     if (c.messages.length > KEEP) c.messages.splice(0, c.messages.length - KEEP);
     c.read[from] = at;
@@ -122,7 +166,7 @@ export class Messages {
   }
 }
 
-export function registerMessages(app, { accounts, friends, messages, hub }) {
+export function registerMessages(app, { accounts, friends, messages, hub, keys }) {
   const me = (request) => request.user.username;
   const limiter = messageLimiter();
   const view = (viewer, other) => ({
@@ -157,9 +201,14 @@ export function registerMessages(app, { accounts, friends, messages, hub }) {
     const u = me(request);
     const other = targetName(request.params.username, u);
     if (!friends.are(u, other) || !accounts.get(other)) throw new HttpError('Vous ne pouvez écrire qu’à vos amis', 403, 'NOT_FRIENDS');
-    const text = cleanText(request.body?.text);
+    const sealed = cleanSealed(request.body);
+    // Encrypted for the keys the server knows now, or the other side could not read it.
+    const mine = keys.current(u, accounts);
+    const theirs = keys.current(other, accounts);
+    if (!theirs) throw new HttpError(`${accounts.get(other)?.displayName || other} n’a pas encore activé le chiffrement des messages : il doit se reconnecter une fois`, 409, 'NO_KEY');
+    if (!mine || sealed.fp !== mine.fp || sealed.toFp !== theirs.fp) throw new HttpError('Clé de chiffrement changée : réessayez', 409, 'KEY_CHANGED');
     checkRate(limiter, u);
-    const message = messages.send(u, other, text);
+    const message = messages.send(u, other, sealed);
     hub.emit(other, { type: 'message', with: u, displayName: accounts.get(u)?.displayName || u, message });
     hub.emit(u, { type: 'message', with: other, message });
     reply.code(201);

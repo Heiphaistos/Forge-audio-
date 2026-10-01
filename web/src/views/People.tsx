@@ -1,5 +1,6 @@
-import { ArrowLeft, Ban, Blend, Check, Loader2, MessageCircle, Send, Trash2, UserMinus, UserPlus, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { ArrowLeft, Ban, Blend, Check, Loader2, Lock, MessageCircle, Send, ShieldAlert, Trash2, UserMinus, UserPlus, X } from 'lucide-react';
+import { Fragment, useEffect, useRef, useState } from 'react';
+import { UNREADABLE, acceptKey, keyChanged, peerKeys, unlockKeys, useKeys, type ShownMessage } from '../store/keys';
 import { inbox, people, useInbox, usePeople } from '../store/social';
 import { api } from '../lib/api';
 import { useSync } from '../lib/sync';
@@ -127,13 +128,49 @@ const time = (at: number) => new Date(at).toLocaleString('fr-FR', { day: 'numeri
 /** Messages: list of conversations, or the conversation with `view.id`. */
 export function MessagesView() {
   const id = useUi((s) => s.view.id) || null;
+  const status = useKeys((s) => s.status);
   useEffect(() => {
+    if (status === 'locked') return;
     inbox.open(id);
     const back = () => { if (id && document.visibilityState === 'visible' && useInbox.getState().thread.length) api.readMessages(id).catch(() => {}); };
     document.addEventListener('visibilitychange', back);
     return () => { document.removeEventListener('visibilitychange', back); inbox.open(null); };
-  }, [id]);
+  }, [id, status]); // re-read (decrypt) once unlocked
+  if (status === 'locked') return <UnlockMessages />;
   return id ? <Thread username={id} /> : <ConversationList />;
+}
+
+/** The message key is not on this device: the password opens it here (lib/e2e.ts). */
+function UnlockMessages() {
+  const hasServerKey = useKeys((s) => s.hasServerKey);
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <div className="page people">
+      <h1 className="page-title">Messages</h1>
+      <section className="settings-card unlock-card">
+        <h2><Lock size={18} /> Déverrouiller vos messages</h2>
+        <p className="muted small">
+          Vos messages privés sont chiffrés de bout en bout : personne d’autre que vous et vos amis ne peut les lire, pas même
+          l’administrateur du serveur. Leur clé n’est pas encore sur cet appareil (nouvel appareil, données effacées ou
+          connexion antérieure à la mise à jour). {hasServerKey
+            ? 'Entrez votre mot de passe : il sert seulement à ouvrir la clé ici, il n’est envoyé nulle part.'
+            : 'Entrez votre mot de passe pour activer le chiffrement : il est vérifié une fois par le serveur, comme à la connexion.'}
+        </p>
+        <form className="login-form" onSubmit={async (e) => {
+          e.preventDefault();
+          setBusy(true);
+          setError(null);
+          try { await unlockKeys(password); setPassword(''); } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
+        }}>
+          <div className="input-icon"><Lock size={16} /><input type="password" autoComplete="current-password" spellCheck={false} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Votre mot de passe" aria-label="Mot de passe" /></div>
+          {error && <p className="bad small">{error}</p>}
+          <button className="btn btn-primary" disabled={busy || !password}>{busy ? <Loader2 size={16} className="spin" /> : 'Déverrouiller'}</button>
+        </form>
+      </section>
+    </div>
+  );
 }
 
 function ConversationList() {
@@ -152,7 +189,7 @@ function ConversationList() {
             <span className="avatar sm" aria-hidden>{c.with.displayName.slice(0, 1).toUpperCase()}</span>
             <div className="grow ellipsis">
               <div className="row gap"><b className="ellipsis">{c.with.displayName}</b><span className="muted small">{ago(c.last.at)}</span></div>
-              <div className="muted small ellipsis">{c.last.from === c.with.username ? '' : 'Vous : '}{c.last.text}</div>
+              <div className="muted small ellipsis">{c.last.from === c.with.username ? '' : 'Vous : '}{c.last.unreadable ? <i>{UNREADABLE[c.last.unreadable]}</i> : c.last.text}</div>
             </div>
             {c.unread > 0 && <span className="badge" aria-label={`${c.unread} non lus`}>{c.unread}</span>}
           </button>
@@ -181,6 +218,13 @@ function Thread({ username }: { username: string }) {
   useEffect(() => { end.current?.scrollIntoView({ block: 'end' }); }, [thread.length]);
   const name = other?.displayName || username;
   const lastMine = [...thread].reverse().find((m) => m.from === me);
+  // « La clé de X a changé »: compared with the key this device saw last time (first time: remembered).
+  const [changed, setChanged] = useState<string | null>(null);
+  useEffect(() => {
+    setChanged(null);
+    peerKeys(username, true).then((k) => { if (k.current && keyChanged(username, k.current.fp)) setChanged(k.current.fp); }).catch(() => {});
+  }, [username]);
+  const theirKey = (m: ShownMessage) => (m.from === username ? m.fp : m.toFp);
   return (
     <div className="page people thread-page">
       <div className="row gap thread-head">
@@ -202,15 +246,25 @@ function Thread({ username }: { username: string }) {
           }}><Trash2 size={17} /></button>
         )}
       </div>
+      {changed && (
+        <p className="key-notice small" role="status">
+          <ShieldAlert size={15} /> <span className="grow">La clé de chiffrement de {name} a changé (mot de passe réinitialisé par l’administrateur, par exemple). Vous pouvez comparer son code de sécurité sur son profil.</span>
+          <button className="btn btn-ghost btn-sm" onClick={() => { acceptKey(username, changed); setChanged(null); }}>OK</button>
+        </p>
+      )}
       <div className="thread" role="log" aria-live="polite">
+        <p className="muted small center-text e2e-line"><Lock size={12} /> Messages chiffrés de bout en bout : le serveur ne peut pas les lire.</p>
         {loading && <p className="muted"><Loader2 size={14} className="spin" /> Chargement…</p>}
         {!loading && !thread.length && <p className="muted small center-text">Aucun message.</p>}
-        {thread.map((m) => (
-          // Plain text only: React escapes it, nothing is ever rendered as HTML.
-          <div key={m.id} className={`bubble ${m.from === me ? 'mine' : ''}`} title={time(m.at)}>
-            <div className="bubble-text">{m.text}</div>
-            <div className="bubble-meta">{time(m.at)}{m === lastMine && readByOther >= m.at ? ' · vu' : ''}</div>
-          </div>
+        {thread.map((m, i) => (
+          <Fragment key={m.id}>
+            {i > 0 && theirKey(m) !== theirKey(thread[i - 1]) && <p className="muted small center-text">La clé de chiffrement de {name} a changé.</p>}
+            {/* Plain text only: React escapes it, nothing is ever rendered as HTML. */}
+            <div className={`bubble ${m.from === me ? 'mine' : ''} ${m.unreadable ? 'locked' : ''}`} title={time(m.at)}>
+              <div className="bubble-text">{m.unreadable ? UNREADABLE[m.unreadable] : m.text}</div>
+              <div className="bubble-meta">{time(m.at)}{m === lastMine && readByOther >= m.at ? ' · vu' : ''}</div>
+            </div>
+          </Fragment>
         ))}
         <div ref={end} className="thread-end" />
       </div>

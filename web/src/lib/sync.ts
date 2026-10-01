@@ -6,6 +6,7 @@ import { useLibrary, slimTrack } from '../store/library';
 import { usePlayer } from '../store/player';
 import { useSettings } from '../store/ui';
 import { engine } from '../audio/engine';
+import { clearDeviceKeys } from './e2e';
 import { flushStorage } from './storage';
 
 /**
@@ -223,6 +224,7 @@ export async function logout() {
   resetLocal();
   localStorage.removeItem(OWNER_KEY);
   flushStorage();
+  await clearDeviceKeys(); // the message key leaves this device with the session
   await api.logout().catch(() => {});
   location.reload();
 }

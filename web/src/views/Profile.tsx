@@ -1,5 +1,7 @@
-import { Ban, Blend, Camera, Copy, ListEnd, Loader2, MessageCircle, Play, Radio, Shuffle, Trash2, UserMinus } from 'lucide-react';
+import { Ban, Blend, Camera, Copy, ListEnd, Loader2, MessageCircle, Play, Radio, ShieldCheck, Shuffle, Trash2, UserMinus } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { peerKeys, useKeys } from '../store/keys';
+import { securityCode } from '../lib/e2e';
 import { api, type MyProfile, type Profile, type ProfilePlaylist } from '../lib/api';
 import type { Track } from '../lib/types';
 import { formatTotal } from '../lib/format';
@@ -60,7 +62,28 @@ export function ProfileView() {
       {p.self && <ProfileEditor onSaved={() => setTick((t) => t + 1)} />}
       <ActivityCard p={p} />
       <ProfilePlaylists p={p} />
+      <SecurityCode p={p} />
     </div>
+  );
+}
+
+/** Fingerprint of the message key (computed in the browser), to compare out of band like Signal. */
+function SecurityCode({ p }: { p: Profile }) {
+  const mine = useKeys((s) => s.fp);
+  const [theirs, setTheirs] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (!p.self) peerKeys(p.username, true).then((k) => setTheirs(k.current?.fp ?? null)).catch(() => setTheirs(null));
+  }, [p.username, p.self]);
+  const fp = p.self ? mine : theirs;
+  if (fp === undefined) return null;
+  return (
+    <section className="settings-card security-code">
+      <h2><ShieldCheck size={18} /> Code de sécurité des messages</h2>
+      <p className="muted small">{p.self
+        ? 'Vos amis voient ce code sur votre profil. En le comparant avec vous (de vive voix, en personne), ils vérifient que leurs messages sont bien chiffrés pour vous, et pour personne d’autre.'
+        : `Comparez ce code avec celui que ${p.displayName} voit sur son propre profil (de vive voix, en personne). S’ils sont identiques, personne ne s’est glissé entre vous, pas même le serveur.`}</p>
+      {fp ? <code>{securityCode(fp)}</code> : <p className="muted small">{p.self ? 'Déverrouillez vos messages (page Messages) pour afficher votre code.' : `${p.displayName} n’a pas encore activé le chiffrement des messages.`}</p>}
+    </section>
   );
 }
 

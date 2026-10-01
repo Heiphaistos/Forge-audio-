@@ -12,13 +12,14 @@ import { HttpError, isPublicUrl, clampInt, TtlCache } from './util.js';
 import { Accounts, Sessions, LoginLimiter, normalizeUsername, isValidUsername, checkPasswordPolicy, hashPassword } from './accounts.js';
 import { Invites, registerAdmin } from './invites.js';
 import { LoginSeal } from './login-seal.js';
+import { Keys, checkWrapped } from './keys.js';
 import { UserData } from './userdata.js';
 import { registerSocial } from './social.js';
 import { registerCovers } from './covers.js';
 import { registerCatalog } from './catalog.js';
 import { registerLoudness } from './loudness.js';
 
-export const VERSION = '0.17.0';
+export const VERSION = '0.18.0';
 
 const IMAGE_HOSTS = /(^|\.)(ytimg\.com|ggpht\.com|googleusercontent\.com|sndcdn\.com|dmcdn\.net|dailymotion\.com|bcbits\.com|vimeocdn\.com|jtvnw\.net|scdn\.co|spotifycdn\.com|dzcdn\.net|mzstatic\.com)$/i;
 
@@ -55,6 +56,7 @@ export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null,
   // Every sign-up attempt counts (success too): 10 per hour and per IP.
   const registerLimiter = new LoginLimiter({ max: 10, windowMs: 60 * 60 * 1000 });
   const invites = new Invites(dataDir ? path.join(dataDir, 'invites.json') : null);
+  const keys = new Keys(dataDir);
   let seal = null; // created on first use: a 4096-bit key takes about a second to generate
   const userData = dataDir ? new UserData(dataDir) : null;
   const LOCAL_USER = { username: 'local', displayName: 'Moi' };
@@ -148,6 +150,37 @@ export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null,
     return { ok: true, user: { username: name, displayName: display, role: 'user' } };
   });
 
+  // Password change by the user. The browser re-encrypts its message key with the new password
+  // (`wrapped`, opaque here); every other session is signed out.
+  app.post('/api/me/password', async (request, reply) => {
+    if (!accounts.enabled) throw new HttpError('Pas de compte sur ce serveur', 404, 'NOT_FOUND');
+    const wait = limiter.blocked(request.ip);
+    if (wait) throw new HttpError(`Trop de tentatives, réessayez dans ${wait} min`, 429, 'RATE_LIMITED');
+    const u = request.user.username;
+    const b = request.body || {};
+    const open = (sealed, plain) => (sealed ? (seal ? seal.open(sealed) : null) : plain);
+    const oldPw = open(b.oldSealed, b.oldPassword);
+    const newPw = open(b.newSealed, b.newPassword);
+    if (typeof oldPw !== 'string' || typeof newPw !== 'string') throw new HttpError('Mot de passe illisible : rechargez la page et réessayez', 400, 'BAD_REQUEST');
+    // 403, not 401: a wrong old password must not sign the app out.
+    if (!(await accounts.authenticate(u, oldPw))) {
+      limiter.fail(request.ip);
+      throw new HttpError('Ancien mot de passe incorrect', 403, 'BAD_PASSWORD');
+    }
+    const problems = checkPasswordPolicy(newPw);
+    if (problems.length) throw new HttpError(`Mot de passe trop faible : il faut ${problems.join(', ')}`);
+    if (newPw === oldPw) throw new HttpError('Le nouveau mot de passe doit être différent de l’ancien');
+    const wrapped = checkWrapped(b.wrapped);
+    if (keys.current(u, accounts) && !wrapped) throw new HttpError('Clé de messagerie manquante : rechargez la page et réessayez', 400, 'BAD_KEY');
+    await accounts.set(u, undefined, newPw);
+    if (wrapped) keys.rewrap(u, wrapped, accounts.get(u).since);
+    limiter.reset(request.ip);
+    sessions.destroyUser(u);
+    reply.header('set-cookie', cookie(request, sessions.create(u), 180 * 24 * 3600));
+    request.log.info({ user: u }, 'Mot de passe changé');
+    return { ok: true };
+  });
+
   app.get('/api/login-key', async () => {
     if (!accounts.enabled) return { key: null, nonce: null };
     seal ??= new LoginSeal();
@@ -187,7 +220,7 @@ export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null,
   app.post('/api/me/data', saveData);
 
   // Shared playlists, Jam, live events, link with the Discord bot.
-  registerSocial(app, { accounts, userData, dataDir });
+  registerSocial(app, { accounts, userData, dataDir, keys });
   registerAdmin(app, { accounts, invites });
   registerCovers(app, { dataDir });
   registerCatalog(app);

@@ -1,11 +1,12 @@
 import { create } from 'zustand';
-import { api, type ChatMessage, type Conversation, type Correspondent, type DiscordLink, type FriendActivity, type FriendsState, type Jam, type SharedPlaylist, type User } from '../lib/api';
+import { api, type ChatMessage, type Conversation, type Correspondent, type DiscordLink, type FriendActivity, type FriendsState, type Jam, type PrivateMessage, type SharedPlaylist, type User } from '../lib/api';
 import { useLibrary } from './library';
 import { pullNow } from '../lib/sync';
 import { engine } from '../audio/engine';
 import type { Track } from '../lib/types';
 import { usePlayer, setJamRouter } from './player';
 import { useSettings, useUi } from './ui';
+import { openMessage, sealFor, type ShownMessage } from './keys';
 
 /**
  * Between accounts: friends, private messages, shared playlists, Jam (group listening + chat) and
@@ -26,7 +27,9 @@ export const useJam = create<{ jam: Jam | null; offset: number; me: string | nul
 /** Friends, requests received / sent, blocked accounts. */
 export const usePeople = create<FriendsState & { loaded: boolean }>(() => ({ friends: [], incoming: [], outgoing: [], blocked: [], loaded: false }));
 /** Private messages: conversation list + the conversation open on screen. */
-export const useInbox = create<{ conversations: Conversation[]; unread: number; open: string | null; with: Correspondent | null; thread: ChatMessage[]; readByOther: number; loading: boolean }>(
+export type ShownConversation = Omit<Conversation, 'last'> & { last: ShownMessage };
+/** Private messages (decrypted here, store/keys.ts): conversation list + the conversation open on screen. */
+export const useInbox = create<{ conversations: ShownConversation[]; unread: number; open: string | null; with: Correspondent | null; thread: ShownMessage[]; readByOther: number; loading: boolean }>(
   () => ({ conversations: [], unread: 0, open: null, with: null, thread: [], readByOther: 0, loading: false }),
 );
 /** Chat of the current Jam (in memory on the server, gone with the Jam). */
@@ -62,9 +65,11 @@ export const people = {
 // ---------------------------------------------------------------- private messages
 async function refreshInbox() {
   const { conversations, unread } = await api.conversations();
-  useInbox.setState({ conversations, unread });
+  // Previews are decrypted here: the server does not know them.
+  const shown = await Promise.all(conversations.map(async (c) => ({ ...c, last: await openMessage(c.with.username, c.last) })));
+  useInbox.setState({ conversations: shown, unread });
 }
-function appendThread(username: string, m: ChatMessage) {
+function appendThread(username: string, m: ShownMessage) {
   const s = useInbox.getState();
   if (s.open === username && !s.thread.some((x) => x.id === m.id)) useInbox.setState({ thread: [...s.thread, m] });
 }
@@ -77,13 +82,22 @@ export const inbox = {
     try {
       const r = await api.conversation(username);
       if (useInbox.getState().open !== username) return;
-      useInbox.setState({ with: r.with, thread: r.messages, readByOther: r.readByOther, loading: false });
+      const thread = await Promise.all(r.messages.map((m) => openMessage(username, m)));
+      if (useInbox.getState().open !== username) return;
+      useInbox.setState({ with: r.with, thread, readByOther: r.readByOther, loading: false });
       if (r.messages.length) await api.readMessages(username);
     } catch (err) { useInbox.setState({ loading: false }); fail(err); }
   },
   send: async (username: string, text: string) => {
-    const { message } = await api.sendMessage(username, text);
-    appendThread(username, message);
+    let message;
+    try {
+      ({ message } = await api.sendMessage(username, await sealFor(username, text)));
+    } catch (err) {
+      // The friend's key changed since it was fetched: fetch it again, once.
+      if ((err as { code?: string }).code !== 'KEY_CHANGED') throw err;
+      ({ message } = await api.sendMessage(username, await sealFor(username, text, true)));
+    }
+    appendThread(username, { id: message.id, from: message.from, at: message.at, fp: message.fp, toFp: message.toFp, text });
   },
   clear: async (username: string) => {
     await api.clearConversation(username);
@@ -302,12 +316,13 @@ export function startSocial(user: User) {
       api.friends().then((r) => useFriends.setState({ list: r.friends, loaded: true })).catch(() => {});
     } else if (e.type === 'message') {
       const other = String(e.with);
-      const m = e.message as ChatMessage;
-      appendThread(other, m);
+      const m = e.message as PrivateMessage;
+      openMessage(other, m).then((shown) => appendThread(other, shown)).catch(() => {});
       const here = useInbox.getState().open === other && document.visibilityState === 'visible';
       if (m.from !== user.username) {
         if (here) api.readMessages(other).catch(() => {});
-        else toast(`${String(e.displayName || other)} : ${m.text.length > 80 ? `${m.text.slice(0, 80)}…` : m.text}`, 'info', { label: 'Répondre', run: () => useUi.getState().navigate({ name: 'messages', id: other }) });
+        // Never the content in a notification: only who wrote.
+        else toast(`Nouveau message de ${String(e.displayName || other)}`, 'info', { label: 'Répondre', run: () => useUi.getState().navigate({ name: 'messages', id: other }) });
       }
       refreshInbox().catch(() => {});
     } else if (e.type === 'message-read' || e.type === 'message-cleared') {
