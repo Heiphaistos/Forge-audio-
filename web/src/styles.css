@@ -163,7 +163,6 @@ kbd {
 .sidebar-top { display: flex; align-items: center; justify-content: space-between; padding: 0 8px 12px; }
 .logo { display: flex; align-items: center; gap: 10px; font-size: 19px; font-weight: 700; letter-spacing: -0.02em; }
 .logo b { background: linear-gradient(90deg, #ffb347, #ff6a1a 55%, #d7263d); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.nav { display: flex; flex-direction: column; gap: 2px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
 .nav-item, .nav-pl {
   display: flex; align-items: center; gap: 14px; padding: 9px 12px; border-radius: 8px; color: var(--muted);
   font-weight: 600; text-align: left; transition: color .15s, background .15s; width: 100%;
@@ -171,12 +170,26 @@ kbd {
 .nav-item:hover, .nav-pl:hover { color: var(--text); background: var(--hover); }
 .nav-item.active, .nav-pl.active { color: var(--text); background: var(--surface-3); }
 .nav-item .count { margin-left: auto; font-size: 12px; color: var(--muted); font-weight: 500; }
-.nav-section { display: flex; flex-direction: column; gap: 2px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+/* Foldable sections; « Playlists » takes the height left and scrolls on its own. */
+.side-sec { flex: none; display: flex; flex-direction: column; min-height: 0; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+.side-sec-head { display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px 10px; border-radius: 8px; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; text-align: left; }
+.side-sec-head:hover { color: var(--text); background: var(--hover); }
+.side-sec-head .chev { transition: transform .15s; flex: none; }
+.side-sec.open .side-sec-head .chev { transform: rotate(90deg); }
+.side-sec-head .badge { text-transform: none; letter-spacing: 0; }
+.side-sec-body { display: flex; flex-direction: column; gap: 2px; }
+.side-sec.side-pl.open { flex: 1 1 auto; border-bottom: 0; }
+.side-pl .side-sec-body { overflow-y: auto; min-height: 0; overscroll-behavior: contain; }
+.side-empty { padding: 6px 12px; margin: 0; }
+.side-foot { margin-top: auto; flex: none; }
+/* Not enough height for the list to scroll on its own (see Sidebar.tsx): one scroll for the whole sidebar. */
+.sidebar.flow { overflow-y: auto; }
+.sidebar.flow .side-sec.side-pl.open { flex: none; }
+.sidebar.flow .side-pl .side-sec-body { overflow: visible; }
 .nav-square { width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .nav-square.add { background: var(--text); color: #0b0908; }
 .nav-square.liked, .liked-gradient { background: linear-gradient(135deg, #4a1fb8, #a78bfa 60%, #e0d7ff); color: #fff; }
 .nav-square.hist { background: linear-gradient(135deg, #0c6b58, #1fd1a3); color: #fff; }
-.playlist-nav { flex: 1; overflow-y: auto; padding: 6px 0; min-height: 0; }
 .nav-pl { padding: 6px 8px; gap: 10px; font-weight: 500; }
 .sidebar-backdrop { display: none; }
 
@@ -525,7 +538,7 @@ kbd {
   /* Single column: a 56vh-tall cover overflowed its row (hidden under the header, visualizer over the tabs) */
   .np-cover { height: auto !important; }
 }
-@media (max-width: 820px) {
+@media (max-width: 820px), (max-height: 500px) and (pointer: coarse) {
   :root { --player-h: 72px; }
   .only-mobile { display: flex !important; }
   .hide-mobile { display: none !important; }
@@ -535,6 +548,10 @@ kbd {
     position: fixed; inset: 0 auto 0 0; width: min(300px, 85vw); z-index: 60; border-radius: 0; transform: translateX(-100%); transition: transform .25s ease;
   }
   .sidebar.open { transform: none; box-shadow: 20px 0 60px rgba(0, 0, 0, .6); }
+  .sidebar { padding: calc(12px + env(safe-area-inset-top)) 10px calc(10px + env(safe-area-inset-bottom)); overscroll-behavior: contain; }
+  /* Finger-sized rows (44 px) in the drawer. */
+  .sidebar .nav-item, .sidebar .nav-pl, .side-sec-head { min-height: 44px; }
+  .sidebar .legal-links a { padding: 8px 4px; }
   .sidebar-backdrop { display: block; position: fixed; inset: 0; z-index: 55; background: rgba(0, 0, 0, .55); opacity: 0; pointer-events: none; transition: opacity .25s; }
   .sidebar-backdrop.open { opacity: 1; pointer-events: auto; }
   .topbar { padding: 10px 12px; }
@@ -651,7 +668,7 @@ kbd {
 .nav-folder .nav-pl { padding-left: 18px; }
 .hidden-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
 .hidden-list li { display: flex; align-items: center; gap: 10px; min-width: 0; }
-@media (max-width: 820px) {
+@media (max-width: 820px), (max-height: 500px) and (pointer: coarse) {
   /* Keep « Sélectionner » reachable on phones (the rest of the header is hidden). */
   .track-head { display: flex !important; justify-content: flex-end; height: auto; border: 0; margin: 0 0 4px; }
   .track-head > span { display: none; }

@@ -1,4 +1,5 @@
-import { Home, Search, Library, Heart, History, Plus, Settings, X, LogOut, Cloud, CloudOff, Loader2, Radio, Users, Pin, Folder, BarChart3, UserPlus, MessageCircle } from 'lucide-react';
+import { Home, Search, Library, Heart, History, Plus, Settings, X, LogOut, Cloud, CloudOff, Loader2, Radio, Users, Pin, Folder, BarChart3, UserPlus, MessageCircle, ChevronRight } from 'lucide-react';
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { Playlist } from '../lib/types';
 import { useInbox, useJam, usePeople, useShared } from '../store/social';
 import { useSync, logout } from '../lib/sync';
@@ -26,6 +27,25 @@ function groupPlaylists(playlists: Playlist[]): [string | null, Playlist[]][] {
   return [[null, loose], ...[...folders.entries()].sort(([a], [b]) => a.localeCompare(b, 'fr'))];
 }
 
+/** Which sidebar sections are folded, per device (nothing stored = all open). */
+const FOLD_KEY = 'forge.sidebar.folded';
+function readFolded(): Record<string, boolean> {
+  try { return JSON.parse(localStorage.getItem(FOLD_KEY) || '{}') || {}; } catch { return {}; }
+}
+
+/** A sidebar section that folds on a click on its title; `badge` shows on the title while folded. */
+function Section({ title, open, toggle, badge = 0, badgeLabel, className = '', children }: { title: string; open: boolean; toggle: () => void; badge?: number; badgeLabel?: string; className?: string; children: ReactNode }) {
+  return (
+    <section className={`side-sec ${className} ${open ? 'open' : ''}`}>
+      <button className="side-sec-head" aria-expanded={open} onClick={toggle}>
+        <ChevronRight size={14} className="chev" aria-hidden /><span className="grow">{title}</span>
+        {!open && badge > 0 && <span className="badge" aria-label={badgeLabel}>{badge}</span>}
+      </button>
+      {open && <div className="side-sec-body">{children}</div>}
+    </section>
+  );
+}
+
 export function Sidebar() {
   const view = useUi((s) => s.view);
   const navigate = useUi((s) => s.navigate);
@@ -43,8 +63,37 @@ export function Sidebar() {
   const togglePanel = useUi((s) => s.togglePanel);
   const requests = usePeople((s) => s.incoming.length);
   const unread = useInbox((s) => s.unread);
+  const plural = (n: number, one: string, many: string) => `${n} ${n > 1 ? many : one}`;
+  const [folded, setFolded] = useState(readFolded);
+  const fold = (id: string) => ({
+    open: !folded[id],
+    toggle: () => {
+      const next = { ...folded, [id]: !folded[id] };
+      setFolded(next);
+      try { localStorage.setItem(FOLD_KEY, JSON.stringify(next)); } catch { /* private mode */ }
+    },
+  });
+  // The playlist list fills the height left and scrolls on its own; when less than ~200 px would be
+  // left (phone in landscape, every section open), the whole drawer scrolls instead: never two scrollbars.
+  const aside = useRef<HTMLElement>(null);
+  const [flow, setFlow] = useState(false);
+  useLayoutEffect(() => {
+    const sb = aside.current;
+    if (!sb) return;
+    const check = () => {
+      const body = sb.querySelector<HTMLElement>('.side-pl .side-sec-body');
+      if (!body) return setFlow(false);
+      const free = sb.clientHeight - (sb.scrollHeight - body.offsetHeight);
+      setFlow(free < Math.min(200, body.scrollHeight));
+    };
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(sb);
+    return () => ro.disconnect();
+  });
+  const socialLabel = [requests && plural(requests, 'demande d’ami', 'demandes d’ami'), unread && plural(unread, 'message non lu', 'messages non lus')].filter(Boolean).join(', ');
 
-  const item = (v: View, icon: React.ReactNode, label: string) => (
+  const item = (v: View, icon: ReactNode, label: string) => (
     <button className={`nav-item ${view.name === v.name && view.id === v.id ? 'active' : ''}`} onClick={() => navigate(v)}>
       {icon}<span>{label}</span>
     </button>
@@ -53,17 +102,17 @@ export function Sidebar() {
   return (
     <>
       <div className={`sidebar-backdrop ${open ? 'open' : ''}`} onClick={() => setOpen(false)} />
-      <aside className={`sidebar ${open ? 'open' : ''}`}>
+      <aside ref={aside} className={`sidebar ${open ? 'open' : ''} ${flow ? 'flow' : ''}`}>
         <div className="sidebar-top">
           <Logo />
           <button className="icon-btn only-mobile" onClick={() => setOpen(false)} aria-label="Fermer le menu"><X size={20} /></button>
         </div>
-        <nav className="nav">
+        <Section title="Navigation" {...fold('nav')}>
           {item({ name: 'home' }, <Home size={20} />, 'Accueil')}
           {item({ name: 'search' }, <Search size={20} />, 'Rechercher')}
           {item({ name: 'library' }, <Library size={20} />, 'Bibliothèque')}
-        </nav>
-        <div className="nav-section">
+        </Section>
+        <Section title="Ma musique" {...fold('music')}>
           <button className="nav-item" onClick={() => { const p = createPlaylist(`Ma playlist n°${playlists.length + 1}`); navigate({ name: 'playlist', id: p.id }); }}>
             <span className="nav-square add"><Plus size={16} /></span><span>Créer une playlist</span>
           </button>
@@ -76,28 +125,24 @@ export function Sidebar() {
           <button className={`nav-item ${view.name === 'stats' ? 'active' : ''}`} onClick={() => navigate({ name: 'stats' })}>
             <span className="nav-square hist"><BarChart3 size={15} /></span><span>Vos stats</span>
           </button>
-          {social && (
+        </Section>
+        {social && (
+          <Section title="Social" {...fold('social')} badge={requests + unread} badgeLabel={socialLabel}>
             <button className={`nav-item ${view.name === 'friends' ? 'active' : ''}`} onClick={() => navigate({ name: 'friends' })}>
-              <span className="nav-square jam"><UserPlus size={15} /></span><span>Amis</span>{requests > 0 && <span className="badge" aria-label={`${requests} demande${requests > 1 ? 's' : ''} d’ami en attente`}>{requests}</span>}
+              <span className="nav-square jam"><UserPlus size={15} /></span><span>Amis</span>{requests > 0 && <span className="badge" aria-label={plural(requests, 'demande d’ami en attente', 'demandes d’ami en attente')}>{requests}</span>}
             </button>
-          )}
-          {social && (
             <button className={`nav-item ${view.name === 'messages' ? 'active' : ''}`} onClick={() => navigate({ name: 'messages' })}>
-              <span className="nav-square jam"><MessageCircle size={15} /></span><span>Messages</span>{unread > 0 && <span className="badge" aria-label={`${unread} message${unread > 1 ? 's' : ''} non lu${unread > 1 ? 's' : ''}`}>{unread}</span>}
+              <span className="nav-square jam"><MessageCircle size={15} /></span><span>Messages</span>{unread > 0 && <span className="badge" aria-label={plural(unread, 'message non lu', 'messages non lus')}>{unread}</span>}
             </button>
-          )}
-          {social && (
             <button className={`nav-item ${panel === 'friends' ? 'active' : ''}`} onClick={() => { togglePanel('friends'); setOpen(false); }}>
               <span className="nav-square jam"><Users size={15} /></span><span>Activité des amis</span>
             </button>
-          )}
-          {social && (
             <button className={`nav-item ${inJam ? 'active' : ''}`} onClick={() => { setJamOpen(true); setOpen(false); }}>
               <span className="nav-square jam"><Radio size={15} /></span><span>{inJam ? 'Jam en cours' : 'Jam : écouter ensemble'}</span>
             </button>
-          )}
-        </div>
-        <div className="playlist-nav">
+          </Section>
+        )}
+        <Section title={`Playlists (${sharedLists.length + playlists.length})`} {...fold('playlists')} className="side-pl">
           {sharedLists.map((p) => (
             <button key={`s-${p.id}`} className={`nav-pl ${view.name === 'shared' && view.id === p.id ? 'active' : ''}`} onClick={() => navigate({ name: 'shared', id: p.id })}>
               <Mosaic covers={p.cover ? [p.cover] : p.tracks.map((t) => t.thumbnail)} size={36} radius={4} />
@@ -122,10 +167,13 @@ export function Sidebar() {
               </details>
             ) : rows;
           })}
+          {!sharedLists.length && !playlists.length && <p className="muted small side-empty">Aucune playlist pour l’instant.</p>}
+        </Section>
+        <div className="side-foot">
+          <UserBlock />
+          {item({ name: 'settings' }, <Settings size={20} />, 'Paramètres')}
+          <LegalLinks />
         </div>
-        <UserBlock />
-        {item({ name: 'settings' }, <Settings size={20} />, 'Paramètres')}
-        <LegalLinks />
       </aside>
     </>
   );
