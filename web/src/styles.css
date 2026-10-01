@@ -209,7 +209,7 @@ kbd {
   padding: 8px 12px; border-radius: 999px; color: var(--muted);
 }
 .topbar-search:hover { color: var(--text); border-color: rgba(255, 255, 255, 0.25); }
-.page { padding: 4px 28px 40px; animation: fade-up .25s ease; }
+.page { --page-x: 28px; padding: 4px var(--page-x) 40px; animation: fade-up .25s ease; }
 .page-title { font-size: 32px; font-weight: 800; letter-spacing: -0.03em; margin: 8px 0 20px; }
 .empty { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 48px 16px; color: var(--muted); text-align: center; }
 .empty.small { padding: 24px 12px; }
@@ -305,6 +305,8 @@ kbd {
 .tr-text { min-width: 0; }
 .tr-title { font-weight: 500; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tr-sub { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+/* A long artist name (button) did not shrink in this flex line: it ran over the like / more buttons. */
+.tr-sub > .link { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tr-duration { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
 .tr-like { color: var(--muted); opacity: 0; }
 .track-row:hover .tr-like, .tr-like.liked { opacity: 1; }
@@ -317,9 +319,9 @@ kbd {
 .playing-bars i:nth-child(2) { animation-delay: -0.3s; }
 .playing-bars i:nth-child(3) { animation-delay: -0.6s; }
 @keyframes bars { 0%, 100% { height: 30%; } 50% { height: 100%; } }
-.list-tools { margin: 4px 0 8px; justify-content: space-between; }
+.list-tools { margin: 4px 0 8px; justify-content: space-between; flex-wrap: wrap; }
 .filter-input { display: flex; align-items: center; gap: 8px; background: var(--surface-3); border-radius: 8px; padding: 7px 10px; color: var(--muted); }
-.filter-input input { background: none; border: 0; outline: none; width: 220px; color: var(--text); }
+.filter-input input { background: none; border: 0; outline: none; width: 220px; min-width: 0; color: var(--text); align-self: stretch; }
 
 /* ---------- hero ---------- */
 .hero { display: flex; align-items: flex-end; gap: 24px; padding: 20px 0 8px; }
@@ -331,7 +333,7 @@ kbd {
 .edit-form { display: flex; flex-direction: column; gap: 8px; max-width: 520px; }
 .artist-hero { flex-direction: column; align-items: flex-start; position: relative; padding: 60px 0 8px; }
 .artist-hero::before {
-  content: ''; position: absolute; inset: -80px -28px 0; z-index: -1; background-image: var(--hero-img); background-size: cover; background-position: center;
+  content: ''; position: absolute; inset: -80px calc(-1 * var(--page-x, 28px)) 0; z-index: -1; background-image: var(--hero-img); background-size: cover; background-position: center;
   filter: blur(40px) brightness(.45); opacity: .8;
 }
 
@@ -415,6 +417,7 @@ kbd {
 .lyric:hover { color: rgba(255, 255, 255, .75); }
 .lyric.past { color: rgba(255, 255, 255, .6); }
 .lyric.active { color: #fff; transform: scale(1.03); }
+.lyric { max-width: 97%; } /* room for the 3 % zoom of the current line (it overflowed the panel) */
 .lyrics.big .lyric { font-size: clamp(22px, 2.4vw, 34px); letter-spacing: -0.02em; }
 .lyrics-plain { white-space: pre-wrap; font: 600 17px/1.6 Inter, sans-serif; color: rgba(255, 255, 255, .85); margin: 0; }
 .lyrics-credit { margin-top: 24px; }
@@ -498,7 +501,7 @@ kbd {
 .picker-item { display: flex; align-items: center; gap: 12px; padding: 8px; border-radius: 8px; text-align: left; }
 .picker-item:hover { background: var(--hover); }
 .eq-modal { width: min(640px, 100%); }
-.eq-bands { display: grid; grid-template-columns: repeat(10, 1fr); gap: 6px; padding: 8px 0; }
+.eq-bands { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 6px; padding: 8px 0; } /* 1fr = min-content: 10 bands overflowed a 360 px screen */
 .eq-bands.disabled { opacity: .4; pointer-events: none; }
 .eq-band { display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .eq-band input { writing-mode: vertical-lr; direction: rtl; height: 160px; width: 24px; accent-color: var(--accent); cursor: pointer; }
@@ -529,7 +532,7 @@ kbd {
 .setting > .slider::-webkit-slider-thumb { opacity: 1; }
 .setting > .slider::-moz-range-thumb { opacity: 1; }
 .setting:last-of-type { border-bottom: 0; }
-.swatches { display: flex; gap: 8px; }
+.swatches { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; min-width: 0; }
 .swatch { width: 26px; height: 26px; border-radius: 50%; border: 2px solid transparent; transition: transform .15s; }
 .swatch:hover { transform: scale(1.12); }
 .swatch.active { border-color: #fff; box-shadow: 0 0 0 2px var(--bg) inset; }
@@ -548,8 +551,9 @@ kbd {
   .app.with-panel { grid-template-columns: var(--sidebar-w) minmax(0, 1fr); grid-template-areas: 'side main' 'player player'; }
   .right-panel { position: fixed; right: 8px; top: 8px; bottom: calc(var(--player-h) + 16px); width: min(var(--panel-w), calc(100vw - 16px)); z-index: 30; box-shadow: -10px 0 40px rgba(0, 0, 0, .6); }
   .vol-slider { width: 70px; }
-  .np-body { grid-template-columns: 1fr; overflow-y: auto; }
-  .np-body.with-video { grid-template-columns: 1fr; }
+  /* minmax(0, …): a plain 1fr column grew to the longest unbroken title of the queue (1 088 px on a phone) */
+  .np-body { grid-template-columns: minmax(0, 1fr); overflow-y: auto; }
+  .np-body.with-video { grid-template-columns: minmax(0, 1fr); }
   .np-right { min-height: 60vh; }
   /* Single column: a 56vh-tall cover overflowed its row (hidden under the header, visualizer over the tabs) */
   .np-cover { height: auto !important; }
@@ -572,7 +576,7 @@ kbd {
   .sidebar-backdrop.open { opacity: 1; pointer-events: auto; }
   /* Home-screen app on iPhone (status bar black-translucent): stay below the status bar. */
   .topbar { padding: calc(10px + env(safe-area-inset-top)) 12px 10px; }
-  .page { padding: 4px 14px 32px; }
+  .page { --page-x: 14px; padding: 4px var(--page-x) 32px; }
   .page-title { font-size: 26px; }
   .player-bar { grid-template-columns: minmax(0, 1fr) auto; padding: 0 10px; border-top: 1px solid var(--border); gap: 8px; padding-bottom: env(safe-area-inset-bottom); }
   .pb-center .seekbar, .transport > .icon-btn:first-child, .transport > .icon-btn:last-child { display: none; }
@@ -779,3 +783,4 @@ kbd {
   .profile-hero > .avatar, .profile-hero > .avatar-img { width: 120px !important; height: 120px !important; font-size: 50px !important; }
 }
 .friend-link.user-name { display: block; max-width: 100%; }
+
