@@ -68,6 +68,11 @@
 .st-sub { color: var(--muted); font-size: 12.5px; margin-top: 3px; }
 .st-info { position: absolute; right: 6px; bottom: 10px; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--muted); }
 .st-info:hover { color: var(--text); background: var(--hover); }
+/* Touch screens: 44 px to the finger without moving the drawing (the hit area grows around it). */
+@media (pointer: coarse) {
+  .st-info::before, .st-fav::before { content: ''; position: absolute; inset: -8px; }
+  .st-fav::before { inset: -6px; }
+}
 @media (hover: none) {
   .st-play { opacity: 1; transform: none; width: 36px; height: 36px; }
   .st-fav { opacity: 1; }

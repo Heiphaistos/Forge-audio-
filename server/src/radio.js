@@ -8,6 +8,9 @@ import { pipeline, Transform, PassThrough } from 'node:stream';
 import { HttpError, isPublicUrl, isHttpUrl, clampInt, TtlCache } from './util.js';
 import { readJson, writeJsonAtomic } from './accounts.js';
 import { FEATURED, FEATURED_BY_ID } from './radio-stations.js';
+import { imageType, logoResolver } from './radio-logo.js';
+
+export { imageType };
 
 /**
  * Radios: hand-picked French stations (radio-stations.js) + the free, open Radio Browser directory
@@ -28,7 +31,6 @@ import { FEATURED, FEATURED_BY_ID } from './radio-stations.js';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const PER_USER = 3;
 const MAX_TOTAL = 60;
-const LOGO_MAX = 300 * 1024;
 const TEXT_MAX = 256 * 1024;
 const SEGMENT_MAX = 8 * 1024 * 1024;
 const AUDIO_TYPES = /^(audio\/[a-z0-9.+-]+|application\/ogg)$/;
@@ -161,17 +163,6 @@ export function icyTitle(buf) {
   return m[1].replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 200);
 }
 
-/** Image type from its first bytes; null for anything else (SVG included: it could run script on this origin). */
-export function imageType(buf) {
-  const head = buf.subarray(0, 12).toString('latin1');
-  if (head.startsWith('\x89PNG\r\n\x1a\n')) return 'image/png';
-  if (head.startsWith('\xff\xd8\xff')) return 'image/jpeg';
-  if (head.startsWith('GIF8')) return 'image/gif';
-  if (head.startsWith('RIFF') && head.slice(8, 12) === 'WEBP') return 'image/webp';
-  if (head.startsWith('\x00\x00\x01\x00')) return 'image/x-icon';
-  return null;
-}
-
 // ---------- module ----------
 
 /**
@@ -191,7 +182,6 @@ export function registerRadio(app, { version, dataDir = null, ffmpeg = 'ffmpeg',
   const known = new TtlCache({ ttlMs: 24 * 3600 * 1000, max: 20000 });
   const nowPlaying = new TtlCache({ ttlMs: 10 * 60 * 1000, max: 2000 });
   const clicked = new TtlCache({ ttlMs: 3600 * 1000, max: 5000 });
-  const logoFailed = new TtlCache({ ttlMs: 6 * 3600 * 1000, max: 5000 });
   const active = new Map(); // username -> open streams
   let total = 0;
 
@@ -247,7 +237,7 @@ export function registerRadio(app, { version, dataDir = null, ffmpeg = 'ffmpeg',
 
   const featuredCard = (f) => ({
     id: f.id, name: f.name, group: f.group, country: f.country, countryCode: f.countryCode, language: f.language, tags: f.tags,
-    codec: f.codec, bitrate: f.bitrate, homepage: f.homepage, logo: f.logo ? `/api/radio/logo/${f.id}` : null, color: f.color, featured: true,
+    codec: f.codec, bitrate: f.bitrate, homepage: f.homepage, logo: f.logo || f.homepage ? `/api/radio/logo/${f.id}` : null, color: f.color, featured: true,
   });
 
   /** Keep what the relay needs (stream URL, favicon) server side; the client gets a card. */
@@ -256,17 +246,19 @@ export function registerRadio(app, { version, dataDir = null, ffmpeg = 'ffmpeg',
     if (!UUID.test(id)) return null;
     const url = isHttpUrl(s.url_resolved) ? s.url_resolved : isHttpUrl(s.url) ? s.url : null;
     if (!url) return null;
+    const homepage = isHttpUrl(s.homepage) ? String(s.homepage).trim().slice(0, 500) : null;
+    const favicon = isHttpUrl(s.favicon) ? String(s.favicon).trim() : null;
     const rec = {
       card: {
         id, name: text(s.name, 120) || 'Radio sans nom', country: text(s.country, 60) || null,
         countryCode: /^[A-Z]{2}$/.test(s.countrycode) ? s.countrycode : null, language: text(s.language, 60) || null,
         tags: tagsOf(s.tags), codec: text(s.codec, 12) || null, bitrate: Number(s.bitrate) > 0 ? Number(s.bitrate) : null,
-        homepage: isHttpUrl(s.homepage) ? String(s.homepage).trim().slice(0, 500) : null,
-        logo: isHttpUrl(s.favicon) ? `/api/radio/logo/${id}` : null,
+        homepage,
+        logo: favicon || homepage ? `/api/radio/logo/${id}` : null, // found by radio-logo.js; initials when nothing is
         votes: Number(s.votes) || 0, clicks: Number(s.clickcount) || 0,
       },
       url: url.trim(),
-      favicon: isHttpUrl(s.favicon) ? String(s.favicon).trim() : null,
+      favicon,
       hls: Number(s.hls) === 1,
     };
     known.set(id, rec);
@@ -333,6 +325,8 @@ export function registerRadio(app, { version, dataDir = null, ffmpeg = 'ffmpeg',
     };
     go(url, 5);
   });
+
+  const logos = logoResolver({ open, dir: dataDir ? path.join(dataDir, 'radio-logos') : null });
 
   const isHlsText = (t) => /#EXT-X-(TARGETDURATION|STREAM-INF|MEDIA-SEQUENCE)/.test(t);
 
@@ -517,23 +511,18 @@ export function registerRadio(app, { version, dataDir = null, ffmpeg = 'ffmpeg',
   app.get('/api/radio/logo/:id', async (request, reply) => {
     limited(request, 'logo', 900);
     const id = String(request.params.id);
-    if (logoFailed.get(id)) throw new HttpError('Logo indisponible', 404, 'NOT_FOUND');
-    const st = await station(id);
-    if (!st.favicon) throw new HttpError('Logo indisponible', 404, 'NOT_FOUND');
-    let buf = null;
-    try {
-      buf = await readBody(await open(st.favicon, { timeoutMs: 8000 }), LOGO_MAX);
-    } catch { /* below */ }
-    const type = buf && imageType(buf);
-    if (!type) {
-      logoFailed.set(id, true);
-      throw new HttpError('Logo indisponible', 404, 'NOT_FOUND');
-    }
-    reply.header('content-type', type);
+    if (!FEATURED_BY_ID.has(id) && !UUID.test(id)) throw new HttpError('Radio inconnue', 404, 'NOT_FOUND');
+    // Cached under the station (plus, for the hand-picked list, its logo URL: a new one is used at once).
+    const img = await logos(`${id}|${FEATURED_BY_ID.get(id)?.logo || ''}`, async () => {
+      const st = await station(id);
+      return { favicon: st.favicon, homepage: st.card.homepage, trusted: !!st.featured };
+    });
+    if (!img) throw new HttpError('Logo indisponible', 404, 'NOT_FOUND');
+    reply.header('content-type', img.type);
     reply.header('cache-control', 'private, max-age=604800');
     reply.header('x-content-type-options', 'nosniff');
     reply.header('content-security-policy', "default-src 'none'");
-    return reply.send(buf);
+    return reply.send(img.buf);
   });
 
   app.get('/api/radio/listen/:id', async (request, reply) => {

@@ -229,3 +229,107 @@ test('radio: favourites and recent stations are kept in the synced library, sani
   assert.deepEqual(lib.radioUnfavorited, { 'fr-rtl': 9 });
   assert.equal(lib.radioRecent[0].name, 'RTL');
 });
+
+// ---------- logo resolution (radio-logo.js) ----------
+const pngOf = (w, h) => {
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(w, 0);
+  ihdr.writeUInt32BE(h, 4);
+  return Buffer.concat([PNG.subarray(0, 8), Buffer.from([0, 0, 0, 13]), Buffer.from('IHDR'), ihdr, Buffer.alloc(16)]);
+};
+
+/** Station site: favicon 404, home page declaring an SVG icon, an apple-touch-icon and a manifest. */
+async function site() {
+  const hits = [];
+  const server = http.createServer((req, res) => {
+    hits.push(req.url);
+    const send = (type, body) => { res.writeHead(200, { 'content-type': type }); res.end(body); };
+    if (req.url === '/home') {
+      send('text/html', `<html><head><link rel="icon" type="image/svg+xml" href="/logo.svg"><link rel="shortcut icon" href="/small.png">
+        <link href="/touch.png" rel="apple-touch-icon" sizes="180x180"><link rel="manifest" href="/site.webmanifest"></head></html>`);
+    } else if (req.url === '/site.webmanifest') send('application/manifest+json', JSON.stringify({ icons: [{ src: '/big.png', sizes: '512x512' }, { src: '/m.svg', sizes: 'any' }] }));
+    else if (req.url === '/big.png') send('image/png', pngOf(512, 512));
+    else if (req.url === '/touch.png') send('image/png', pngOf(180, 180));
+    else if (req.url === '/small.png') send('image/png', pngOf(16, 16));
+    else if (req.url === '/logo.svg' || req.url === '/svgonly') send('image/svg+xml', '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
+    else if (req.url === '/svghome') send('text/html', '<link rel="icon" href="/svgonly"><meta property="og:image" content="/logo.svg">');
+    else { res.writeHead(404); res.end(); }
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  return { server, hits, base: `http://127.0.0.1:${server.address().port}` };
+}
+
+test('radio logos: favicon 404 -> best icon of the home page, cached on disk (found and not found)', async () => {
+  const s = await site();
+  try {
+    const allow = (u) => u.startsWith(s.base);
+    const st = setup({ allow, stations: [
+      rbStation(UUID1, `${s.base}/icy`, { favicon: `${s.base}/gone.png`, homepage: `${s.base}/home` }),
+      rbStation(UUID2, `${s.base}/icy`, { favicon: `${s.base}/logo.svg`, homepage: `${s.base}/svghome` }),
+    ] });
+    const { get, dir } = await st;
+    const list = (await get('/api/radio/stations')).json().stations;
+    assert.ok(list.every((x) => x.logo === `/api/radio/logo/${x.id}`));
+
+    const ok = await get(`/api/radio/logo/${UUID1}`);
+    assert.equal(ok.statusCode, 200);
+    assert.equal(ok.headers['content-type'], 'image/png');
+    assert.equal(ok.rawPayload.readUInt32BE(16), 512, 'the largest square picture (manifest) wins over 180 and 16 px');
+
+    const svg = await get(`/api/radio/logo/${UUID2}`);
+    assert.equal(svg.statusCode, 404, 'SVG everywhere: no logo');
+
+    const before = s.hits.length;
+    assert.equal((await get(`/api/radio/logo/${UUID1}`)).statusCode, 200);
+    assert.equal((await get(`/api/radio/logo/${UUID2}`)).statusCode, 404);
+    assert.equal(s.hits.length, before, 'both answers come from the disk cache');
+    const files = fs.readdirSync(path.join(dir, 'radio-logos'));
+    assert.equal(files.filter((f) => f.endsWith('.none')).length, 1);
+    assert.equal(files.filter((f) => !f.endsWith('.none')).length, 1);
+  } finally {
+    s.server.close();
+  }
+});
+
+test('radio logos: SVG and private addresses refused, even from the home page', async () => {
+  const s = await site();
+  try {
+    // Default guards: favicon and home page on 127.0.0.1 are never fetched.
+    const { get } = await setup({ stations: [rbStation(UUID1, `${s.base}/icy`, { favicon: `${s.base}/big.png`, homepage: `${s.base}/home` })] });
+    assert.equal((await get(`/api/radio/logo/${UUID1}`)).statusCode, 404);
+    assert.equal(s.hits.length, 0, 'nothing fetched from a private address');
+    // A public-looking home page whose icon is on a refused address.
+    const { pageIcons } = await import('../src/radio-logo.js');
+    const icons = pageIcons('<link rel="apple-touch-icon" href="http://169.254.169.254/x.png"><link rel="icon" href="javascript:alert(1)">', 'https://radio.example/');
+    assert.deepEqual(icons.icons.map((i) => i.url), ['http://169.254.169.254/x.png'], 'only http(s) URLs kept, each then checked by the guarded GET');
+    assert.equal((await get('/api/radio/logo/..%2F..%2Fetc')).statusCode, 404);
+  } finally {
+    s.server.close();
+  }
+});
+
+test('radio logos: .ico turned into PNG (embedded PNG or 32-bit bitmap)', async () => {
+  const { icoToPng, toLogo, imageSize } = await import('../src/radio-logo.js');
+  const ico = (entries) => {
+    const head = Buffer.alloc(6 + 16 * entries.length);
+    head.writeUInt16LE(1, 2);
+    head.writeUInt16LE(entries.length, 4);
+    let off = head.length;
+    entries.forEach(({ w, data }, k) => {
+      head[6 + 16 * k] = w;
+      head.writeUInt32LE(data.length, 6 + 16 * k + 8);
+      head.writeUInt32LE(off, 6 + 16 * k + 12);
+      off += data.length;
+    });
+    return Buffer.concat([head, ...entries.map((e) => e.data)]);
+  };
+  // 2x2 32-bit bitmap (BGRA, bottom-up) + AND mask.
+  const dib = Buffer.alloc(40 + 16 + 8);
+  dib.writeUInt32LE(40, 0); dib.writeInt32LE(2, 4); dib.writeInt32LE(4, 8); dib.writeUInt16LE(1, 12); dib.writeUInt16LE(32, 14);
+  Buffer.from([255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 9, 9, 9, 0]).copy(dib, 40);
+  const fromBmp = toLogo(ico([{ w: 2, data: dib }]));
+  assert.equal(fromBmp.type, 'image/png');
+  assert.deepEqual(imageSize(fromBmp.buf), { w: 2, h: 2 });
+  const fromPng = icoToPng(ico([{ w: 16, data: dib }, { w: 0, data: pngOf(256, 256) }]));
+  assert.deepEqual(imageSize(fromPng), { w: 256, h: 256 }, 'largest entry first');
+});
