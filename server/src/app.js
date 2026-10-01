@@ -21,6 +21,7 @@ import { registerCovers } from './covers.js';
 import { registerCatalog } from './catalog.js';
 import { registerLoudness } from './loudness.js';
 import { registerRadio } from './radio.js';
+import { registerTranslate } from './translate.js';
 
 export const VERSION = '0.21.2';
 
@@ -52,8 +53,9 @@ function readCookie(header, name) {
  * @param {boolean|object} [opts.logger]
  * @param {object} [opts.mailer] outgoing mail (mail.js; default: SMTP_* environment variables)
  * @param {object} [opts.radio] test hooks of the radio module (radio.js)
+ * @param {object} [opts.translate] test hooks of the lyrics translation (translate.js)
  */
-export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null, dataDir = null, accountsFile = null, logger = true, mailer = createMailer(), radio = {} } = {}) {
+export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null, dataDir = null, accountsFile = null, logger = true, mailer = createMailer(), radio = {}, translate = {} } = {}) {
   const app = Fastify({ logger, trustProxy: 'loopback,uniquelocal', disableRequestLogging: true, bodyLimit: 10 * 1024 * 1024 });
   const accounts = new Accounts(accountsFile);
   const sessions = new Sessions(dataDir ? path.join(dataDir, 'sessions.json') : null);
@@ -242,6 +244,7 @@ export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null,
   registerCatalog(app);
   registerLoudness(app, { media, ffmpeg, ytdlp });
   registerRadio(app, { version: VERSION, dataDir, ffmpeg, ...radio });
+  registerTranslate(app, { dataDir, ...translate });
 
   // ---------- API ----------
   app.get('/api/health', async (request, reply) => {

@@ -16,6 +16,9 @@ services:
       - SMTP_USER=${SMTP_USER:-}
       - SMTP_PASS=${SMTP_PASS:-}
       - SMTP_FROM=${SMTP_FROM:-}
+      # Paroles traduites : adresse de contact transmise au service de traduction gratuit (quota 50 000
+      # caractères/jour au lieu de 5 000). Vide = quota anonyme.
+      - TRANSLATE_EMAIL=${TRANSLATE_EMAIL:-}
     volumes:
       # Comptes, sessions et bibliothèque de chaque utilisateur (playlists, historique, likes…).
       # Aucun fichier audio n'y est stocké.
