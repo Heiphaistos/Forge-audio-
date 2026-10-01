@@ -13,13 +13,15 @@ import { Accounts, Sessions, LoginLimiter, normalizeUsername, isValidUsername, c
 import { Invites, registerAdmin } from './invites.js';
 import { LoginSeal } from './login-seal.js';
 import { Keys, checkWrapped } from './keys.js';
+import { Emails, registerRecovery, normalizeEmail, isValidEmail } from './recovery.js';
+import { createMailer } from './mail.js';
 import { UserData } from './userdata.js';
 import { registerSocial } from './social.js';
 import { registerCovers } from './covers.js';
 import { registerCatalog } from './catalog.js';
 import { registerLoudness } from './loudness.js';
 
-export const VERSION = '0.18.0';
+export const VERSION = '0.19.0';
 
 const IMAGE_HOSTS = /(^|\.)(ytimg\.com|ggpht\.com|googleusercontent\.com|sndcdn\.com|dmcdn\.net|dailymotion\.com|bcbits\.com|vimeocdn\.com|jtvnw\.net|scdn\.co|spotifycdn\.com|dzcdn\.net|mzstatic\.com)$/i;
 
@@ -47,8 +49,9 @@ function readCookie(header, name) {
  * @param {string|null} [opts.dataDir] where sessions and per-user libraries are saved (null: memory only)
  * @param {string|null} [opts.accountsFile] accounts JSON; no account = single-user local mode without login
  * @param {boolean|object} [opts.logger]
+ * @param {object} [opts.mailer] outgoing mail (mail.js; default: SMTP_* environment variables)
  */
-export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null, dataDir = null, accountsFile = null, logger = true } = {}) {
+export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null, dataDir = null, accountsFile = null, logger = true, mailer = createMailer() } = {}) {
   const app = Fastify({ logger, trustProxy: 'loopback,uniquelocal', disableRequestLogging: true, bodyLimit: 10 * 1024 * 1024 });
   const accounts = new Accounts(accountsFile);
   const sessions = new Sessions(dataDir ? path.join(dataDir, 'sessions.json') : null);
@@ -57,6 +60,7 @@ export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null,
   const registerLimiter = new LoginLimiter({ max: 10, windowMs: 60 * 60 * 1000 });
   const invites = new Invites(dataDir ? path.join(dataDir, 'invites.json') : null);
   const keys = new Keys(dataDir);
+  const emails = new Emails(dataDir);
   let seal = null; // created on first use: a 4096-bit key takes about a second to generate
   const userData = dataDir ? new UserData(dataDir) : null;
   const LOCAL_USER = { username: 'local', displayName: 'Moi' };
@@ -94,7 +98,7 @@ export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null,
     if (!p.startsWith('/api/')) return;
     request.user = userOf(request);
     // /api/bot/*: HeiphaisBot, authenticated by its bearer token (social.js), not by a session.
-    if (!request.user && !PUBLIC.has(p) && !p.startsWith('/api/bot/')) return reply.code(401).send({ error: 'Connexion requise', code: 'AUTH_REQUIRED' });
+    if (!request.user && !PUBLIC.has(p) && !p.startsWith('/api/bot/') && !p.startsWith('/api/recovery/')) return reply.code(401).send({ error: 'Connexion requise', code: 'AUTH_REQUIRED' });
   });
 
   const cookie = (request, value, maxAge) => {
@@ -132,6 +136,9 @@ export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null,
     const name = normalizeUsername(username);
     if (!isValidUsername(name)) throw new HttpError('Identifiant invalide : 2 à 32 caractères, lettres minuscules, chiffres, point, tiret ou souligné, en commençant par une lettre ou un chiffre');
     const display = String(displayName || '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 40) || name;
+    // Optional address, verified later with a code (Paramètres > Adresse e-mail).
+    const email = normalizeEmail(request.body?.email);
+    if (email && !isValidEmail(email)) throw new HttpError('Adresse e-mail invalide', 400, 'BAD_EMAIL');
     const problems = checkPasswordPolicy(clear);
     if (problems.length) throw new HttpError(`Mot de passe trop faible : il faut ${problems.join(', ')}`);
     if (!invites.find(code)) throw new HttpError("Code d'invitation invalide, expiré ou déjà utilisé", 403, 'INVITE_INVALID');
@@ -143,6 +150,8 @@ export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null,
     if (accounts.get(name) || userData?.exists(name)) throw new HttpError('Cet identifiant est déjà pris', 409, 'USERNAME_TAKEN');
     accounts.insertHashed(name, display, hash);
     invites.consume(invite, name);
+    emails.drop(name);
+    if (email && mailer.enabled) recovery.addEmail(request.log, name, email);
     request.log.info({ user: name, invite: invite.id }, 'Inscription');
     const token = sessions.create(name);
     reply.header('set-cookie', cookie(request, token, 180 * 24 * 3600));
@@ -222,6 +231,11 @@ export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null,
   // Shared playlists, Jam, live events, link with the Discord bot.
   registerSocial(app, { accounts, userData, dataDir, keys });
   registerAdmin(app, { accounts, invites });
+  const recovery = registerRecovery(app, {
+    accounts, sessions, keys, emails, mailer, limiter,
+    openPassword: (sealed, plain) => (sealed ? (seal ? seal.open(sealed) : null) : plain),
+    startSession: (request, reply, u) => reply.header('set-cookie', cookie(request, sessions.create(u), 180 * 24 * 3600)),
+  });
   registerCovers(app, { dataDir });
   registerCatalog(app);
   registerLoudness(app, { media, ffmpeg, ytdlp });

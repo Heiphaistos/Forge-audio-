@@ -1,4 +1,4 @@
-# Forge Audio : API nouvelle ou modifiée depuis la 0.14.0 (serveur 0.18.0)
+# Forge Audio : API nouvelle ou modifiée depuis la 0.14.0 (serveur 0.19.0)
 
 Référence pour adapter les clients Android et bureau. Tout le reste de l'API (recherche, lecture,
 bibliothèque `/api/me/data`, catalogue, playlists partagées, Jam hors chat, Discord) est inchangé
@@ -10,7 +10,7 @@ sauf mention ci-dessous.
 - Session : cookie `forge_session` (HttpOnly, SameSite=Lax, Secure en HTTPS), posé par `/api/login`
   ou `/api/register`, valable 180 jours.
 - Toute route `/api/*` hors liste publique répond **401** `{ "error": "Connexion requise", "code": "AUTH_REQUIRED" }`
-  sans session. Routes publiques : `/api/health`, `/api/login`, `/api/login-key`, `/api/logout`, `/api/register`.
+  sans session. Routes publiques : `/api/health`, `/api/login`, `/api/login-key`, `/api/logout`, `/api/register`, `/api/recovery/*`.
   `/api/bot/*` : jeton `Authorization: Bearer <FORGE_BOT_TOKEN>` (HeiphaisBot), pas de session.
 - Erreurs : `{ "error": "<message affichable tel quel>", "code": "<CODE>" }` avec le statut HTTP.
   Codes génériques : `BAD_REQUEST` (400), `NOT_FOUND` (404), `FORBIDDEN` (403), `RATE_LIMITED` (429), `INTERNAL` (500).
@@ -40,7 +40,9 @@ Réponses : `200 { "ok": true, "user": { "username", "displayName", "role": "adm
 
 ### `POST /api/register` (public)
 Requête : `{ "code": "FORGE-XXXX-XXXX-XXXX", "username": "loris", "displayName": "Loris" (facultatif, 40 car. max),
-"password": "<clair>" | "sealed": "<comme /api/login>" }`.
+"email": "loris@exemple.fr" (facultatif, depuis la 0.19.0), "password": "<clair>" | "sealed": "<comme /api/login>" }`.
+Avec `email` (et l'envoi de mails configuré), un code de vérification y est envoyé ; la vérification se fait plus tard
+(`POST /api/me/email/verify`, section 11) et n'est jamais obligatoire. Adresse mal formée : **400** `BAD_EMAIL`, rien n'est créé.
 Mot de passe : 70 caractères minimum avec majuscule, minuscule, chiffre et symbole.
 
 | Statut | Code | Cas |
@@ -143,10 +145,12 @@ de l'autre se trouve par empreinte dans `GET /api/keys/:username`, `current` ou 
 → « message chiffré avec une ancienne clé, illisible ».)
 `Correspondent = { "username", "displayName" (= username si pas ami), "friend": bool }`
 
-### `GET /api/me/keys` → `200 { "key": { pub, fp, wrapped: Wrapped, at } | null }`
+### `GET /api/me/keys` → `200 { "key": { pub, fp, wrapped: Wrapped, at, backupAt: <ms>|null } | null }`
+`backupAt` (0.19.0) : date du « code de secours des messages » actuel (section 11), `null` s'il n'y en a pas.
 `null` : pas encore de clé, ou clé retirée après une **réinitialisation du mot de passe par l'administrateur**
 (`accounts-cli passwd` : l'enveloppe ne s'ouvre plus) → en créer une nouvelle.
-### `PUT /api/me/keys` `{ "pub": "<b64>", "wrapped": Wrapped }`
+### `PUT /api/me/keys` `{ "pub": "<b64>", "wrapped": Wrapped, "backup"?: Wrapped }`
+`backup` (0.19.0, facultatif) : la même clé privée enveloppée avec le code de secours (section 11).
 → `200 { "key": … }` ; 400 `BAD_KEY` (point invalide, enveloppe invalide, < 600 000 itérations) ;
 409 `KEY_EXISTS` (jamais écrasée : relire `GET /api/me/keys` et ouvrir l'enveloppe).
 ### `GET /api/keys/:username` → `200 { "username", "current": { pub, fp } | null, "old": [{ pub, fp }] }`
@@ -258,3 +262,50 @@ en charge → 415 `BAD_TYPE`, JSON illisible → 400 `BAD_REQUEST`.
 - **Flux `/api/events`** (0.16.1) : un `EventSource` du navigateur abandonne **définitivement** après une réponse HTTP
   d'erreur (nginx renvoie 502 pendant un redémarrage du serveur). Tout client doit le rouvrir lui-même (le web : 2 s puis
   jusqu'à 30 s, et au retour au premier plan) puis, au `hello`, tout recharger.
+
+## 11. Adresse e-mail, mot de passe oublié, code de secours des messages (0.19.0, nouveau)
+
+L'adresse est **facultative** et ne sert qu'à récupérer le compte. Envoi par SMTP (variables d'environnement
+`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` ; absentes = fonctions mail indisponibles, **503**
+`MAIL_UNAVAILABLE`). Codes : 6 chiffres, **15 min**, **5 essais**, usage unique, stockés en SHA-256 salé, jamais journalisés.
+Envois limités par compte : 1 par minute, 5 codes de vérification et 3 codes de réinitialisation par heure.
+
+### Adresse (session requise)
+- `GET /api/me/email` → `200 EmailState` = `{ "email": "<vérifiée>"|null, "pending": "<en attente de code>"|null, "mail": bool }`
+  (`mail` : le serveur peut envoyer des mails).
+- `PUT /api/me/email` `{ "email", "password"|"sealed" }` → **202** `EmailState` : code envoyé à la nouvelle adresse (l'ancienne
+  reste valable jusqu'à la vérification). Le **mot de passe actuel** est exigé (une session volée ne suffit pas).
+  403 `BAD_PASSWORD` · 400 `BAD_EMAIL` · 409 `SAME_EMAIL` · 429 `RATE_LIMITED` · 502 `MAIL_FAILED` · 503 `MAIL_UNAVAILABLE`.
+- `POST /api/me/email/resend` → **202** `EmailState` (nouveau code) ; 404 `NO_PENDING` ; 429.
+- `POST /api/me/email/verify` `{ "code": "123456" }` → `200 EmailState` ; 400 `CODE_INVALID` (un essai consommé) ;
+  410 `CODE_EXPIRED` (expiré, 5 essais épuisés ou déjà utilisé : en redemander un) ; 409 `EMAIL_TAKEN` (adresse vérifiée par
+  un autre compte). L'ancienne adresse éventuelle reçoit un mail « adresse retirée ».
+- `DELETE /api/me/email` `{ "password"|"sealed" }` → `200 EmailState` (adresse effacée, l'ancienne est prévenue) ; 403 `BAD_PASSWORD`.
+
+### Mot de passe oublié (public)
+- `GET /api/recovery/status` → `200 { "mail": bool }` (afficher ou non le champ e-mail de l'inscription).
+- `POST /api/recovery/start` `{ "login": "<identifiant ou adresse e-mail>" }` → **202** `{ "ok": true }`, **toujours la même
+  réponse après le même délai (~1,2 s)** que le compte existe, ait une adresse vérifiée ou non. Le code part seulement vers
+  une adresse **vérifiée**. 429 `RATE_LIMITED` (10 demandes / heure / IP) ; 503 `MAIL_UNAVAILABLE`.
+- `POST /api/recovery/verify` `{ "login", "code" }` → `200 { "ticket", "username", "hasKey": bool, "backup": Wrapped|null }`
+  (code consommé) ; **400** `CODE_INVALID` identique pour un mauvais code, un compte inconnu ou un code expiré ; 429 (20 erreurs / heure / IP).
+  `ticket` : usage unique, 15 min. `backup` : l'enveloppe « code de secours » de la clé de messagerie (à ouvrir côté client).
+- `POST /api/recovery/reset` `{ "ticket", "newPassword"|"newSealed", "wrapped"?: Wrapped }` → `200 { "ok": true, "user" }` + cookie de
+  session. Toutes les autres sessions sont fermées, un mail « mot de passe réinitialisé » part vers l'adresse vérifiée.
+  - avec `wrapped` (clé privée ouverte avec le code de secours puis ré-enveloppée avec le **nouveau** mot de passe, comme
+    `/api/me/password`) : **la clé est conservée**, les conversations restent lisibles, le code de secours reste valable ;
+  - sans : la clé est retirée comme après une réinitialisation par l'administrateur (`GET /api/me/keys` → `null`, en créer une
+    nouvelle ; anciens messages illisibles ; les amis voient « la clé a changé »).
+  400 `TICKET_INVALID` / `BAD_REQUEST` (mot de passe faible) / `BAD_KEY`.
+
+### Code de secours des messages
+- Fabriqué **par le client**, montré une fois : 24 caractères de `ABCDEFGHJKMNPQRSTUVWXYZ23456789` (≈ 119 bits), affiché
+  en groupes de 4 séparés par `-`. Normalisation avant usage : majuscules, sans espaces ni tirets.
+- Enveloppe : comme `Wrapped` (PBKDF2-SHA-256 600 000 itérations sur le code normalisé, AES-GCM 256) mais données
+  additionnelles `"forge-audio backup v1|<username>"` (au lieu de `key`). Le serveur ne voit jamais le code.
+- Créé avec la clé (`PUT /api/me/keys` champ `backup`) ou plus tard :
+  `PUT /api/me/keys/backup` `{ "fp": "<empreinte de la clé actuelle>", "backup": Wrapped }` → `200 { "backupAt" }` ; remplace
+  l'ancien (qui ne sert plus à rien) ; 409 `NO_KEY` / `KEY_CHANGED` ; 400 `BAD_KEY`. Le client a besoin de la clé privée
+  en clair pour l'envelopper : il ouvre `wrapped` avec le mot de passe saisi localement.
+- `DELETE /api/me/keys/backup` → `200 { "ok": true }`.
+- L'enveloppe est effacée quand la clé est retirée ; un changement de mot de passe (`/api/me/password`) la garde.

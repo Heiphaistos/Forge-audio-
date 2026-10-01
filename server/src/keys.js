@@ -66,7 +66,7 @@ export class Keys {
     const since = accounts.get(username)?.since || 0;
     if (rec.at >= since) return rec;
     rec.old = [{ pub: rec.pub, fp: rec.fp, at: rec.at, until: Date.now() }, ...(rec.old || [])].slice(0, KEEP_OLD);
-    delete rec.pub; delete rec.fp; delete rec.wrapped; delete rec.at;
+    delete rec.pub; delete rec.fp; delete rec.wrapped; delete rec.at; delete rec.backup;
     this.save();
     return null;
   }
@@ -77,9 +77,11 @@ export class Keys {
     return { current: cur ? { pub: cur.pub, fp: cur.fp } : null, old: (this.users[username]?.old || []).map(({ pub, fp }) => ({ pub, fp })) };
   }
 
-  set(username, pub, wrapped, at = Date.now()) {
+  set(username, pub, wrapped, at = Date.now(), backup = null) {
     const rec = (this.users[username] ||= {});
     Object.assign(rec, { pub, fp: fingerprint(pub), wrapped, at });
+    if (backup) rec.backup = { ...backup, at };
+    else delete rec.backup;
     this.save();
     return rec;
   }
@@ -91,6 +93,12 @@ export class Keys {
     Object.assign(rec, { wrapped, at });
     this.save();
   }
+
+  /** The key's second envelope, opened by the user's « code de secours » (never seen by the server). */
+  backupOf(username, accounts) {
+    const b = this.current(username, accounts)?.backup;
+    return b ? { v: b.v, iter: b.iter, salt: b.salt, iv: b.iv, ct: b.ct } : null;
+  }
 }
 
 export function registerKeys(app, { accounts, friends, messages, keys }) {
@@ -98,7 +106,7 @@ export function registerKeys(app, { accounts, friends, messages, keys }) {
 
   app.get('/api/me/keys', async (request) => {
     const cur = keys.current(me(request), accounts);
-    return { key: cur ? { pub: cur.pub, fp: cur.fp, wrapped: cur.wrapped, at: cur.at } : null };
+    return { key: cur ? { pub: cur.pub, fp: cur.fp, wrapped: cur.wrapped, at: cur.at, backupAt: cur.backup?.at || null } : null };
   });
 
   // Only when there is no key yet (first sign-in after 0.18, or after an admin reset): never overwritten.
@@ -108,9 +116,30 @@ export function registerKeys(app, { accounts, friends, messages, keys }) {
     const wrapped = checkWrapped(request.body?.wrapped);
     if (!wrapped || !(await checkPublicKey(pub))) throw new HttpError('Clé invalide', 400, 'BAD_KEY');
     if (keys.current(u, accounts)) throw new HttpError('Une clé existe déjà pour ce compte', 409, 'KEY_EXISTS');
-    const rec = keys.set(u, pub, wrapped);
+    const backup = request.body?.backup ? checkWrapped(request.body.backup) : null;
+    if (request.body?.backup && !backup) throw new HttpError('Code de secours invalide', 400, 'BAD_KEY');
+    const rec = keys.set(u, pub, wrapped, Date.now(), backup);
     request.log.info({ user: u }, 'Nouvelle clé de messagerie');
     return { key: { pub: rec.pub, fp: rec.fp, wrapped: rec.wrapped, at: rec.at } };
+  });
+
+  // « Code de secours des messages »: a new envelope of the CURRENT key replaces the old one (old code invalid).
+  app.put('/api/me/keys/backup', async (request) => {
+    const u = me(request);
+    const cur = keys.current(u, accounts);
+    if (!cur) throw new HttpError('Pas encore de clé de messagerie', 409, 'NO_KEY');
+    if (request.body?.fp !== cur.fp) throw new HttpError('Votre clé a changé : rechargez la page', 409, 'KEY_CHANGED');
+    const backup = checkWrapped(request.body?.backup);
+    if (!backup) throw new HttpError('Code de secours invalide', 400, 'BAD_KEY');
+    cur.backup = { ...backup, at: Date.now() };
+    keys.save();
+    request.log.info({ user: u }, 'Code de secours des messages créé');
+    return { backupAt: cur.backup.at };
+  });
+  app.delete('/api/me/keys/backup', async (request) => {
+    const cur = keys.current(me(request), accounts);
+    if (cur?.backup) { delete cur.backup; keys.save(); }
+    return { ok: true };
   });
 
   // Public keys of a friend, or of someone one already has a conversation with (to read it).

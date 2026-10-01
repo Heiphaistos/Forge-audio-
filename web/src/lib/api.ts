@@ -54,6 +54,8 @@ export async function sealPassword(password: string): Promise<{ sealed: string }
   }
 }
 
+export interface EmailState { email: string | null; pending: string | null; mail: boolean }
+
 export interface User {
   username: string;
   displayName: string;
@@ -163,8 +165,8 @@ export const api = {
   health: () => get<Health>('/api/health'),
   login: async (username: string, password: string) =>
     send<{ ok: true; user: User }>('POST', '/api/login', { username, ...(await sealPassword(password)) }),
-  register: async (p: { code: string; username: string; displayName: string; password: string }) =>
-    send<{ ok: true; user: User }>('POST', '/api/register', { code: p.code, username: p.username, displayName: p.displayName, ...(await sealPassword(p.password)) }),
+  register: async (p: { code: string; username: string; displayName: string; password: string; email?: string }) =>
+    send<{ ok: true; user: User }>('POST', '/api/register', { code: p.code, username: p.username, displayName: p.displayName, email: p.email || undefined, ...(await sealPassword(p.password)) }),
   logout: () => send<{ ok: true }>('POST', '/api/logout', {}),
   invites: () => get<{ invites: Invite[] }>('/api/admin/invites'),
   inviteCreate: (days: number, note: string) => send<{ code: string; invite: Invite }>('POST', '/api/admin/invites', { days, note }),
@@ -235,8 +237,22 @@ export const api = {
   /** End-to-end encrypted (store/keys.ts sealFor): the server never receives the text. */
   sendMessage: (username: string, sealed: { v: 1; iv: string; ct: string; fp: string; toFp: string }) => send<{ message: PrivateMessage }>('POST', `/api/messages/${encodeURIComponent(username)}`, sealed),
   readMessages: (username: string) => send<{ ok: true }>('POST', `/api/messages/${encodeURIComponent(username)}/read`, {}),
-  myKeys: () => get<{ key: { pub: string; fp: string; wrapped: Wrapped; at: number } | null }>('/api/me/keys'),
-  putKeys: (pub: string, wrapped: Wrapped) => send<{ key: { pub: string; fp: string } }>('PUT', '/api/me/keys', { pub, wrapped }),
+  myKeys: () => get<{ key: { pub: string; fp: string; wrapped: Wrapped; at: number; backupAt: number | null } | null }>('/api/me/keys'),
+  putKeys: (pub: string, wrapped: Wrapped, backup?: Wrapped) => send<{ key: { pub: string; fp: string } }>('PUT', '/api/me/keys', { pub, wrapped, backup }),
+  putBackup: (fp: string, backup: Wrapped) => send<{ backupAt: number }>('PUT', '/api/me/keys/backup', { fp, backup }),
+  // Optional e-mail address and « Mot de passe oublié » (server/src/recovery.js)
+  myEmail: () => get<EmailState>('/api/me/email'),
+  setEmail: async (email: string, password: string) => send<EmailState>('PUT', '/api/me/email', { email, ...(await sealPassword(password)) }),
+  removeEmail: async (password: string) => send<EmailState>('DELETE', '/api/me/email', await sealPassword(password)),
+  resendEmail: () => send<EmailState>('POST', '/api/me/email/resend', {}),
+  verifyEmail: (code: string) => send<EmailState>('POST', '/api/me/email/verify', { code }),
+  recoveryStatus: () => get<{ mail: boolean }>('/api/recovery/status'),
+  recoveryStart: (login: string) => send<{ ok: true }>('POST', '/api/recovery/start', { login }),
+  recoveryVerify: (login: string, code: string) => send<{ ticket: string; username: string; hasKey: boolean; backup: Wrapped | null }>('POST', '/api/recovery/verify', { login, code }),
+  recoveryReset: async (ticket: string, password: string, wrapped: Wrapped | null) => {
+    const n = await sealPassword(password);
+    return send<{ ok: true; user: User }>('POST', '/api/recovery/reset', { ticket, wrapped, ...('sealed' in n ? { newSealed: n.sealed } : { newPassword: n.password }) });
+  },
   keysOf: (username: string) => get<{ username: string; current: { pub: string; fp: string } | null; old: { pub: string; fp: string }[] }>(`/api/keys/${encodeURIComponent(username)}`),
   changePassword: async (oldPw: string, newPw: string, wrapped: Wrapped | null) => {
     const o = await sealPassword(oldPw);

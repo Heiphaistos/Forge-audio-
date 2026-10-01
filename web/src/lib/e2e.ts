@@ -49,22 +49,45 @@ async function passwordKey(password: string, salt: Bytes, iter: number) {
   const base = await subtle().importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
   return subtle().deriveKey({ name: 'PBKDF2', salt, iterations: iter, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
 }
-const wrapAad = (username: string) => enc.encode(`forge-audio key v1|${username}`);
+// 'key': envelope opened by the password; 'backup': by the « code de secours » (never sent to the server).
+type Envelope = 'key' | 'backup';
+const wrapAad = (username: string, kind: Envelope) => enc.encode(`forge-audio ${kind} v1|${username}`);
 
 /** Encrypt the private key (PKCS#8) with the password. */
-export async function wrapKey(pkcs8: Bytes, password: string, username: string): Promise<Wrapped> {
+export async function wrapKey(pkcs8: Bytes, password: string, username: string, kind: Envelope = 'key'): Promise<Wrapped> {
   const salt = random(16);
   const iv = random(12);
   const key = await passwordKey(password, salt, ITERATIONS);
-  const ct = await subtle().encrypt({ name: 'AES-GCM', iv, additionalData: wrapAad(username) }, key, pkcs8);
+  const ct = await subtle().encrypt({ name: 'AES-GCM', iv, additionalData: wrapAad(username, kind) }, key, pkcs8);
   return { v: 1, iter: ITERATIONS, salt: toB64(salt), iv: toB64(iv), ct: toB64(ct) };
 }
 
 /** PKCS#8 of the private key; throws (AES-GCM check) if the password is wrong. */
-export async function unwrapKey(w: Wrapped, password: string, username: string): Promise<Bytes> {
+export async function unwrapKey(w: Wrapped, password: string, username: string, kind: Envelope = 'key'): Promise<Bytes> {
   if (w.v !== 1 || w.iter < ITERATIONS) throw new Error('Enveloppe de clé inconnue');
   const key = await passwordKey(password, fromB64(w.salt), w.iter);
-  return new Uint8Array(await subtle().decrypt({ name: 'AES-GCM', iv: fromB64(w.iv), additionalData: wrapAad(username) }, key, fromB64(w.ct))) as Bytes;
+  return new Uint8Array(await subtle().decrypt({ name: 'AES-GCM', iv: fromB64(w.iv), additionalData: wrapAad(username, kind) }, key, fromB64(w.ct))) as Bytes;
+}
+
+// ---------------------------------------------------------------- « code de secours des messages »
+const BACKUP_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0/O, 1/I/L
+export const BACKUP_LENGTH = 24; // 31^24 ≈ 2^119
+
+/** 24 characters in groups of 4 (XXXX-XXXX-…), made here and shown once. */
+export function generateBackupCode(): string {
+  const out: string[] = [];
+  const buf = new Uint8Array(1);
+  while (out.length < BACKUP_LENGTH) {
+    globalThis.crypto.getRandomValues(buf);
+    if (buf[0] < 248) out.push(BACKUP_ALPHABET[buf[0] % 31]); // 248 = 8 × 31: no modulo bias
+  }
+  return out.join('').match(/.{4}/g)!.join('-');
+}
+
+/** What the user typed, without spaces/dashes, upper case (0→O and 1→I/L would be ambiguous: refused). */
+export function normalizeBackupCode(code: string): string | null {
+  const s = code.toUpperCase().replace(/[\s-]/g, '');
+  return s.length === BACKUP_LENGTH && [...s].every((c) => BACKUP_ALPHABET.includes(c)) ? s : null;
 }
 
 export const exportPrivate = async (k: CryptoKey) => new Uint8Array(await subtle().exportKey('pkcs8', k)) as Bytes;

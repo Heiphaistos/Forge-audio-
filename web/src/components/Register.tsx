@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Copy, Eye, EyeOff, KeyRound, Loader2, Lock, Ticket, User as UserIcon, Wand2 } from 'lucide-react';
+import { Copy, Eye, EyeOff, KeyRound, Loader2, Lock, Mail, Ticket, User as UserIcon, Wand2 } from 'lucide-react';
 import { api, type User } from '../lib/api';
 import { setupKeys } from '../store/keys';
+import { useMailAvailable } from './Recovery';
 
 export const PASSWORD_MIN = 70; // same as server/src/accounts.js
 
@@ -47,6 +48,8 @@ export function Register({ onDone }: { onDone: (user: User) => void }) {
   const [code, setCode] = useState('');
   const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [email, setEmail] = useState('');
+  const mail = useMailAvailable();
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [show, setShow] = useState(false);
@@ -64,7 +67,7 @@ export function Register({ onDone }: { onDone: (user: User) => void }) {
       setLoading(true);
       setError(null);
       try {
-        const { user } = await api.register({ code: code.trim(), username: username.trim(), displayName: displayName.trim(), password });
+        const { user } = await api.register({ code: code.trim(), username: username.trim(), displayName: displayName.trim(), password, email: email.trim() });
         await setupKeys(user.username, password).catch(() => {});
         try { localStorage.setItem('forge.lastUser', user.username); } catch { /* quota */ }
         onDone(user);
@@ -88,6 +91,13 @@ export function Register({ onDone }: { onDone: (user: User) => void }) {
         <span>Nom affiché <small className="muted">(facultatif)</small></span>
         <div className="input-icon"><UserIcon size={16} /><input autoComplete="nickname" maxLength={40} value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Ce que vos amis verront" /></div>
       </label>
+      {mail && (
+        <label className="field">
+          <span>Adresse e-mail <small className="muted">(facultative)</small></span>
+          <div className="input-icon"><Mail size={16} /><input type="email" autoComplete="email" spellCheck={false} maxLength={254} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Pour récupérer votre compte" /></div>
+          <small className="muted hint">Sert seulement à récupérer le compte si vous oubliez le mot de passe. Un code vous sera envoyé : vous pourrez le saisir plus tard dans Paramètres.</small>
+        </label>
+      )}
       <div className="field">
         <label htmlFor="reg-pw">Mot de passe</label>
         <div className="input-icon">

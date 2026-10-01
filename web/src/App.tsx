@@ -4,6 +4,7 @@ import { useUi } from './store/ui';
 import { usePlayer } from './store/player';
 import { Sidebar, Logo, LegalLinks } from './components/Sidebar';
 import { Register } from './components/Register';
+import { ForgotPassword, BackupCodeDialog, RecoveryReminder } from './components/Recovery';
 import { PlayerBar } from './components/PlayerBar';
 import { RightPanel, MiniVideo } from './components/Panels';
 import { NowPlaying } from './components/NowPlaying';
@@ -83,21 +84,21 @@ function Login({ onDone }: { onDone: (user: User) => void }) {
   const [show, setShow] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('login');
   return (
     <div className="login">
       <div className="login-glow" />
       <div className="login-card">
       <Logo />
       <div>
-        <h1 className="login-title">{mode === 'login' ? 'Connexion' : 'Créer un compte'}</h1>
+        <h1 className="login-title">{mode === 'login' ? 'Connexion' : mode === 'forgot' ? 'Mot de passe oublié' : 'Créer un compte'}</h1>
         <p className="muted small">Retrouvez vos playlists, vos titres likés et votre historique sur tous vos appareils.</p>
       </div>
-      <div className="chips login-tabs" role="tablist">
+      {mode !== 'forgot' && <div className="chips login-tabs" role="tablist">
         <button type="button" role="tab" aria-selected={mode === 'login'} className={`chip ${mode === 'login' ? 'active' : ''}`} onClick={() => setMode('login')}>Se connecter</button>
         <button type="button" role="tab" aria-selected={mode === 'register'} className={`chip ${mode === 'register' ? 'active' : ''}`} onClick={() => setMode('register')}>Créer un compte</button>
-      </div>
-      {mode === 'register' ? <Register onDone={onDone} /> : (
+      </div>}
+      {mode === 'forgot' ? <ForgotPassword onDone={onDone} onBack={() => setMode('login')} /> : mode === 'register' ? <Register onDone={onDone} /> : (
       <form className="login-form" onSubmit={async (e) => {
         e.preventDefault();
         setLoading(true);
@@ -128,6 +129,7 @@ function Login({ onDone }: { onDone: (user: User) => void }) {
         </label>
         {error && <p className="bad small">{error}</p>}
         <button className="btn btn-primary full" disabled={loading || !username || !password}>{loading ? <Loader2 size={16} className="spin" /> : 'Se connecter'}</button>
+        <button type="button" className="link accent small center-text" onClick={() => setMode('forgot')}>Mot de passe oublié ?</button>
         <p className="muted small center-text">Astuce : laissez votre navigateur enregistrer le mot de passe.</p>
       </form>
       )}
@@ -189,6 +191,7 @@ export function App() {
         <div className="main-scroll">
           <TopBar />
           <JamBanner />
+          <RecoveryReminder />
           <CurrentView />
         </div>
       </main>
@@ -202,6 +205,7 @@ export function App() {
       <JamPanel />
       <SelectionBar />
       <Toasts />
+      <BackupCodeDialog />
     </div>
   );
 }

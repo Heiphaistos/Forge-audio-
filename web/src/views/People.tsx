@@ -248,7 +248,7 @@ function Thread({ username }: { username: string }) {
       </div>
       {changed && (
         <p className="key-notice small" role="status">
-          <ShieldAlert size={15} /> <span className="grow">La clé de chiffrement de {name} a changé (mot de passe réinitialisé par l’administrateur, par exemple). Vous pouvez comparer son code de sécurité sur son profil.</span>
+          <ShieldAlert size={15} /> <span className="grow">La clé de chiffrement de {name} a changé (mot de passe oublié puis réinitialisé, par exemple). Vous pouvez comparer son code de sécurité sur son profil.</span>
           <button className="btn btn-ghost btn-sm" onClick={() => { acceptKey(username, changed); setChanged(null); }}>OK</button>
         </p>
       )}

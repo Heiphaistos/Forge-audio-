@@ -9,6 +9,13 @@ services:
       # Jeton partagé avec le bot Discord (HeiphaisBot : FORGEAUDIO_BOT_TOKEN) : titres likés et playlists partagées
       # communs à Forge Audio et Discord. Vide = liaison désactivée. Défini dans .env (non versionné).
       - FORGE_BOT_TOKEN=${FORGE_BOT_TOKEN:-}
+      # Envoi des mails (vérification de l'adresse, « Mot de passe oublié ? ») : SMTP de l'hébergeur, dans .env.
+      # Vides = fonctions mail indisponibles. Port 587 = STARTTLS obligatoire, 465 = TLS direct.
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - SMTP_FROM=${SMTP_FROM:-}
     volumes:
       # Comptes, sessions et bibliothèque de chaque utilisateur (playlists, historique, likes…).
       # Aucun fichier audio n'y est stocké.

@@ -7,8 +7,8 @@ import * as e2e from '../lib/e2e';
  * key is not on this device (new device, data cleared, session opened before 0.18) and the
  * password must be typed once in « Déverrouiller vos messages ».
  */
-export const useKeys = create<{ status: 'unknown' | 'ready' | 'locked'; fp: string | null; hasServerKey: boolean }>(
-  () => ({ status: 'unknown', fp: null, hasServerKey: false }),
+export const useKeys = create<{ status: 'unknown' | 'ready' | 'locked'; fp: string | null; hasServerKey: boolean; backupCode: string | null }>(
+  () => ({ status: 'unknown', fp: null, hasServerKey: false, backupCode: null }),
 );
 
 /** A private message as shown: decrypted text, or why it cannot be read. */
@@ -54,9 +54,13 @@ export async function setupKeys(username: string, password: string): Promise<voi
   }
   const id = await e2e.generateIdentity();
   const pkcs8 = await e2e.exportPrivate(id.privateKey);
+  // New key: its « code de secours » is made here too and shown once (BackupCodeDialog).
+  const code = e2e.generateBackupCode();
   try {
-    const r = await api.putKeys(id.pub, await e2e.wrapKey(pkcs8, password, username));
-    return await adopt(username, pkcs8, r.key.fp);
+    const r = await api.putKeys(id.pub, await e2e.wrapKey(pkcs8, password, username), await e2e.wrapKey(pkcs8, e2e.normalizeBackupCode(code)!, username, 'backup'));
+    await adopt(username, pkcs8, r.key.fp);
+    useKeys.setState({ backupCode: code });
+    return;
   } catch (err) {
     // Another device made it at the same moment: open that one.
     if (err instanceof ApiError && err.code === 'KEY_EXISTS') return setupKeys(username, password);
@@ -102,6 +106,26 @@ export async function changePassword(oldPw: string, newPw: string) {
   await api.changePassword(oldPw, newPw, pkcs8 && await e2e.wrapKey(pkcs8, newPw, me));
   if (pkcs8 && key) await adopt(me, pkcs8, key.fp);
   else await setupKeys(me, newPw);
+}
+
+/** Settings: a new « code de secours » for the current key (the password opens it here, sent nowhere). */
+export async function newBackupCode(password: string) {
+  const { key } = await api.myKeys();
+  if (!key) throw new Error('Pas encore de clé de messagerie : ouvrez Messages une fois');
+  let pkcs8;
+  try { pkcs8 = await e2e.unwrapKey(key.wrapped, password, me); } catch { throw new Error('Mot de passe incorrect'); }
+  const code = e2e.generateBackupCode();
+  await api.putBackup(key.fp, await e2e.wrapKey(pkcs8, e2e.normalizeBackupCode(code)!, me, 'backup'));
+  useKeys.setState({ backupCode: code });
+}
+
+/** Forgotten password: the key opened with the « code de secours », re-wrapped with the new password. */
+export async function rewrapWithBackup(backup: e2e.Wrapped, code: string, username: string, newPassword: string) {
+  const norm = e2e.normalizeBackupCode(code);
+  if (!norm) throw new Error('Code de secours incomplet : 24 caractères (lettres et chiffres, sans 0 ni 1)');
+  let pkcs8;
+  try { pkcs8 = await e2e.unwrapKey(backup, norm, username, 'backup'); } catch { throw new Error('Code de secours incorrect'); }
+  return e2e.wrapKey(pkcs8, newPassword, username);
 }
 
 // ---------------------------------------------------------------- friends' keys

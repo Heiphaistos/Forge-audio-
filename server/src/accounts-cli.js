@@ -38,7 +38,7 @@ async function main() {
     case 'remove': {
       if (!accounts.remove(user || '')) throw new Error(`Compte inconnu : ${user}`);
       new Sessions(path.join(dataDir, 'sessions.json')).destroyUser(user.toLowerCase());
-      console.log(`Compte ${user} supprimé (sa bibliothèque reste dans ${dataDir}/users).`);
+      console.log(`Compte ${user} supprimé (sa bibliothèque reste dans ${dataDir}/users ; son adresse e-mail éventuelle est effacée au prochain démarrage du serveur).`);
       break;
     }
     case 'role': {

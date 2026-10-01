@@ -53,3 +53,33 @@ test('fingerprint and security code', async () => {
   assert.match(fp, /^[0-9a-f]{64}$/);
   assert.equal(e2e.securityCode(fp).split(' ').length, 16);
 });
+
+test('code de secours: format, normalisation, and messages read again after a reset by mail', async () => {
+  const code = e2e.generateBackupCode();
+  assert.match(code, /^([A-HJKMNP-Z2-9]{4}-){5}[A-HJKMNP-Z2-9]{4}$/);
+  assert.notEqual(e2e.generateBackupCode(), code);
+  const norm = e2e.normalizeBackupCode(` ${code.toLowerCase().replaceAll('-', ' ')} `);
+  assert.equal(norm, code.replaceAll('-', ''));
+  assert.equal(e2e.normalizeBackupCode(code.slice(0, -1)), null, 'too short');
+  assert.equal(e2e.normalizeBackupCode(`0${code.slice(1)}`), null, 'ambiguous character');
+
+  // Evan's key, a message from Polo, and the two envelopes stored by the server.
+  const evan = await e2e.generateIdentity();
+  const polo = await e2e.generateIdentity();
+  const pkcs8 = await e2e.exportPrivate(evan.privateKey);
+  const msg = await e2e.encryptText(await e2e.conversationKey(polo.privateKey, evan.pub, 'polo', 'evan'), 'gardé ✓', 'polo', 'evan');
+  const byPassword = await e2e.wrapKey(pkcs8, 'ancien mot de passe', 'evan');
+  const byBackup = await e2e.wrapKey(pkcs8, norm!, 'evan', 'backup');
+  // The two envelopes are not interchangeable (different authenticated data).
+  await assert.rejects(e2e.unwrapKey(byBackup, norm!, 'evan'));
+  await assert.rejects(e2e.unwrapKey(byPassword, 'ancien mot de passe', 'evan', 'backup'));
+  await assert.rejects(e2e.unwrapKey(byBackup, e2e.normalizeBackupCode(e2e.generateBackupCode())!, 'evan', 'backup'), 'wrong code');
+  // Password forgotten: the code opens the key, re-wrapped with the new password; the old message reads.
+  const recovered = await e2e.unwrapKey(byBackup, norm!, 'evan', 'backup');
+  const rewrapped = await e2e.wrapKey(recovered, 'nouveau mot de passe', 'evan');
+  const priv = await e2e.importPrivate(await e2e.unwrapKey(rewrapped, 'nouveau mot de passe', 'evan'));
+  assert.equal(await e2e.decryptText(await e2e.conversationKey(priv, polo.pub, 'evan', 'polo'), msg, 'polo', 'evan'), 'gardé ✓');
+  // Without the code: a new key cannot read it.
+  const other = await e2e.generateIdentity();
+  await assert.rejects(e2e.decryptText(await e2e.conversationKey(other.privateKey, polo.pub, 'evan', 'polo'), msg, 'polo', 'evan'));
+});

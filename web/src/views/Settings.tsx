@@ -8,6 +8,7 @@ import { api, type Health, type Invite, type AdminAccount } from '../lib/api';
 import { SOURCE_LABELS } from '../lib/format';
 import { changePassword } from '../store/keys';
 import { PASSWORD_MIN, generatePassword, missing } from '../components/Register';
+import { EmailCard, BackupCodeCard } from '../components/Recovery';
 
 export const SHORTCUTS: [string, string][] = [
   ['Espace', 'Lecture / pause'],
@@ -321,6 +322,8 @@ export function Settings() {
       <h1 className="page-title">Paramètres</h1>
       <MyProfileCard />
       <PasswordCard />
+      <EmailCard />
+      <BackupCodeCard />
 
       <section className="settings-card">
         <h2>Apparence</h2>
