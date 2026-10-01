@@ -11,11 +11,13 @@ export function JamBanner() {
   const j = useJam((s) => s.jam);
   const me = useJam((s) => s.me);
   const setOpen = useUi((s) => s.setJamOpen);
+  const unread = useJamChat((s) => s.unread);
   if (!j) return null;
   return (
     <button className="jam-banner" onClick={() => setOpen(true)}>
       <Radio size={15} />
-      <span className="ellipsis">{j.host === me ? 'Votre Jam' : `Jam de ${nameOf(j.host)}`} · {j.participants.length} participant{j.participants.length > 1 ? 's' : ''} · code <b>{j.code}</b></span>
+      <span className="ellipsis grow">{j.host === me ? 'Votre Jam' : `Jam de ${nameOf(j.host)}`} · {j.participants.length} participant{j.participants.length > 1 ? 's' : ''} · code <b>{j.code}</b></span>
+      {unread > 0 && <span className="badge" aria-label={`${unread} message${unread > 1 ? 's' : ''} non lu${unread > 1 ? 's' : ''} dans le Jam`}>{unread}</span>}
     </button>
   );
 }
@@ -24,12 +26,13 @@ export function JamBanner() {
 function JamChat() {
   const messages = useJamChat((s) => s.messages);
   const me = useJam((s) => s.me);
-  const end = useRef<HTMLDivElement>(null);
-  useEffect(() => { end.current?.scrollIntoView({ block: 'end' }); }, [messages.length]);
+  const box = useRef<HTMLDivElement>(null);
+  // Scroll the chat box only (scrollIntoView also moved the Jam window and hid the newest lines).
+  useEffect(() => { if (box.current) box.current.scrollTop = box.current.scrollHeight; }, [messages.length]);
   return (
     <div>
       <h3 className="small muted">Discussion</h3>
-      <div className="thread jam-chat" role="log" aria-live="polite">
+      <div ref={box} className="thread jam-chat" role="log" aria-live="polite">
         {!messages.length && <p className="muted small">Aucun message. La discussion disparaît à la fin du Jam.</p>}
         {messages.map((m) => (
           <div key={m.id} className={`bubble ${m.from === me ? 'mine' : ''}`}>
@@ -37,7 +40,6 @@ function JamChat() {
             <div className="bubble-text">{m.text}</div>
           </div>
         ))}
-        <div ref={end} />
       </div>
       <Composer onSend={jamSay} placeholder="Écrire au Jam" />
     </div>
@@ -57,6 +59,7 @@ export function JamPanel() {
   const close = () => setOpen(false);
   useEscape(open, close);
   useEffect(() => { if (open) otherAccounts().then(setPeople).catch(() => {}); }, [open]);
+  useEffect(() => { if (open) useJamChat.setState({ unread: 0 }); }, [open, j?.id]);
   if (!open) return null;
 
   const run = async (fn: () => Promise<unknown>) => {

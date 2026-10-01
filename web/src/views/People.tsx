@@ -201,7 +201,7 @@ function Thread({ username }: { username: string }) {
             <div className="bubble-meta">{time(m.at)}{m === lastMine && readByOther >= m.at ? ' · vu' : ''}</div>
           </div>
         ))}
-        <div ref={end} />
+        <div ref={end} className="thread-end" />
       </div>
       {other && !other.friend ? (
         <p className="muted small notice-line">Vous n’êtes pas (ou plus) amis : vous ne pouvez pas écrire à {name}.</p>

@@ -621,7 +621,9 @@ kbd {
 /* Jam, shared playlists, Discord link */
 .jam-banner { display: flex; align-items: center; gap: 8px; width: calc(100% - 32px); margin: 0 16px 12px; padding: 9px 14px; border-radius: 10px; border: 1px solid rgba(var(--accent-rgb, 255, 106, 26), .35); background: rgba(var(--accent-rgb, 255, 106, 26), .12); color: var(--text); font-size: 14px; text-align: left; min-width: 0; }
 .jam-banner svg { color: var(--accent); flex: none; }
-.jam-modal { display: grid; gap: 14px; }
+.jam-modal { display: grid; gap: 14px; overflow-y: auto; overscroll-behavior: contain; }
+/* Not sticky here: it would cover the newest chat lines; focusing it scrolls the window down to it instead. */
+.jam-modal .composer { position: static; background: none; }
 .jam-modal h2 { display: flex; align-items: center; gap: 8px; }
 .jam-code { text-align: center; padding: 14px; border-radius: 12px; background: var(--surface-2); display: grid; gap: 6px; justify-items: center; }
 .jam-code-value { font-size: 34px; font-weight: 800; letter-spacing: .18em; font-variant-numeric: tabular-nums; }
@@ -688,17 +690,21 @@ kbd {
 .conv-row.unread b { color: var(--text); }
 .people .admin-row .avatar { flex: none; }
 .thread-page { display: flex; flex-direction: column; min-height: 100%; }
-.thread-head { margin: 8px 0 12px; }
+/* Who you are talking to stays visible while scrolling (under the 54-61 px top bar). */
+.thread-head { margin: 0 0 8px; padding: 6px 0; position: sticky; top: 54px; z-index: 4; background: rgba(21, 18, 16, 0.92); backdrop-filter: blur(12px); }
+@media (min-width: 821px) { .thread-head { top: 60px; } }
 .thread-title { font-size: 22px; font-weight: 800; margin: 0; }
 .thread { display: flex; flex-direction: column; gap: 6px; flex: 1; padding: 4px 0 12px; }
-.jam-chat { max-height: 220px; overflow-y: auto; background: var(--surface-3); border-radius: 10px; padding: 8px; margin: 6px 0 8px; }
+.jam-chat { max-height: min(220px, 34vh); overflow-y: auto; background: var(--surface-3); border-radius: 10px; padding: 8px; margin: 6px 0 8px; }
 .bubble { max-width: min(80%, 560px); align-self: flex-start; background: var(--surface-2); border-radius: 14px 14px 14px 4px; padding: 7px 11px; }
 .jam-chat .bubble { background: var(--surface-2); }
 .bubble.mine { align-self: flex-end; background: var(--accent); color: #000; border-radius: 14px 14px 4px 14px; }
 .bubble-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 .bubble-meta { font-size: 11px; opacity: .7; margin-top: 2px; }
-.composer { display: flex; align-items: flex-end; gap: 8px; position: sticky; bottom: 0; padding: 8px 0; background: inherit; }
+.composer { display: flex; align-items: flex-end; gap: 8px; position: sticky; bottom: 0; padding: 8px 0; background: rgba(21, 18, 16, 0.92); backdrop-filter: blur(12px); }
+/* Keeps the newest message above the sticky composer when scrolled into view. */
+.thread-end { scroll-margin-bottom: 72px; }
 .composer textarea { resize: none; min-height: 40px; max-height: 140px; font: inherit; }
-.send-btn { flex: none; }
+.send-btn { flex: none; width: 44px; height: 44px; }
 .notice-line { padding: 10px 0; }
 .people form.row .input { min-width: 200px; }

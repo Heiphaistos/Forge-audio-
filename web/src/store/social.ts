@@ -30,7 +30,7 @@ export const useInbox = create<{ conversations: Conversation[]; unread: number; 
   () => ({ conversations: [], unread: 0, open: null, with: null, thread: [], readByOther: 0, loading: false }),
 );
 /** Chat of the current Jam (in memory on the server, gone with the Jam). */
-export const useJamChat = create<{ jamId: string | null; messages: ChatMessage[] }>(() => ({ jamId: null, messages: [] }));
+export const useJamChat = create<{ jamId: string | null; messages: ChatMessage[]; unread: number }>(() => ({ jamId: null, messages: [], unread: 0 }));
 
 let accountsCache: User[] | null = null;
 /** Accounts one can share with or invite: friends only. */
@@ -94,7 +94,7 @@ export const inbox = {
 
 // ---------------------------------------------------------------- Jam chat
 async function loadJamChat(id: string) {
-  useJamChat.setState({ jamId: id, messages: [] });
+  useJamChat.setState({ jamId: id, messages: [], unread: 0 });
   try {
     const { messages } = await api.jamChat(id);
     if (useJamChat.getState().jamId === id) useJamChat.setState({ messages });
@@ -135,7 +135,7 @@ const livePosition = (j: Jam) => (j.playing ? j.position + (Date.now() + useJam.
 
 function setJam(j: Jam | null) {
   useJam.setState({ jam: j, offset: j ? j.serverNow - Date.now() : useJam.getState().offset });
-  if (!j) useJamChat.setState({ jamId: null, messages: [] });
+  if (!j) useJamChat.setState({ jamId: null, messages: [], unread: 0 });
   else if (useJamChat.getState().jamId !== j.id) loadJamChat(j.id);
   if (j) applyJam(j);
 }
@@ -244,6 +244,23 @@ export const discord = {
 
 // ---------------------------------------------------------------- live events
 let source: EventSource | null = null;
+let started = false;
+let retries = 0;
+
+/**
+ * The browser retries a dropped stream by itself, but gives up for good after an HTTP error (nginx
+ * answers 502 while the server restarts for a deployment): reopen it ourselves, 2 s then up to 30 s.
+ */
+function connect(onEvent: (m: MessageEvent) => void) {
+  source = new EventSource('/api/events');
+  source.onopen = () => { retries = 0; };
+  source.onmessage = onEvent;
+  source.onerror = () => {
+    if (source?.readyState !== EventSource.CLOSED) return;
+    source = null;
+    setTimeout(() => { if (!source) connect(onEvent); }, Math.min(30_000, 2000 * 2 ** retries++));
+  };
+}
 
 async function refreshAll() {
   const [s, j, , , f] = await Promise.allSettled([api.shared(), api.jam(), discord.refresh(), refreshPeople(), api.friends(), refreshInbox()]);
@@ -255,15 +272,15 @@ async function refreshAll() {
 /** Start after login (App.tsx). The browser reconnects EventSource by itself; each (re)connection resyncs. */
 export function startSocial(user: User) {
   useJam.setState({ me: user.username });
-  if (source || typeof EventSource === 'undefined') return;
+  if (started || typeof EventSource === 'undefined') return;
+  started = true;
   // Report each track started here (the history entry is pushed when playback really starts).
   useLibrary.subscribe((st, prev) => {
     const h = st.history[0];
     if (!h || h === prev.history[0] || Date.now() - h.at > 10_000 || !useSettings.getState().shareActivity) return;
     api.activity(h.track).catch(() => {});
   });
-  source = new EventSource('/api/events');
-  source.onmessage = (m) => {
+  const onEvent = (m: MessageEvent) => {
     let e: { type: string; [k: string]: unknown };
     try { e = JSON.parse(m.data); } catch { return; }
     if (e.type === 'hello') refreshAll();
@@ -295,7 +312,12 @@ export function startSocial(user: User) {
     } else if (e.type === 'jam-chat') {
       const c = useJamChat.getState();
       const m = e.message as ChatMessage;
-      if (c.jamId === e.jamId && !c.messages.some((x) => x.id === m.id)) useJamChat.setState({ messages: [...c.messages, m].slice(-200) });
+      if (c.jamId === e.jamId && !c.messages.some((x) => x.id === m.id)) {
+        // Jam window closed: say it, or the message goes unnoticed.
+        const away = m.from !== user.username && !useUi.getState().jamOpen;
+        useJamChat.setState({ messages: [...c.messages, m].slice(-200), unread: c.unread + (away ? 1 : 0) });
+        if (away) toast(`${m.displayName || m.from} (Jam) : ${m.text.length > 80 ? `${m.text.slice(0, 80)}…` : m.text}`, 'info', { label: 'Ouvrir', run: () => useUi.getState().setJamOpen(true) });
+      }
     }
     else if (e.type === 'shared') {
       if (e.playlist) {
@@ -316,4 +338,9 @@ export function startSocial(user: User) {
       toast(`${String(e.from)} vous invite à son Jam`, 'info', { label: 'Rejoindre', run: () => jam.join(String(e.code)).catch(fail) });
     }
   };
+  connect(onEvent);
+  // Back to the app (phone woken up, tab shown again) while the stream is down: reconnect now.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && !source) { retries = 0; connect(onEvent); }
+  });
 }
