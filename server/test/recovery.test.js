@@ -246,3 +246,11 @@ test('message key after a reset: kept when the browser re-wraps it (code de seco
     }
   }
 });
+
+test('SMTP refusing the mail: 502, no address left waiting for a code that never came', async () => {
+  const { call, as, pw } = await setup({ enabled: true, send: async () => { throw Object.assign(new Error('535 auth'), { code: 'EAUTH', responseCode: 535 }); } });
+  const res = await call(as.evan, 'PUT', '/api/me/email', { email: 'evan@example.org', password: pw.evan });
+  assert.equal(res.statusCode, 502);
+  assert.equal(res.json().code, 'MAIL_FAILED');
+  assert.deepEqual((await call(as.evan, 'GET', '/api/me/email')).json(), { email: null, pending: null, mail: true });
+});

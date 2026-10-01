@@ -129,9 +129,12 @@ export function registerRecovery(app, { accounts, sessions, keys, emails, mailer
 
   const sendVerify = (log, u, email) => {
     const { code, slot } = newCode();
-    emails.rec(u).pending = { ...slot, email };
-    emails.save();
-    return mailer.send({ to: email, ...MAILS.verify(code) }).then((smtp) => log.info({ user: u, kind: 'verify', smtp: String(smtp || '').slice(0, 120) }, 'Mail envoyé'));
+    // Stored only once the mail is accepted: a failed send leaves no address « en attente » of a code that never came.
+    return mailer.send({ to: email, ...MAILS.verify(code) }).then((smtp) => {
+      emails.rec(u).pending = { ...slot, email };
+      emails.save();
+      log.info({ user: u, kind: 'verify', smtp: String(smtp || '').slice(0, 120) }, 'Mail envoyé');
+    });
   };
   const mailFailed = (log, u) => (err) => {
     log.warn({ user: u, kind: 'verify', code: err.code, responseCode: err.responseCode }, 'Échec d’envoi du mail');
