@@ -4,7 +4,7 @@ import { lazyStorage } from '../lib/storage';
 import type { Track } from '../lib/types';
 import { EQ_PRESETS } from '../audio/engine';
 
-export type ViewName = 'home' | 'search' | 'library' | 'playlist' | 'shared' | 'liked' | 'history' | 'settings' | 'artist' | 'album' | 'mix' | 'stats' | 'blend' | 'genre';
+export type ViewName = 'home' | 'search' | 'library' | 'playlist' | 'shared' | 'liked' | 'history' | 'settings' | 'artist' | 'album' | 'mix' | 'stats' | 'blend' | 'genre' | 'friends' | 'messages';
 
 export interface View {
   name: ViewName;
@@ -81,7 +81,8 @@ export const useUi = create<UiState>()((set, get) => ({
 
   navigate: (view) => {
     const cur = get().view;
-    if (cur.name === view.name && cur.id === view.id && cur.q === view.q) return;
+    // Same page: only close the phone menu (it stayed open over the page).
+    if (cur.name === view.name && cur.id === view.id && cur.q === view.q) { if (get().sidebarOpen) set({ sidebarOpen: false }); return; }
     // Consecutive searches replace each other instead of piling up in history.
     const replace = cur.name === 'search' && view.name === 'search';
     set({ view, back: replace ? get().back : [...get().back, cur].slice(-50), forward: [], nowPlaying: false, sidebarOpen: false });

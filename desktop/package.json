@@ -1,7 +1,7 @@
 {
   "name": "forge-audio-desktop",
   "productName": "Forge Audio",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "description": "Forge Audio — lecteur musical libre et sans pub",
   "author": "Heiphaistos",
   "license": "MIT",

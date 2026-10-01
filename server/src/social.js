@@ -5,37 +5,58 @@ import { SharedPlaylists } from './shared.js';
 import { JamHub } from './jam.js';
 import { DiscordLinks, checkBotToken } from './links.js';
 import { cleanTracks } from './userdata.js';
+import { Friends, registerFriends } from './friends.js';
+import { Messages, registerMessages, messageLimiter, checkRate } from './messages.js';
 
 /**
- * Everything between accounts: live events, shared playlists, Jam, and the link with the Discord
- * bot (HeiphaisBot) so a ❤ in Discord and a ❤ in Forge Audio are the same liked track.
+ * Everything between accounts: friends, private messages, live events, shared playlists, Jam, and
+ * the link with the Discord bot (HeiphaisBot) so a ❤ in Discord and a ❤ in Forge Audio are the same
+ * liked track. Social features are between friends only (activity, Blend, invitations, new members
+ * of a shared playlist, messages); a Jam code stays an explicit way in, like a link.
  */
 export function registerSocial(app, { accounts, userData, dataDir, botToken = process.env.FORGE_BOT_TOKEN }) {
   const hub = new EventHub();
   const shared = new SharedPlaylists(dataDir);
   const jams = new JamHub(hub);
   const links = new DiscordLinks(dataDir);
+  const friends = new Friends(dataDir);
+  const messages = new Messages(dataDir);
   const isAccount = (u) => !!accounts.get(u);
   const me = (request) => request.user.username;
-  const activity = registerActivity(app, { accounts, userData, hub });
+  const friendOf = (u) => (other) => isAccount(other) && friends.are(u, other);
+  const activity = registerActivity(app, { accounts, userData, hub, friends });
+  const jamChat = messageLimiter();
   const sharedEvent = (users, playlist, extra = {}) => hub.emit(users, { type: 'shared', id: playlist?.id ?? extra.id, playlist: playlist ?? null, ...extra });
 
   // ---------- Live events ----------
   app.get('/api/events', async (request, reply) => streamEvents(hub, request, reply, me(request)));
 
-  // Accounts one can share with / invite (names only).
-  app.get('/api/users', async (request) => ({ users: accounts.list().filter((u) => u.username !== me(request)) }));
+  // ---------- Friends and private messages ----------
+  registerFriends(app, {
+    accounts, friends, hub,
+    // Blocking also cuts the shared playlists one owns with the other.
+    onBlock: (by, who) => {
+      for (const { playlist, removed } of shared.separate(by, who)) {
+        sharedEvent(removed, null, { id: playlist.id, removed: true });
+        sharedEvent(shared.audience(playlist), playlist, { left: removed });
+      }
+    },
+  });
+  registerMessages(app, { accounts, friends, messages, hub });
+
+  // Accounts one can share with / invite: friends only (names only).
+  app.get('/api/users', async (request) => ({ users: accounts.list().filter((u) => friends.are(me(request), u.username)) }));
 
   // ---------- Shared playlists ----------
   app.get('/api/shared', async (request) => ({ playlists: shared.forUser(me(request)) }));
   app.get('/api/shared/:id', async (request) => ({ playlist: shared.get(request.params.id, me(request)) }));
   app.post('/api/shared', async (request) => {
-    const p = shared.create(me(request), request.body || {}, isAccount);
+    const p = shared.create(me(request), request.body || {}, friendOf(me(request)));
     sharedEvent(shared.audience(p), p, { by: me(request) });
     return { playlist: p };
   });
   app.patch('/api/shared/:id', async (request) => {
-    const { playlist, notify } = shared.update(request.params.id, me(request), request.body || {}, isAccount);
+    const { playlist, notify } = shared.update(request.params.id, me(request), request.body || {}, friendOf(me(request)));
     sharedEvent(notify, playlist, { by: me(request) });
     // Removed members lose it.
     const gone = notify.filter((u) => !shared.audience(playlist).includes(u));
@@ -73,9 +94,16 @@ export function registerSocial(app, { accounts, userData, dataDir, botToken = pr
   // ---------- Jam ----------
   app.get('/api/jam', async (request) => { const j = jams.mine(me(request)); return { jam: j ? jams.view(j) : null }; });
   app.post('/api/jam', async (request) => ({ jam: jams.create(request.user, request.body || {}) }));
-  app.post('/api/jam/join', async (request) => ({ jam: jams.join(request.user, request.body?.code) }));
+  app.post('/api/jam/join', async (request) => ({ jam: jams.join(request.user, request.body?.code, (host) => friends.separated(host, me(request))) }));
   app.post('/api/jam/:id/leave', async (request) => ({ jam: jams.leave(request.params.id, me(request)) }));
-  app.post('/api/jam/:id/invite', async (request) => jams.invite(request.params.id, request.user, request.body?.username, isAccount));
+  app.post('/api/jam/:id/invite', async (request) => jams.invite(request.params.id, request.user, request.body?.username, friendOf(me(request))));
+  app.get('/api/jam/:id/chat', async (request) => ({ messages: jams.chatOf(request.params.id, me(request)) }));
+  app.post('/api/jam/:id/chat', async (request, reply) => {
+    jams.require(request.params.id, me(request));
+    checkRate(jamChat, me(request));
+    reply.code(201);
+    return { message: jams.say(request.params.id, request.user, request.body?.text) };
+  });
   app.post('/api/jam/:id/add', async (request) => ({ jam: jams.add(request.params.id, me(request), request.body?.tracks, !!request.body?.next) }));
   app.post('/api/jam/:id/remove', async (request) => ({ jam: jams.remove(request.params.id, me(request), request.body?.index) }));
   app.post('/api/jam/:id/control', async (request) => ({ jam: jams.control(request.params.id, me(request), request.body || {}) }));
@@ -151,5 +179,5 @@ export function registerSocial(app, { accounts, userData, dataDir, botToken = pr
     return result;
   });
 
-  return { hub, shared, jams, links };
+  return { hub, shared, jams, links, friends, messages };
 }

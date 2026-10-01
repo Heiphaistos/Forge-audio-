@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { HttpError } from './util.js';
 import { cleanTracks } from './userdata.js';
+import { cleanText } from './messages.js';
 
 /**
  * Jam (Spotify-style group session): a host starts it, friends join with a code or an invitation,
@@ -15,6 +16,7 @@ import { cleanTracks } from './userdata.js';
 const MAX_QUEUE = 1000;
 const MAX_PARTICIPANTS = 50;
 const IDLE_MS = 12 * 3600 * 1000;
+const MAX_CHAT = 200;
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 export class JamHub {
@@ -80,6 +82,7 @@ export class JamHub {
     const j = {
       id: crypto.randomBytes(9).toString('base64url'), code: this.code(), host: user.username, everyoneControls: false,
       participants: new Map([[user.username, this.person(user)]]),
+      chat: [],
       queue, index: queue.length ? Math.min(Math.max(0, Number(index) || 0), queue.length - 1) : -1,
       playing: !!playing && queue.length > 0, position: Math.max(0, Number(position) || 0), positionAt: now,
       createdAt: now, updatedAt: now,
@@ -90,9 +93,10 @@ export class JamHub {
     return this.view(j);
   }
 
-  join(user, code) {
+  /** `refused(host)`: true when the host and this user blocked each other (same answer as a wrong code). */
+  join(user, code, refused = () => false) {
     const j = [...this.jams.values()].find((x) => x.code === String(code || '').trim().toUpperCase());
-    if (!j) throw new HttpError('Aucun Jam avec ce code', 404, 'NO_JAM');
+    if (!j || (!j.participants.has(user.username) && refused(j.host))) throw new HttpError('Aucun Jam avec ce code', 404, 'NO_JAM');
     if (!j.participants.has(user.username)) {
       if (j.participants.size >= MAX_PARTICIPANTS) throw new HttpError('Ce Jam est complet', 400);
       const old = this.mine(user.username);
@@ -122,12 +126,30 @@ export class JamHub {
     return null;
   }
 
-  invite(id, from, to, isAccount) {
+  /** Friends only: `isFriend(target)` (an unknown account gets the same answer). */
+  invite(id, from, to, isFriend) {
     const j = this.require(id, from.username);
     const target = String(to || '').trim().toLowerCase();
-    if (!isAccount(target) || target === from.username) throw new HttpError('Compte inconnu', 400);
+    if (!isFriend(target) || target === from.username) throw new HttpError('Vous ne pouvez inviter que vos amis', 403, 'NOT_FRIENDS');
     this.hub.emit(target, { type: 'jam-invite', code: j.code, from: from.displayName || from.username, host: j.host });
     return { online: this.hub.online(target) };
+  }
+
+  /** Text chat of the Jam: in memory only, gone when the Jam ends. */
+  say(id, user, text) {
+    const j = this.require(id, user.username);
+    const clean = cleanText(text);
+    const last = j.chat[j.chat.length - 1];
+    const message = { id: crypto.randomBytes(8).toString('base64url'), from: user.username, displayName: user.displayName || user.username, text: clean, at: Math.max(Date.now(), (last?.at || 0) + 1) };
+    j.chat.push(message);
+    if (j.chat.length > MAX_CHAT) j.chat.splice(0, j.chat.length - MAX_CHAT);
+    j.updatedAt = Date.now();
+    this.hub.emit([...j.participants.keys()], { type: 'jam-chat', jamId: j.id, message });
+    return message;
+  }
+
+  chatOf(id, username) {
+    return this.require(id, username).chat;
   }
 
   canControl(j, username) {

@@ -19,6 +19,7 @@ import { openLink } from './views/Home';
 import { Library, PlaylistView, Liked, HistoryView } from './views/Library';
 import { Settings, inMobileApp, changeServerUrl } from './views/Settings';
 import { SharedPlaylistView } from './views/Shared';
+import { FriendsView, MessagesView } from './views/People';
 import { JamPanel, JamBanner } from './components/Jam';
 import { SelectionBar } from './components/SelectionBar';
 import { startSocial } from './store/social';
@@ -42,6 +43,8 @@ function CurrentView() {
     case 'liked': return <Liked />;
     case 'history': return <HistoryView />;
     case 'settings': return <Settings />;
+    case 'friends': return <FriendsView />;
+    case 'messages': return <MessagesView />;
     default: return <Home />;
   }
 }

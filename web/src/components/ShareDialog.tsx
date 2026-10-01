@@ -34,7 +34,7 @@ export function ShareDialog({ title, initial = [], confirm, onDone, onClose }: {
         </div>
         <p className="muted small">Les membres voient la playlist dans leur bibliothèque et peuvent ajouter, retirer et réordonner les titres. Seul vous la renommez, gérez les membres ou la supprimez.</p>
         <div className="picker-list">
-          {!people && !error && <p className="muted"><Loader2 size={14} className="spin" /> Chargement des comptes…</p>}
+          {!people && !error && <p className="muted"><Loader2 size={14} className="spin" /> Chargement des amis…</p>}
           {people?.map((u) => (
             <button key={u.username} className={`picker-item ${picked.has(u.username) ? 'picked' : ''}`} onClick={() => toggle(u.username)} aria-pressed={picked.has(u.username)}>
               <span className="avatar" aria-hidden>{u.displayName.slice(0, 1).toUpperCase()}</span>
@@ -42,7 +42,7 @@ export function ShareDialog({ title, initial = [], confirm, onDone, onClose }: {
               {picked.has(u.username) && <Check size={18} className="accent" />}
             </button>
           ))}
-          {people && !people.length && <p className="muted small">Aucun autre compte sur ce serveur.</p>}
+          {people && !people.length && <p className="muted small">Vous ne pouvez partager qu’avec vos amis : ajoutez-en dans « Amis ».</p>}
         </div>
         {error && <p className="bad small">{error}</p>}
         <button className="btn btn-primary full" disabled={busy} onClick={async () => {

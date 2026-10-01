@@ -1,8 +1,9 @@
 import { Copy, Crown, Loader2, LogOut, Radio, Send, Users, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { User } from '../lib/api';
 import { useUi } from '../store/ui';
-import { jam, nameOf, otherAccounts, useJam } from '../store/social';
+import { jam, jamSay, nameOf, otherAccounts, useJam, useJamChat } from '../store/social';
+import { Composer } from '../views/People';
 import { useEscape } from '../hooks';
 
 /** Top banner while in a Jam: whose Jam, how many people, opens the Jam window. */
@@ -16,6 +17,30 @@ export function JamBanner() {
       <Radio size={15} />
       <span className="ellipsis">{j.host === me ? 'Votre Jam' : `Jam de ${nameOf(j.host)}`} · {j.participants.length} participant{j.participants.length > 1 ? 's' : ''} · code <b>{j.code}</b></span>
     </button>
+  );
+}
+
+/** Chat of the Jam: participants only, kept in the server's memory until the Jam ends. */
+function JamChat() {
+  const messages = useJamChat((s) => s.messages);
+  const me = useJam((s) => s.me);
+  const end = useRef<HTMLDivElement>(null);
+  useEffect(() => { end.current?.scrollIntoView({ block: 'end' }); }, [messages.length]);
+  return (
+    <div>
+      <h3 className="small muted">Discussion</h3>
+      <div className="thread jam-chat" role="log" aria-live="polite">
+        {!messages.length && <p className="muted small">Aucun message. La discussion disparaît à la fin du Jam.</p>}
+        {messages.map((m) => (
+          <div key={m.id} className={`bubble ${m.from === me ? 'mine' : ''}`}>
+            {m.from !== me && <div className="bubble-meta">{m.displayName || m.from}</div>}
+            <div className="bubble-text">{m.text}</div>
+          </div>
+        ))}
+        <div ref={end} />
+      </div>
+      <Composer onSend={jamSay} placeholder="Écrire au Jam" />
+    </div>
   );
 }
 
@@ -88,6 +113,7 @@ export function JamPanel() {
                 </div>
               </div>
             )}
+            <JamChat />
             {host ? (
               <label className="setting">
                 <input type="checkbox" checked={j.everyoneControls} onChange={(e) => run(() => jam.everyone(e.target.checked))} />

@@ -53,7 +53,8 @@ export class SharedPlaylists {
     return p;
   }
 
-  create(owner, { name, description = '', cover = null, tracks = [], members = [] }, isAccount) {
+  /** `canAdd(m)`: may `m` become a member (a friend of the owner)? */
+  create(owner, { name, description = '', cover = null, tracks = [], members = [] }, canAdd) {
     if (this.forUser(owner).filter((p) => p.owner === owner).length >= MAX_PLAYLISTS) throw new HttpError('Trop de playlists partagées', 400);
     const now = Date.now();
     const p = {
@@ -62,7 +63,7 @@ export class SharedPlaylists {
       description: String(description || '').slice(0, 2000),
       cover: cleanCover(cover),
       owner,
-      members: this.cleanMembers(owner, members, isAccount),
+      members: this.cleanMembers(owner, members, canAdd),
       tracks: cleanTracks(tracks, MAX_TRACKS).map((t) => ({ ...t, addedBy: owner, addedAt: t.addedAt || now })),
       createdAt: now,
       updatedAt: now,
@@ -73,20 +74,21 @@ export class SharedPlaylists {
     return p;
   }
 
-  cleanMembers(owner, members, isAccount) {
+  cleanMembers(owner, members, canAdd) {
     const list = [...new Set((Array.isArray(members) ? members : []).map((m) => String(m).trim().toLowerCase()))]
-      .filter((m) => m && m !== owner && isAccount(m));
+      .filter((m) => m && m !== owner && canAdd(m));
     if (list.length > MAX_MEMBERS) throw new HttpError(`${MAX_MEMBERS} membres au maximum`, 400);
     return list;
   }
 
-  update(id, username, patch, isAccount) {
+  /** New members must pass `canAdd`; current members stay even if no longer friends with the owner. */
+  update(id, username, patch, canAdd) {
     const p = this.owned(id, username);
     if (patch.name !== undefined) p.name = String(patch.name).trim().slice(0, 200) || p.name;
     if (patch.description !== undefined) p.description = String(patch.description).slice(0, 2000);
     if (patch.cover !== undefined) p.cover = cleanCover(patch.cover);
     const before = this.audience(p);
-    if (patch.members !== undefined) p.members = this.cleanMembers(p.owner, patch.members, isAccount);
+    if (patch.members !== undefined) p.members = this.cleanMembers(p.owner, patch.members, (m) => before.includes(m) || canAdd(m));
     this.touch(p);
     return { playlist: p, notify: [...new Set([...before, ...this.audience(p)])] };
   }
@@ -117,6 +119,17 @@ export class SharedPlaylists {
     const [m] = p.tracks.splice(f, 1);
     p.tracks.splice(t, 0, m);
     return this.touch(p);
+  }
+
+  /** After a block: each one leaves the playlists the other owns. Returns the playlists changed. */
+  separate(a, b) {
+    const changed = [];
+    for (const p of this.lists.values()) {
+      const out = p.owner === a ? b : p.owner === b ? a : null;
+      if (out && p.members.includes(out)) { p.members = p.members.filter((m) => m !== out); changed.push({ playlist: p, removed: out }); }
+    }
+    if (changed.length) for (const c of changed) this.touch(c.playlist);
+    return changed;
   }
 
   /** A member leaves; the owner deletes. Returns who must be told. */

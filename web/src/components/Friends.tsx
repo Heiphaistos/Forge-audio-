@@ -1,5 +1,5 @@
 import { Blend, Play, Settings2 } from 'lucide-react';
-import { useFriends } from '../store/social';
+import { useFriends, usePeople } from '../store/social';
 import { usePlayer } from '../store/player';
 import { useSettings, useUi } from '../store/ui';
 import { Cover } from './Cover';
@@ -12,12 +12,13 @@ export function ago(at: number) {
   return `il y a ${Math.floor(s / 86400)} j`;
 }
 
-/** « Activité des amis »: what the other accounts play (live) or played last, plus a Blend with each of them. */
+/** « Activité des amis »: what friends play (live) or played last, plus a Blend with each of them. */
 export function FriendsPanel() {
   const { list, loaded } = useFriends();
   const sharing = useSettings((s) => s.shareActivity);
   const navigate = useUi((s) => s.navigate);
   const playNow = usePlayer((s) => s.playNow);
+  const hasFriends = usePeople((s) => s.friends.length > 0);
   return (
     <div className="panel-body friends">
       {!sharing && (
@@ -26,7 +27,12 @@ export function FriendsPanel() {
           <button className="link accent" onClick={() => navigate({ name: 'settings' })}><Settings2 size={13} /> Paramètres</button>
         </div>
       )}
-      {loaded && !list.length && <div className="empty small">Aucune activité pour l’instant. Les amis qui partagent leur écoute apparaîtront ici.</div>}
+      {loaded && !list.length && (
+        <div className="empty small">
+          {hasFriends ? 'Aucune activité pour l’instant. Vos amis qui partagent leur écoute apparaîtront ici.' : 'Seuls vos amis apparaissent ici.'}
+          <button className="link accent" onClick={() => navigate({ name: 'friends' })}>{hasFriends ? 'Gérer mes amis' : 'Ajouter un ami'}</button>
+        </div>
+      )}
       {list.map((f) => (
         <div key={f.user} className="friend">
           <div className="friend-avatar" aria-hidden>{f.displayName.slice(0, 1).toUpperCase()}{f.live && <span className="live-dot" title="En écoute" />}</div>

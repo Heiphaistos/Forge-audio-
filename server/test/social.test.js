@@ -26,11 +26,20 @@ async function setup() {
     const res = await app.inject({ method, url, payload, headers: { cookie: cookie[u] } });
     return { status: res.statusCode, body: res.json() };
   };
-  return { app, dir, cookie, evan: as('evan'), polo: as('polo'), lohan: as('lohan') };
+  const users = { evan: as('evan'), polo: as('polo'), lohan: as('lohan') };
+  /** Friend request from a, accepted by b. */
+  const befriend = async (a, b) => {
+    assert.equal((await users[a]('POST', '/api/friends/requests', { username: b })).status, 202);
+    assert.equal((await users[b]('POST', `/api/friends/requests/${a}/accept`)).status, 200);
+  };
+  return { app, dir, cookie, befriend, ...users };
 }
 
 test('shared playlists: owner shares, members edit tracks, only the owner manages', async () => {
-  const { evan, polo, lohan } = await setup();
+  const { evan, polo, lohan, befriend } = await setup();
+  assert.deepEqual((await evan('GET', '/api/users')).body.users, [], 'nobody listed before being friends');
+  await befriend('evan', 'polo');
+  await befriend('lohan', 'evan');
   const users = await evan('GET', '/api/users');
   assert.deepEqual(users.body.users.map((u) => u.username).sort(), ['lohan', 'polo']);
 
@@ -139,6 +148,10 @@ test('Jam and shared playlist with 10 people: all join, all add, all get the liv
   assert.equal(view.queue.length, 11, 'the first track + one per person');
   assert.deepEqual(new Set(view.queue.slice(1).map((t) => t.addedBy)), new Set(names));
 
+  for (const u of names.slice(1)) {
+    await as('ami0')('POST', '/api/friends/requests', { username: u });
+    await as(u)('POST', '/api/friends/requests/ami0/accept');
+  }
   const { playlist } = await as('ami0')('POST', '/api/shared', { name: 'Les 10', tracks: [], members: names.slice(1) });
   for (const [i, u] of names.entries()) await as(u)('POST', `/api/shared/${playlist.id}/tracks`, { tracks: [track(200 + i)] });
   for (const u of names) assert.equal((await as(u)('GET', `/api/shared/${playlist.id}`)).playlist.tracks.length, 10, `${u} sees all 10 tracks`);
@@ -170,7 +183,10 @@ test('playlist covers: real images only, served to signed-in users; library keep
 });
 
 test('friend activity and Blend follow the « share my activity » setting', async () => {
-  const { evan, polo, lohan } = await setup();
+  const { evan, polo, lohan, befriend } = await setup();
+  await befriend('evan', 'polo');
+  await befriend('evan', 'lohan');
+  await befriend('polo', 'lohan');
   const lib = (liked, extra = {}) => ({ library: { liked, history: liked.map((t, i) => ({ track: t, at: 1000 - i })), playCounts: {} }, settings: extra });
   assert.equal((await evan('PUT', '/api/me/data', { baseRev: 0, data: lib([track(1), track(2), track(3)]) })).status, 200);
   assert.equal((await polo('PUT', '/api/me/data', { baseRev: 0, data: lib([track(3), track(4)]) })).status, 200);
@@ -193,10 +209,12 @@ test('friend activity and Blend follow the « share my activity » setting', asy
   assert.equal((await evan('GET', '/api/blend/lohan')).status, 403);
   assert.equal((await lohan('GET', '/api/blend/evan')).status, 403, 'blending requires sharing yourself');
   assert.equal((await evan('GET', '/api/blend/evan')).status, 404);
+  assert.equal((await evan('GET', '/api/blend/inconnu')).status, 404);
 });
 
 test('bot: friend activity, stats and Blend of linked Discord members', async () => {
-  const { app, evan, polo } = await setup();
+  const { app, evan, polo, befriend } = await setup();
+  await befriend('polo', 'evan');
   const bot = async (method, url) => {
     const res = await app.inject({ method, url, headers: { authorization: `Bearer ${BOT}` } });
     return { status: res.statusCode, body: res.json() };

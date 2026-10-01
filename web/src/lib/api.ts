@@ -221,7 +221,33 @@ export const api = {
   discord: () => get<{ link: DiscordLink | null; botEnabled: boolean }>('/api/me/discord'),
   discordCode: () => send<{ code: string; expiresAt: number }>('POST', '/api/me/discord/code', {}),
   discordUnlink: () => send<{ ok: true }>('DELETE', '/api/me/discord', {}),
+  friendsAll: () => get<FriendsState>('/api/friends'),
+  friendRequest: (username: string) => send<{ status: 'sent' | 'friends' }>('POST', '/api/friends/requests', { username }),
+  friendAccept: (username: string) => send<{ ok: true }>('POST', `/api/friends/requests/${encodeURIComponent(username)}/accept`, {}),
+  friendDecline: (username: string) => send<{ ok: true }>('POST', `/api/friends/requests/${encodeURIComponent(username)}/decline`, {}),
+  friendCancel: (username: string) => send<{ ok: true }>('DELETE', `/api/friends/requests/${encodeURIComponent(username)}`, {}),
+  friendRemove: (username: string) => send<{ ok: true }>('DELETE', `/api/friends/${encodeURIComponent(username)}`, {}),
+  block: (username: string) => send<{ ok: true }>('POST', '/api/friends/blocks', { username }),
+  unblock: (username: string) => send<{ ok: true }>('DELETE', `/api/friends/blocks/${encodeURIComponent(username)}`, {}),
+  conversations: () => get<{ conversations: Conversation[]; unread: number }>('/api/messages'),
+  conversation: (username: string) => get<{ with: Correspondent; messages: ChatMessage[]; readByOther: number }>(`/api/messages/${encodeURIComponent(username)}`),
+  sendMessage: (username: string, text: string) => send<{ message: ChatMessage }>('POST', `/api/messages/${encodeURIComponent(username)}`, { text }),
+  readMessages: (username: string) => send<{ ok: true }>('POST', `/api/messages/${encodeURIComponent(username)}/read`, {}),
+  clearConversation: (username: string) => send<{ ok: true }>('DELETE', `/api/messages/${encodeURIComponent(username)}`, {}),
+  jamChat: (id: string) => get<{ messages: ChatMessage[] }>(`/api/jam/${id}/chat`),
+  jamSay: (id: string, text: string) => send<{ message: ChatMessage }>('POST', `/api/jam/${id}/chat`, { text }),
 };
+
+export interface FriendsState {
+  friends: { username: string; displayName: string; since: number }[];
+  incoming: { username: string; displayName: string; at: number }[];
+  outgoing: { username: string; at: number }[];
+  blocked: { username: string; at: number }[];
+}
+/** A private message or a Jam chat message (`displayName` in the Jam only). Plain text: always rendered as text. */
+export interface ChatMessage { id: string; from: string; text: string; at: number; displayName?: string }
+export interface Correspondent { username: string; displayName: string; friend: boolean }
+export interface Conversation { with: Correspondent; last: ChatMessage; unread: number }
 
 export function isUrl(str: string): boolean {
   try {

@@ -43,11 +43,24 @@
   </section>
 
   <section>
-    <h2>Fonctions entre comptes</h2>
+    <h2>Amis</h2>
+    <p>Les personnes qui utilisent le lecteur ne se voient pas entre elles tant qu'elles ne sont pas amies : rien n'est automatique. Vous envoyez une demande avec l'identifiant de la personne ; elle l'accepte ou la refuse. Vous pouvez annuler une demande envoyée, retirer un ami ou bloquer un compte à tout moment (un compte bloqué ne peut plus vous demander en ami ni vous écrire, et ne voit plus votre activité ; s'il était membre d'une de vos playlists partagées, il en est retiré).</p>
+    <p>Le serveur conserve, dans un fichier dédié : la liste de vos amis (avec la date), les demandes en attente (envoyées et reçues, avec la date) et les comptes que vous avez bloqués. Une personne qui n'est pas votre amie ne voit ni votre nom affiché, ni votre activité ; si elle vous envoie une demande, elle voit seulement « demande envoyée », que vous l'acceptiez ou non (et même si vous l'avez bloquée). Conservation : jusqu'à ce que vous retiriez l'ami, annuliez ou traitiez la demande, débloquiez le compte, ou jusqu'à la suppression du compte.</p>
+  </section>
+
+  <section>
+    <h2>Messages privés</h2>
+    <p>Vous pouvez écrire à vos amis (conversations à deux, texte seul, 1 000 caractères au plus par message). Le serveur conserve pour chaque conversation : le texte des messages, l'expéditeur, la date et l'heure, et jusqu'où chacun les a lus (« vu »). Seuls <strong>les 500 derniers messages</strong> de chaque conversation sont gardés ; les plus anciens sont effacés automatiquement.</p>
+    <p>« Supprimer la conversation » la fait disparaître pour vous ; les messages sont <strong>effacés du serveur</strong> dès que les deux personnes ont supprimé la conversation. Retirer un ami ou le bloquer empêche d'écrire, sans effacer l'historique de chacun. Les messages ne sont pas chiffrés de bout en bout : ils sont stockés sur le serveur de l'éditeur, qui n'y accède pas hors besoin technique (panne, demande des autorités, signalement d'abus). Conservation : jusqu'à la suppression de la conversation par les deux personnes, ou jusqu'à la suppression du compte.</p>
+  </section>
+
+  <section>
+    <h2>Fonctions entre amis</h2>
     <ul>
-      <li><strong>Activité des amis</strong> : le titre que vous écoutez et vos statistiques sont visibles par les autres comptes du lecteur, qui peuvent aussi créer un « Blend » avec vos goûts. Activé par défaut, désactivable dans Paramètres ; désactivé, rien n'est transmis.</li>
-      <li><strong>Playlists partagées</strong> : les membres que vous invitez voient et modifient leurs titres.</li>
-      <li><strong>Jam</strong> (écoute à plusieurs) : file et position de lecture partagées, gardées en mémoire vive seulement, effacées à la fin de la session.</li>
+      <li><strong>Activité des amis</strong> : le titre que vous écoutez et vos statistiques sont visibles <strong>par vos amis seulement</strong>, qui peuvent aussi créer un « Blend » avec vos goûts. Activé par défaut, désactivable dans Paramètres ; désactivé, rien n'est transmis.</li>
+      <li><strong>Playlists partagées</strong> : les membres que vous invitez (parmi vos amis) voient et modifient leurs titres. Un membre qui n'est plus votre ami reste membre jusqu'à ce que vous le retiriez.</li>
+      <li><strong>Jam</strong> (écoute à plusieurs) : on n'y invite que ses amis ; le code du Jam, lui, permet à toute personne à qui vous le donnez de rejoindre. File et position de lecture partagées, gardées en mémoire vive seulement, effacées à la fin de la session.</li>
+      <li><strong>Discussion du Jam</strong> : les messages écrits dans un Jam (texte seul, 1 000 caractères au plus) sont visibles des participants, y compris ceux qui arrivent ensuite (200 derniers messages). Ils restent <strong>en mémoire vive seulement</strong> : jamais écrits sur le disque, ils disparaissent à la fin du Jam ou au redémarrage du serveur.</li>
       <li><strong>Liaison Discord</strong> (facultative) : si vous liez votre compte au bot Discord HeiphaisBot, le serveur garde la correspondance entre votre compte et votre identifiant Discord, pour que vos likes et playlists partagées soient les mêmes des deux côtés. Déliable sur demande.</li>
     </ul>
   </section>
@@ -80,7 +93,7 @@
 
   <section>
     <h2>Destinataires</h2>
-    <p>Les données ne sont accessibles qu'à l'éditeur et, pour ce que vous partagez (activité, playlists partagées, Jam), aux autres comptes du lecteur. Elles ne sont ni vendues, ni cédées, ni utilisées pour du profilage publicitaire.</p>
+    <p>Les données ne sont accessibles qu'à l'éditeur et, pour ce que vous partagez, aux personnes concernées : vos amis (activité, Blend), les membres de vos playlists partagées, les participants d'un Jam et la personne avec qui vous échangez des messages. Elles ne sont ni vendues, ni cédées, ni utilisées pour du profilage publicitaire.</p>
   </section>
 
   <section>

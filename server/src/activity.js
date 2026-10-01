@@ -4,7 +4,7 @@ import { cleanTracks } from './userdata.js';
 /**
  * « Activité des amis » and « Blend ».
  *
- * Each client reports the track it starts (POST /api/activity); the others see it live (SSE
+ * Friends only. Each client reports the track it starts (POST /api/activity); friends see it live (SSE
  * `activity`) and, after a restart, the last entry of the synced history. Both features follow the
  * user's `shareActivity` setting (synced with the library, on by default): turned off, nothing is
  * reported, the user disappears from the list and cannot be blended.
@@ -64,7 +64,7 @@ export function statsOf(lib, days = 28, now = Date.now()) {
   return { days, plays: plays.length, minutes: Math.round(seconds / 60), artistCount: artists.size, topArtists: top(artists), topTracks: top(tracks) };
 }
 
-export function registerActivity(app, { accounts, userData, hub }) {
+export function registerActivity(app, { accounts, userData, hub, friends }) {
   /** username -> { track, at } (tracks started since the server started) */
   const live = new Map();
   const me = (request) => request.user.username;
@@ -77,14 +77,13 @@ export function registerActivity(app, { accounts, userData, hub }) {
     if (!track) throw new HttpError('Titre invalide', 400);
     const entry = { track, at: Date.now() };
     live.set(u, entry);
-    const others = accounts.list().map((a) => a.username).filter((x) => x !== u);
-    hub.emit(others, { type: 'activity', user: u, displayName: accounts.get(u)?.displayName || u, ...entry, live: true });
+    hub.emit(friends.of(u).map((f) => f.username), { type: 'activity', user: u, displayName: accounts.get(u)?.displayName || u, ...entry, live: true });
     return { ok: true, shared: true };
   });
 
   const friendsOf = (username) => {
     const now = Date.now();
-    return accounts.list().filter((a) => a.username !== username).map((a) => {
+    return accounts.list().filter((a) => friends.are(username, a.username)).map((a) => {
       const data = dataOf(a.username);
       if (!sharing(data)) return null;
       const l = live.get(a.username);
@@ -97,7 +96,8 @@ export function registerActivity(app, { accounts, userData, hub }) {
   const blendOf = (username, otherName) => {
     const other = String(otherName || '').toLowerCase();
     const acc = accounts.get(other);
-    if (!acc || other === username) throw new HttpError('Compte introuvable', 404);
+    // Same answer for an unknown account and for someone who is not a friend.
+    if (!acc || !friends.are(username, other)) throw new HttpError('Blend possible uniquement avec vos amis', 404, 'NOT_FRIENDS');
     const mine = dataOf(username);
     const theirs = dataOf(other);
     if (!sharing(theirs)) throw new HttpError(`${acc.displayName} ne partage pas son activité : Blend indisponible`, 403, 'NOT_SHARED');

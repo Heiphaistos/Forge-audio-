@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { api, type DiscordLink, type FriendActivity, type Jam, type SharedPlaylist, type User } from '../lib/api';
+import { api, type ChatMessage, type Conversation, type Correspondent, type DiscordLink, type FriendActivity, type FriendsState, type Jam, type SharedPlaylist, type User } from '../lib/api';
 import { useLibrary } from './library';
 import { pullNow } from '../lib/sync';
 import { engine } from '../audio/engine';
@@ -8,8 +8,8 @@ import { usePlayer, setJamRouter } from './player';
 import { useSettings, useUi } from './ui';
 
 /**
- * Between accounts: shared playlists, Jam (group listening) and the Discord link, all kept up to
- * date by the server's live events (/api/events).
+ * Between accounts: friends, private messages, shared playlists, Jam (group listening + chat) and
+ * the Discord link, all kept up to date by the server's live events (/api/events).
  */
 
 const toast = (text: string, kind?: 'info' | 'error' | 'success', action?: { label: string; run: () => void }) => useUi.getState().toast(text, kind, action);
@@ -23,12 +23,90 @@ const putFriend = (f: FriendActivity) => useFriends.setState((s) => ({ list: [f,
 
 export const useJam = create<{ jam: Jam | null; offset: number; me: string | null }>(() => ({ jam: null, offset: 0, me: null }));
 
+/** Friends, requests received / sent, blocked accounts. */
+export const usePeople = create<FriendsState & { loaded: boolean }>(() => ({ friends: [], incoming: [], outgoing: [], blocked: [], loaded: false }));
+/** Private messages: conversation list + the conversation open on screen. */
+export const useInbox = create<{ conversations: Conversation[]; unread: number; open: string | null; with: Correspondent | null; thread: ChatMessage[]; readByOther: number; loading: boolean }>(
+  () => ({ conversations: [], unread: 0, open: null, with: null, thread: [], readByOther: 0, loading: false }),
+);
+/** Chat of the current Jam (in memory on the server, gone with the Jam). */
+export const useJamChat = create<{ jamId: string | null; messages: ChatMessage[] }>(() => ({ jamId: null, messages: [] }));
+
 let accountsCache: User[] | null = null;
+/** Accounts one can share with or invite: friends only. */
 export async function otherAccounts() {
   if (!accountsCache) accountsCache = (await api.users()).users;
   return accountsCache;
 }
-export const nameOf = (username: string) => accountsCache?.find((u) => u.username === username)?.displayName || username;
+export const nameOf = (username: string) => usePeople.getState().friends.find((u) => u.username === username)?.displayName
+  || accountsCache?.find((u) => u.username === username)?.displayName || username;
+
+// ---------------------------------------------------------------- friends
+async function refreshPeople() {
+  const state = await api.friendsAll();
+  accountsCache = null;
+  usePeople.setState({ ...state, loaded: true });
+}
+const thenRefresh = (fn: (username: string) => Promise<unknown>) => async (username: string) => { await fn(username); await refreshPeople(); };
+export const people = {
+  refresh: refreshPeople,
+  request: async (username: string) => { const r = await api.friendRequest(username); await refreshPeople(); return r.status; },
+  accept: thenRefresh(api.friendAccept),
+  decline: thenRefresh(api.friendDecline),
+  cancel: thenRefresh(api.friendCancel),
+  remove: thenRefresh(api.friendRemove),
+  block: thenRefresh(api.block),
+  unblock: thenRefresh(api.unblock),
+};
+
+// ---------------------------------------------------------------- private messages
+async function refreshInbox() {
+  const { conversations, unread } = await api.conversations();
+  useInbox.setState({ conversations, unread });
+}
+function appendThread(username: string, m: ChatMessage) {
+  const s = useInbox.getState();
+  if (s.open === username && !s.thread.some((x) => x.id === m.id)) useInbox.setState({ thread: [...s.thread, m] });
+}
+export const inbox = {
+  refresh: refreshInbox,
+  /** Show a conversation (null = back to the list) and mark it read. */
+  open: async (username: string | null) => {
+    useInbox.setState({ open: username, with: null, thread: [], readByOther: 0, loading: !!username });
+    if (!username) return;
+    try {
+      const r = await api.conversation(username);
+      if (useInbox.getState().open !== username) return;
+      useInbox.setState({ with: r.with, thread: r.messages, readByOther: r.readByOther, loading: false });
+      if (r.messages.length) await api.readMessages(username);
+    } catch (err) { useInbox.setState({ loading: false }); fail(err); }
+  },
+  send: async (username: string, text: string) => {
+    const { message } = await api.sendMessage(username, text);
+    appendThread(username, message);
+  },
+  clear: async (username: string) => {
+    await api.clearConversation(username);
+    if (useInbox.getState().open === username) useInbox.setState({ thread: [] });
+    await refreshInbox();
+  },
+};
+
+// ---------------------------------------------------------------- Jam chat
+async function loadJamChat(id: string) {
+  useJamChat.setState({ jamId: id, messages: [] });
+  try {
+    const { messages } = await api.jamChat(id);
+    if (useJamChat.getState().jamId === id) useJamChat.setState({ messages });
+  } catch { /* the Jam just ended */ }
+}
+export async function jamSay(text: string) {
+  const j = useJam.getState().jam;
+  if (!j) return;
+  const { message } = await api.jamSay(j.id, text);
+  const s = useJamChat.getState();
+  if (s.jamId === j.id && !s.messages.some((x) => x.id === message.id)) useJamChat.setState({ messages: [...s.messages, message] });
+}
 
 // ---------------------------------------------------------------- shared playlists
 function putShared(p: SharedPlaylist) {
@@ -57,6 +135,8 @@ const livePosition = (j: Jam) => (j.playing ? j.position + (Date.now() + useJam.
 
 function setJam(j: Jam | null) {
   useJam.setState({ jam: j, offset: j ? j.serverNow - Date.now() : useJam.getState().offset });
+  if (!j) useJamChat.setState({ jamId: null, messages: [] });
+  else if (useJamChat.getState().jamId !== j.id) loadJamChat(j.id);
   if (j) applyJam(j);
 }
 
@@ -166,7 +246,7 @@ export const discord = {
 let source: EventSource | null = null;
 
 async function refreshAll() {
-  const [s, j, , , f] = await Promise.allSettled([api.shared(), api.jam(), discord.refresh(), otherAccounts(), api.friends()]);
+  const [s, j, , , f] = await Promise.allSettled([api.shared(), api.jam(), discord.refresh(), refreshPeople(), api.friends(), refreshInbox()]);
   if (s.status === 'fulfilled') useShared.setState({ list: s.value.playlists, loaded: true });
   if (f.status === 'fulfilled') useFriends.setState({ list: f.value.friends, loaded: true });
   if (j.status === 'fulfilled') setJam(j.value.jam);
@@ -190,6 +270,33 @@ export function startSocial(user: User) {
     else if (e.type === 'library') pullNow();
     else if (e.type === 'discord') discord.refresh().catch(() => {});
     else if (e.type === 'activity') putFriend(e as unknown as FriendActivity);
+    else if (e.type === 'friends') {
+      const before = new Set(usePeople.getState().incoming.map((r) => r.username));
+      refreshPeople().then(() => {
+        const fresh = usePeople.getState().incoming.find((r) => !before.has(r.username));
+        if (fresh) toast(`${fresh.displayName} vous demande en ami`, 'info', { label: 'Voir', run: () => useUi.getState().navigate({ name: 'friends' }) });
+      }).catch(() => {});
+      api.friends().then((r) => useFriends.setState({ list: r.friends, loaded: true })).catch(() => {});
+    } else if (e.type === 'message') {
+      const other = String(e.with);
+      const m = e.message as ChatMessage;
+      appendThread(other, m);
+      const here = useInbox.getState().open === other && document.visibilityState === 'visible';
+      if (m.from !== user.username) {
+        if (here) api.readMessages(other).catch(() => {});
+        else toast(`${String(e.displayName || other)} : ${m.text.length > 80 ? `${m.text.slice(0, 80)}…` : m.text}`, 'info', { label: 'Répondre', run: () => useUi.getState().navigate({ name: 'messages', id: other }) });
+      }
+      refreshInbox().catch(() => {});
+    } else if (e.type === 'message-read' || e.type === 'message-cleared') {
+      if (e.type === 'message-cleared' && useInbox.getState().open === String(e.with)) useInbox.setState({ thread: [] });
+      refreshInbox().catch(() => {});
+    } else if (e.type === 'message-read-by') {
+      if (useInbox.getState().open === String(e.with)) useInbox.setState({ readByOther: Number(e.at) || Date.now() });
+    } else if (e.type === 'jam-chat') {
+      const c = useJamChat.getState();
+      const m = e.message as ChatMessage;
+      if (c.jamId === e.jamId && !c.messages.some((x) => x.id === m.id)) useJamChat.setState({ messages: [...c.messages, m].slice(-200) });
+    }
     else if (e.type === 'shared') {
       if (e.playlist) {
         const p = e.playlist as SharedPlaylist;
