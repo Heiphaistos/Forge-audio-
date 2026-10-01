@@ -76,6 +76,7 @@ docker exec -it forge-audio node server/src/accounts-cli.js list
 docker exec -it forge-audio node server/src/accounts-cli.js add prenom Prénom   # génère et affiche un mot de passe de 80 caractères
 docker exec -it forge-audio node server/src/accounts-cli.js passwd evan         # nouveau mot de passe (déconnecte ses sessions)
 docker exec -it forge-audio node server/src/accounts-cli.js remove prenom
+docker exec -it forge-audio node server/src/accounts-cli.js role momo admin     # admin : codes d'invitation (Paramètres > Administration)
 ```
 
 Sans Docker : `npm run accounts -- list` (etc.). Sans aucun compte, le serveur fonctionne sans connexion (mode local, utilisé par l'application de bureau).

@@ -6,8 +6,8 @@ import { promisify } from 'node:util';
 /**
  * User accounts, sessions and login throttling.
  *
- * Accounts live in a JSON file ({ users: [{ username, displayName, password }] }) where `password`
- * is a scrypt hash. With no account configured the server runs in single-user "local" mode
+ * Accounts live in a JSON file ({ users: [{ username, displayName, password, since, role? }] }) where `password`
+ * is a scrypt hash and `role` is 'admin' or 'user' (missing = 'user'). With no account configured the server runs in single-user "local" mode
  * (desktop app, private installs): no login page, data saved under the `local` user.
  */
 
@@ -15,14 +15,14 @@ const scrypt = promisify(crypto.scrypt);
 const SCRYPT = { N: 1 << 15, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
 const KEYLEN = 64;
 
-export const PASSWORD_MIN = 75;
+export const PASSWORD_MIN = 70;
 const UPPER = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
 const LOWER = 'abcdefghijkmnopqrstuvwxyz';
 const DIGITS = '23456789';
 // No quotes, backslash or spaces: easy to paste anywhere.
 const SYMBOLS = '!#$%&*+-=?@^_~.:;,()[]{}<>|/';
 
-/** Password policy: at least 75 characters with upper case, lower case, digits and symbols. */
+/** Password policy: at least 70 characters with upper case, lower case, digits and symbols. */
 export function checkPasswordPolicy(pw) {
   const s = String(pw || '');
   const problems = [];
@@ -108,7 +108,7 @@ export class Accounts {
     const data = this.file ? readJson(this.file, { users: [] }) : { users: [] };
     for (const u of data.users || []) {
       const username = normalizeUsername(u.username);
-      if (isValidUsername(username) && u.password) this.users.set(username, { username, displayName: u.displayName || username, password: u.password, since: Number(u.since) || 0 });
+      if (isValidUsername(username) && u.password) this.users.set(username, { username, displayName: u.displayName || username, password: u.password, since: Number(u.since) || 0, role: u.role === 'admin' ? 'admin' : 'user' });
     }
   }
 
@@ -126,6 +126,12 @@ export class Accounts {
     return [...this.users.values()].map(({ username, displayName }) => ({ username, displayName }));
   }
 
+  /** Admin view: role and last password change, never the hash. */
+  adminList() {
+    this.refresh();
+    return [...this.users.values()].map(({ username, displayName, role, since }) => ({ username, displayName, role, since }));
+  }
+
   save() {
     writeJsonAtomic(this.file, { users: [...this.users.values()] });
   }
@@ -135,8 +141,27 @@ export class Accounts {
     if (!isValidUsername(name)) throw new Error(`Nom d'utilisateur invalide : ${username}`);
     const problems = checkPasswordPolicy(password);
     if (problems.length) throw new Error(`Mot de passe trop faible : il faut ${problems.join(', ')}`);
-    this.users.set(name, { username: name, displayName: displayName || this.users.get(name)?.displayName || name, password: await hashPassword(password), since: Date.now() });
+    const prev = this.users.get(name);
+    this.users.set(name, { username: name, displayName: displayName || prev?.displayName || name, password: await hashPassword(password), since: Date.now(), role: prev?.role || 'user' });
     this.save();
+  }
+
+  /** Add a new account from an already computed hash. Synchronous, so the caller can pair it atomically with an invite. */
+  insertHashed(username, displayName, hash) {
+    const name = normalizeUsername(username);
+    if (!isValidUsername(name)) throw new Error(`Nom d'utilisateur invalide : ${username}`);
+    this.refresh();
+    if (this.users.has(name)) throw new Error(`Le compte ${name} existe déjà`);
+    this.users.set(name, { username: name, displayName: displayName || name, password: hash, since: Date.now(), role: 'user' });
+    this.save();
+  }
+
+  setRole(username, role) {
+    const u = this.get(username);
+    if (!u) return false;
+    u.role = role === 'admin' ? 'admin' : 'user';
+    this.save();
+    return true;
   }
 
   remove(username) {
@@ -149,7 +174,7 @@ export class Accounts {
   async authenticate(username, password) {
     const user = this.get(username);
     const ok = await verifyPassword(password, user?.password || DUMMY_HASH);
-    return ok && user ? { username: user.username, displayName: user.displayName } : null;
+    return ok && user ? { username: user.username, displayName: user.displayName, role: user.role } : null;
   }
 }
 

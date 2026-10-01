@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useUi } from './store/ui';
 import { usePlayer } from './store/player';
 import { Sidebar, Logo, LegalLinks } from './components/Sidebar';
+import { Register } from './components/Register';
 import { PlayerBar } from './components/PlayerBar';
 import { RightPanel, MiniVideo } from './components/Panels';
 import { NowPlaying } from './components/NowPlaying';
@@ -76,10 +77,22 @@ function Login({ onDone }: { onDone: (user: User) => void }) {
   const [show, setShow] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [mode, setMode] = useState<'login' | 'register'>('login');
   return (
     <div className="login">
       <div className="login-glow" />
-      <form className="login-card" onSubmit={async (e) => {
+      <div className="login-card">
+      <Logo />
+      <div>
+        <h1 className="login-title">{mode === 'login' ? 'Connexion' : 'Créer un compte'}</h1>
+        <p className="muted small">Retrouvez vos playlists, vos titres likés et votre historique sur tous vos appareils.</p>
+      </div>
+      <div className="chips login-tabs" role="tablist">
+        <button type="button" role="tab" aria-selected={mode === 'login'} className={`chip ${mode === 'login' ? 'active' : ''}`} onClick={() => setMode('login')}>Se connecter</button>
+        <button type="button" role="tab" aria-selected={mode === 'register'} className={`chip ${mode === 'register' ? 'active' : ''}`} onClick={() => setMode('register')}>Créer un compte</button>
+      </div>
+      {mode === 'register' ? <Register onDone={onDone} /> : (
+      <form className="login-form" onSubmit={async (e) => {
         e.preventDefault();
         setLoading(true);
         setError(null);
@@ -93,11 +106,6 @@ function Login({ onDone }: { onDone: (user: User) => void }) {
           setLoading(false);
         }
       }}>
-        <Logo />
-        <div>
-          <h1 className="login-title">Connexion</h1>
-          <p className="muted small">Retrouvez vos playlists, vos titres likés et votre historique sur tous vos appareils.</p>
-        </div>
         <label className="field">
           <span>Identifiant</span>
           <div className="input-icon"><UserIcon size={16} /><input autoFocus={!username} autoComplete="username" autoCapitalize="none" spellCheck={false} value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Votre identifiant" /></div>
@@ -113,10 +121,12 @@ function Login({ onDone }: { onDone: (user: User) => void }) {
         {error && <p className="bad small">{error}</p>}
         <button className="btn btn-primary full" disabled={loading || !username || !password}>{loading ? <Loader2 size={16} className="spin" /> : 'Se connecter'}</button>
         <p className="muted small center-text">Astuce : laissez votre navigateur enregistrer le mot de passe.</p>
+      </form>
+      )}
         {inMobileApp() && <p className="muted small center-text">Serveur : <b>{location.host}</b> · <a className="link accent" href={changeServerUrl()}>Changer</a></p>}
         {window.forgeDesktop && <p className="muted small center-text">Serveur : <b>{location.host}</b> · <button type="button" className="link accent" onClick={() => window.forgeDesktop?.setServer(null)}>Utiliser sans compte (bibliothèque locale)</button></p>}
         <LegalLinks />
-      </form>
+      </div>
     </div>
   );
 }

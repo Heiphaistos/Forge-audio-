@@ -24,7 +24,7 @@ async function send<T>(method: string, path: string, payload: unknown): Promise<
   if (!res.ok) {
     const err = new ApiError(body.error || `Erreur ${res.status}`, res.status, body.code) as ApiError & { current?: unknown };
     err.current = body.current;
-    if (res.status === 401 && path !== '/api/login') window.dispatchEvent(new Event('forge:auth-required'));
+    if (res.status === 401 && path !== '/api/login' && path !== '/api/register') window.dispatchEvent(new Event('forge:auth-required'));
     throw err;
   }
   return body as T;
@@ -56,7 +56,22 @@ async function sealPassword(password: string): Promise<{ sealed: string } | { pa
 export interface User {
   username: string;
   displayName: string;
+  role?: 'admin' | 'user';
 }
+
+export interface Invite {
+  id: string;
+  note: string;
+  createdBy: string;
+  createdAt: number;
+  expiresAt: number;
+  usedBy: string | null;
+  usedAt: number | null;
+  revokedAt: number | null;
+  status: 'active' | 'used' | 'expired' | 'revoked';
+}
+
+export interface AdminAccount { username: string; displayName: string; role: 'admin' | 'user'; since: number }
 
 export interface ServerDoc<D> {
   rev: number;
@@ -147,7 +162,13 @@ export const api = {
   health: () => get<Health>('/api/health'),
   login: async (username: string, password: string) =>
     send<{ ok: true; user: User }>('POST', '/api/login', { username, ...(await sealPassword(password)) }),
+  register: async (p: { code: string; username: string; displayName: string; password: string }) =>
+    send<{ ok: true; user: User }>('POST', '/api/register', { code: p.code, username: p.username, displayName: p.displayName, ...(await sealPassword(p.password)) }),
   logout: () => send<{ ok: true }>('POST', '/api/logout', {}),
+  invites: () => get<{ invites: Invite[] }>('/api/admin/invites'),
+  inviteCreate: (days: number, note: string) => send<{ code: string; invite: Invite }>('POST', '/api/admin/invites', { days, note }),
+  inviteRevoke: (id: string) => send<{ ok: true }>('DELETE', `/api/admin/invites/${encodeURIComponent(id)}`, {}),
+  adminAccounts: () => get<{ accounts: AdminAccount[] }>('/api/admin/accounts'),
   getData: <D>() => get<ServerDoc<D>>('/api/me/data'),
   putData: <D>(baseRev: number, data: D) => send<{ rev: number; updatedAt: number }>('PUT', '/api/me/data', { baseRev, data }),
   search: (q: string, source: string, limit = 20, signal?: AbortSignal) =>

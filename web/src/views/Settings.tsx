@@ -3,7 +3,7 @@ import { CheckCircle2, XCircle, Github, Loader2 } from 'lucide-react';
 import { ACCENTS, useSettings, useUi } from '../store/ui';
 import { discord, useDiscord, useJam } from '../store/social';
 import { useLibrary } from '../store/library';
-import { api, type Health } from '../lib/api';
+import { api, type Health, type Invite, type AdminAccount } from '../lib/api';
 import { SOURCE_LABELS } from '../lib/format';
 
 export const SHORTCUTS: [string, string][] = [
@@ -149,6 +149,87 @@ function DownloadApps() {
   );
 }
 
+const INVITE_STATUS: Record<Invite['status'], string> = { active: 'Actif', used: 'Utilisé', expired: 'Expiré', revoked: 'Révoqué' };
+const day = (t: number) => new Date(t).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+
+/** Admins only: invitation codes (shown once) and the list of accounts. */
+function AdminCard() {
+  const toast = useUi((st) => st.toast);
+  const [invites, setInvites] = useState<Invite[] | null>(null);
+  const [accounts, setAccounts] = useState<AdminAccount[]>([]);
+  const [days, setDays] = useState(7);
+  const [note, setNote] = useState('');
+  const [fresh, setFresh] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const load = () => {
+    api.invites().then((r) => setInvites(r.invites)).catch((e) => toast(e.message, 'error'));
+    api.adminAccounts().then((r) => setAccounts(r.accounts)).catch(() => {});
+  };
+  useEffect(load, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const create = async () => {
+    setBusy(true);
+    try {
+      const { code } = await api.inviteCreate(days, note.trim());
+      setFresh(code);
+      setNote('');
+      load();
+    } catch (e) { toast((e as Error).message, 'error'); } finally { setBusy(false); }
+  };
+  const revoke = (i: Invite) => {
+    if (!confirm(`Révoquer ce code${i.note ? ` (${i.note})` : ''} ? Il ne pourra plus servir.`)) return;
+    api.inviteRevoke(i.id).then(() => { toast('Code révoqué'); load(); }).catch((e) => toast(e.message, 'error'));
+  };
+  return (
+    <section className="settings-card">
+      <h2>Administration</h2>
+      <p className="muted">Créez un code d'invitation pour qu'une personne crée son compte depuis la page de connexion (« Créer un compte »). Chaque code ne sert qu'une fois.</p>
+      <div className="row gap wrap">
+        <select className="select" value={days} onChange={(e) => setDays(Number(e.target.value))} aria-label="Durée de validité">
+          <option value={1}>Valable 1 jour</option>
+          <option value={7}>Valable 7 jours</option>
+          <option value={30}>Valable 30 jours</option>
+        </select>
+        <input className="input grow" maxLength={100} placeholder="Note facultative (ex. pour Loris)" value={note} onChange={(e) => setNote(e.target.value)} aria-label="Note" />
+        <button className="btn btn-primary" disabled={busy} onClick={create}>{busy ? <Loader2 size={16} className="spin" /> : 'Générer un code'}</button>
+      </div>
+      {fresh && (
+        <div className="admin-code">
+          <code>{fresh}</code>
+          <button className="btn btn-ghost btn-sm" onClick={() => navigator.clipboard?.writeText(fresh).then(() => toast('Code copié', 'success'))}>Copier</button>
+          <p className="muted small">Notez-le maintenant : il ne sera plus jamais affiché.</p>
+        </div>
+      )}
+      <h3 className="settings-sub">Codes</h3>
+      {invites === null ? <p className="muted">Chargement…</p> : !invites.length ? <p className="muted">Aucun code pour l'instant.</p> : (
+        <div className="admin-list">
+          {invites.map((i) => (
+            <div key={i.id} className="admin-row">
+              <span className={`admin-status ${i.status}`}>{INVITE_STATUS[i.status]}</span>
+              <div className="grow">
+                <div>{i.note || <span className="muted">Sans note</span>}</div>
+                <div className="muted small">
+                  Créé par {i.createdBy} le {day(i.createdAt)}
+                  {i.status === 'used' ? ` · utilisé par ${i.usedBy} le ${day(i.usedAt || 0)}` : i.status === 'revoked' ? ` · révoqué le ${day(i.revokedAt || 0)}` : ` · ${i.status === 'expired' ? 'expiré' : 'expire'} le ${day(i.expiresAt)}`}
+                </div>
+              </div>
+              {i.status === 'active' && <button className="btn btn-ghost btn-sm danger" onClick={() => revoke(i)}>Révoquer</button>}
+            </div>
+          ))}
+        </div>
+      )}
+      <h3 className="settings-sub">Comptes ({accounts.length})</h3>
+      <div className="admin-list">
+        {accounts.map((a) => (
+          <div key={a.username} className="admin-row">
+            <div className="grow"><b>{a.displayName}</b> <span className="muted">@{a.username}</span></div>
+            {a.role === 'admin' && <span className="admin-status active">Admin</span>}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function Toggle({ checked, onChange, label, hint }: { checked: boolean; onChange: (v: boolean) => void; label: string; hint?: string }) {
   return (
     <label className="setting">
@@ -222,6 +303,7 @@ export function Settings() {
         </div>
       </section>
 
+      {health?.user?.role === 'admin' && <AdminCard />}
       <DesktopServer />
       <MobileServer />
       <DiscordLinkCard />

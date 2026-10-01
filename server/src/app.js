@@ -9,7 +9,8 @@ import { MediaService } from './stream.js';
 import { findLyrics } from './lyrics.js';
 import { resolveStreamingLink, playableUrl, withDrmFallback, withBotFallback } from './streaming.js';
 import { HttpError, isPublicUrl, clampInt, TtlCache } from './util.js';
-import { Accounts, Sessions, LoginLimiter } from './accounts.js';
+import { Accounts, Sessions, LoginLimiter, normalizeUsername, isValidUsername, checkPasswordPolicy, hashPassword } from './accounts.js';
+import { Invites, registerAdmin } from './invites.js';
 import { LoginSeal } from './login-seal.js';
 import { UserData } from './userdata.js';
 import { registerSocial } from './social.js';
@@ -17,7 +18,7 @@ import { registerCovers } from './covers.js';
 import { registerCatalog } from './catalog.js';
 import { registerLoudness } from './loudness.js';
 
-export const VERSION = '0.14.0';
+export const VERSION = '0.15.0';
 
 const IMAGE_HOSTS = /(^|\.)(ytimg\.com|ggpht\.com|googleusercontent\.com|sndcdn\.com|dmcdn\.net|dailymotion\.com|bcbits\.com|vimeocdn\.com|jtvnw\.net|scdn\.co|spotifycdn\.com|dzcdn\.net|mzstatic\.com)$/i;
 
@@ -51,6 +52,9 @@ export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null,
   const accounts = new Accounts(accountsFile);
   const sessions = new Sessions(dataDir ? path.join(dataDir, 'sessions.json') : null);
   const limiter = new LoginLimiter();
+  // Every sign-up attempt counts (success too): 10 per hour and per IP.
+  const registerLimiter = new LoginLimiter({ max: 10, windowMs: 60 * 60 * 1000 });
+  const invites = new Invites(dataDir ? path.join(dataDir, 'invites.json') : null);
   let seal = null; // created on first use: a 4096-bit key takes about a second to generate
   const userData = dataDir ? new UserData(dataDir) : null;
   const LOCAL_USER = { username: 'local', displayName: 'Moi' };
@@ -74,10 +78,10 @@ export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null,
     const s = sessions.get(readCookie(request.headers.cookie, COOKIE));
     const u = s && accounts.get(s.username);
     // A password change (accounts-cli passwd) signs out every older session.
-    return u && s.created >= u.since ? { username: u.username, displayName: u.displayName } : null;
+    return u && s.created >= u.since ? { username: u.username, displayName: u.displayName, role: u.role } : null;
   };
 
-  const PUBLIC = new Set(['/api/health', '/api/login', '/api/login-key', '/api/logout']);
+  const PUBLIC = new Set(['/api/health', '/api/login', '/api/login-key', '/api/logout', '/api/register']);
   app.addHook('onRequest', async (request, reply) => {
     const p = request.url.split('?')[0];
     if (!p.startsWith('/api/')) return;
@@ -107,6 +111,36 @@ export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null,
     const token = sessions.create(user.username);
     reply.header('set-cookie', cookie(request, token, 180 * 24 * 3600));
     return { ok: true, user };
+  });
+
+  // Sign-up with an invitation code (admin, Settings). Password sealed like /api/login, or plain `password`.
+  app.post('/api/register', async (request, reply) => {
+    if (!accounts.enabled) throw new HttpError('Inscription indisponible sur ce serveur', 404, 'NOT_FOUND');
+    const wait = registerLimiter.blocked(request.ip);
+    if (wait) throw new HttpError(`Trop de tentatives, réessayez dans ${wait} min`, 429, 'RATE_LIMITED');
+    registerLimiter.fail(request.ip);
+    const { code, username, displayName, password, sealed } = request.body || {};
+    const clear = sealed ? (seal ? seal.open(sealed) : null) : password;
+    if (typeof clear !== 'string') throw new HttpError('Mot de passe illisible : rechargez la page et réessayez', 400, 'BAD_REQUEST');
+    const name = normalizeUsername(username);
+    if (!isValidUsername(name)) throw new HttpError('Identifiant invalide : 2 à 32 caractères, lettres minuscules, chiffres, point, tiret ou souligné, en commençant par une lettre ou un chiffre');
+    const display = String(displayName || '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 40) || name;
+    const problems = checkPasswordPolicy(clear);
+    if (problems.length) throw new HttpError(`Mot de passe trop faible : il faut ${problems.join(', ')}`);
+    if (!invites.find(code)) throw new HttpError("Code d'invitation invalide, expiré ou déjà utilisé", 403, 'INVITE_INVALID');
+    const hash = await hashPassword(clear);
+    // No await from here on: the invite check, the account creation and the invite use happen in one go.
+    const invite = invites.find(code);
+    if (!invite) throw new HttpError("Code d'invitation invalide, expiré ou déjà utilisé", 403, 'INVITE_INVALID');
+    // A removed account's library stays in data/users: never hand it to a newcomer.
+    if (accounts.get(name) || userData?.exists(name)) throw new HttpError('Cet identifiant est déjà pris', 409, 'USERNAME_TAKEN');
+    accounts.insertHashed(name, display, hash);
+    invites.consume(invite, name);
+    request.log.info({ user: name, invite: invite.id }, 'Inscription');
+    const token = sessions.create(name);
+    reply.header('set-cookie', cookie(request, token, 180 * 24 * 3600));
+    reply.code(201);
+    return { ok: true, user: { username: name, displayName: display, role: 'user' } };
   });
 
   app.get('/api/login-key', async () => {
@@ -149,6 +183,7 @@ export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null,
 
   // Shared playlists, Jam, live events, link with the Discord bot.
   registerSocial(app, { accounts, userData, dataDir });
+  registerAdmin(app, { accounts, invites });
   registerCovers(app, { dataDir });
   registerCatalog(app);
   registerLoudness(app, { media, ffmpeg, ytdlp });

@@ -4,6 +4,7 @@
 //   npm run accounts -- add <utilisateur> [Nom affiché]   (génère un mot de passe de 80 caractères)
 //   npm run accounts -- passwd <utilisateur>               (nouveau mot de passe généré)
 //   npm run accounts -- remove <utilisateur>
+//   npm run accounts -- role <utilisateur> admin|user
 // In Docker: docker exec -it forge-audio node server/src/accounts-cli.js add evan Evan
 import { Accounts, Sessions, generatePassword } from './accounts.js';
 import { resolvePaths } from './paths.js';
@@ -18,7 +19,7 @@ async function main() {
     case 'list': {
       const list = accounts.list();
       if (!list.length) console.log('Aucun compte : le serveur fonctionne sans connexion (mode local).');
-      for (const u of list) console.log(`${u.username}\t${u.displayName}`);
+      for (const u of accounts.adminList()) console.log(`${u.username}\t${u.displayName}\t${u.role}`);
       break;
     }
     case 'add':
@@ -38,8 +39,15 @@ async function main() {
       console.log(`Compte ${user} supprimé (sa bibliothèque reste dans ${dataDir}/users).`);
       break;
     }
+    case 'role': {
+      const role = rest[0];
+      if (!['admin', 'user'].includes(role)) throw new Error('Rôle attendu : admin ou user');
+      if (!accounts.setRole(user || '', role)) throw new Error(`Compte inconnu : ${user}`);
+      console.log(`Compte ${user.toLowerCase()} : rôle ${role}.`);
+      break;
+    }
     default:
-      console.log('Usage : accounts-cli.js list | add <utilisateur> [Nom] | passwd <utilisateur> | remove <utilisateur>');
+      console.log('Usage : accounts-cli.js list | add <utilisateur> [Nom] | passwd <utilisateur> | remove <utilisateur> | role <utilisateur> admin|user');
   }
   // Let the debounced session write finish.
   await new Promise((r) => setTimeout(r, 400));

@@ -22,7 +22,7 @@
 
   <h1>Politique de confidentialité</h1>
   <p class="updated">Dernière mise à jour : 1er octobre 2026</p>
-  <p class="intro">En bref : le lecteur <strong>connect.forgeaudio.heiphaistos.org</strong> est réservé à des comptes créés par l'éditeur. Il garde votre bibliothèque musicale pour la retrouver sur tous vos appareils. Pas de publicité, pas de revente, pas de mesure d'audience, pas de cookie de pistage. Les données sont stockées sur un serveur de l'éditeur hébergé par IONOS dans l'Union européenne.</p>
+  <p class="intro">En bref : le lecteur <strong>connect.forgeaudio.heiphaistos.org</strong> est réservé aux personnes invitées : un compte se crée avec un code d'invitation remis par un administrateur. Il garde votre bibliothèque musicale pour la retrouver sur tous vos appareils. Pas de publicité, pas de revente, pas de mesure d'audience, pas de cookie de pistage. Les données sont stockées sur un serveur de l'éditeur hébergé par IONOS dans l'Union européenne.</p>
 
   <section>
     <h2>Responsable de traitement</h2>
@@ -31,7 +31,8 @@
 
   <section>
     <h2>Compte</h2>
-    <p>Il n'y a pas d'inscription publique : l'éditeur crée chaque compte à la demande. Un compte contient un identifiant, un nom affiché et une empreinte du mot de passe (scrypt) — le mot de passe lui-même n'est jamais stocké. Aucune adresse e-mail n'est demandée.</p>
+    <p>Il n'y a pas d'inscription publique : un compte est créé soit par l'éditeur, soit par vous-même avec un code d'invitation à usage unique remis par un administrateur (page de connexion, « Créer un compte »). À l'inscription, vous fournissez le code, un identifiant, un nom affiché (facultatif) et un mot de passe. Le compte contient l'identifiant, le nom affiché, son rôle (utilisateur ou administrateur), la date de création ou du dernier changement de mot de passe et une empreinte du mot de passe (scrypt) — le mot de passe lui-même n'est jamais stocké. Sur la page web, il est chiffré dans le navigateur avant l'envoi. Aucune adresse e-mail n'est demandée.</p>
+    <p>Codes d'invitation : seule une empreinte (SHA-256) du code est conservée, avec l'administrateur qui l'a créé, sa date de création et d'expiration, une note éventuelle de l'administrateur (par exemple le prénom de la personne invitée) et, une fois utilisé, l'identifiant du compte créé et la date. Les administrateurs voient cette liste et celle des comptes (identifiant, nom affiché, rôle).</p>
     <p>Finalité : vous authentifier. Base légale : exécution du service (article 6.1.b du RGPD). Conservation : jusqu'à la suppression du compte, sur simple demande.</p>
   </section>
 
@@ -56,7 +57,7 @@
     <ul>
       <li><strong>forge_session</strong> : cookie de session strictement nécessaire (HttpOnly, Secure, SameSite=Lax), valable 180 jours ; la session est effacée du serveur à la déconnexion ou à l'expiration, et toutes vos sessions sont fermées quand votre mot de passe change.</li>
       <li>Le stockage local de votre navigateur ou de l'application garde une copie de la bibliothèque, la position de lecture, vos réglages, vos recherches récentes et votre dernier identifiant de connexion.</li>
-      <li>Après des échecs de connexion, votre adresse IP est retenue en mémoire 15 minutes au plus pour bloquer les tentatives répétées.</li>
+      <li>Après des échecs de connexion, votre adresse IP est retenue en mémoire 15 minutes au plus pour bloquer les tentatives répétées ; lors d'une tentative d'inscription, 1 heure au plus.</li>
     </ul>
     <p>Ces éléments sont indispensables au service et ne nécessitent pas de consentement. Aucun cookie publicitaire ni de mesure d'audience, donc aucun bandeau cookies.</p>
   </section>

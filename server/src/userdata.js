@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { HttpError } from './util.js';
 import { readJson, writeJsonAtomic, isValidUsername } from './accounts.js';
@@ -113,6 +114,10 @@ export class UserData {
   file(username) {
     if (!isValidUsername(username)) throw new HttpError('Utilisateur invalide', 400);
     return path.join(this.dir, 'users', `${username}.json`);
+  }
+
+  exists(username) {
+    return fs.existsSync(this.file(username));
   }
 
   get(username) {
