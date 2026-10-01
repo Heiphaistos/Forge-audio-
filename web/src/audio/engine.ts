@@ -51,6 +51,8 @@ class AudioEngine {
   private eq: number[] = EQ_PRESETS.Plat;
   private eqEnabled = true;
   private offset = 0;
+  /** Resume point waiting for the media metadata (the element reads 0 until then). */
+  private pendingStart: number | null = null;
   private playback: Playback | null = null;
   private track: Track | null = null;
   private loadToken = 0;
@@ -159,7 +161,8 @@ class AudioEngine {
   private dropGraph() {
     const old = this.el;
     const src = old.getAttribute('src');
-    const time = old.currentTime;
+    const time = this.pendingStart ?? old.currentTime;
+    this.pendingStart = null;
     const rate = old.playbackRate;
     const wasPlaying = !old.paused;
     this.ctx?.close().catch(() => {});
@@ -314,6 +317,7 @@ class AudioEngine {
     this.track = track;
     this.playback = pb;
     this.offset = 0;
+    this.pendingStart = null;
     this.norm = gain;
     this.applyGain(track, this.gainFor(track));
     const from = old.volume;
@@ -352,6 +356,7 @@ class AudioEngine {
     this.track = track;
     this.playback = null;
     this.offset = 0;
+    this.pendingStart = null;
     this.emit();
     const gain = this.gainFor(track);
     const pb = await this.resolve(track);
@@ -372,10 +377,17 @@ class AudioEngine {
     if (!pb) return;
     const el = this.el;
     const rate = el.playbackRate;
+    this.pendingStart = null;
     if (pb.seekable) {
       this.offset = 0;
       el.src = pb.src;
-      if (startAt > 0) el.addEventListener('loadedmetadata', () => { el.currentTime = startAt; }, { once: true });
+      if (startAt > 0) {
+        this.pendingStart = startAt;
+        el.addEventListener('loadedmetadata', () => {
+          if (this.el === el && this.pendingStart !== null) el.currentTime = this.pendingStart;
+          this.pendingStart = null;
+        }, { once: true });
+      }
     } else {
       this.offset = pb.isLive ? 0 : startAt;
       el.src = startAt > 0 && !pb.isLive ? `${pb.src}&start=${Math.floor(startAt)}` : pb.src;
@@ -428,6 +440,7 @@ class AudioEngine {
 
   stop() {
     this.loadToken += 1;
+    this.pendingStart = null;
     this.endCrossfade();
     clearInterval(this.fadeTimer);
     this.el.pause();
@@ -443,6 +456,7 @@ class AudioEngine {
   }
 
   get currentTime() {
+    if (this.pendingStart !== null) return this.pendingStart;
     return this.offset + (this.el.currentTime || 0);
   }
 
@@ -464,7 +478,9 @@ class AudioEngine {
     if (!this.playback || this.playback.isLive) return;
     this.endCrossfade();
     const t = Math.max(0, Math.min(time, (this.duration ?? time) - 0.25));
-    if (this.playback.seekable) {
+    if (this.pendingStart !== null) {
+      this.pendingStart = t;
+    } else if (this.playback.seekable) {
       this.el.currentTime = t;
     } else {
       const wasPlaying = !this.el.paused;

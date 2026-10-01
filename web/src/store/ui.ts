@@ -4,7 +4,7 @@ import { lazyStorage } from '../lib/storage';
 import type { Track } from '../lib/types';
 import { EQ_PRESETS } from '../audio/engine';
 
-export type ViewName = 'home' | 'search' | 'library' | 'playlist' | 'shared' | 'liked' | 'history' | 'settings' | 'artist' | 'album' | 'mix' | 'stats' | 'blend' | 'genre' | 'friends' | 'messages' | 'profile' | 'radio';
+export type ViewName = 'home' | 'search' | 'library' | 'playlist' | 'shared' | 'liked' | 'history' | 'settings' | 'artist' | 'album' | 'mix' | 'stats' | 'blend' | 'genre' | 'friends' | 'messages' | 'profile' | 'radio' | 'artists';
 
 export interface View {
   name: ViewName;
@@ -144,6 +144,8 @@ interface SettingsState {
   dataSaver: 'off' | 'auto' | 'on';
   /** Friends see what I play and can make a Blend with me. */
   shareActivity: boolean;
+  /** Lyrics shown under the clip (right panel, full-screen player). Per device. */
+  clipLyrics: boolean;
   set: (patch: Partial<Omit<SettingsState, 'set'>>) => void;
 }
 
@@ -164,6 +166,7 @@ export const useSettings = create<SettingsState>()(
       quality: 'high',
       dataSaver: 'auto',
       shareActivity: true,
+      clipLyrics: false,
       set: (patch) => set(patch),
     }),
     {

@@ -1,4 +1,4 @@
-import { ChevronDown, Heart, ListMusic, Users, Mic2, MonitorPlay, MoreHorizontal, Disc3 } from 'lucide-react';
+import { ChevronDown, Heart, ListMusic, Users, Mic2, MonitorPlay, MoreHorizontal, Disc3, Rows2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useCurrentTrack } from '../store/player';
 import { useUi, useSettings } from '../store/ui';
@@ -10,8 +10,9 @@ import { LyricsView, QueuePanel, VideoView } from './Panels';
 import { Visualizer } from './Visualizer';
 import { SourceBadge } from './SourceBadge';
 import { useShared } from '../store/social';
+import { useMedia } from './ClipLyrics';
 
-type Side = 'lyrics' | 'queue' | 'video' | 'cover';
+type Side = 'lyrics' | 'queue' | 'video' | 'both' | 'cover';
 
 export function NowPlaying() {
   const open = useUi((s) => s.nowPlaying);
@@ -22,7 +23,10 @@ export function NowPlaying() {
   const liked = useIsLiked(track?.url);
   const toggleLike = useLibrary((s) => s.toggleLike);
   const visualizer = useSettings((s) => s.visualizer);
-  const [side, setSide] = useState<Side>('lyrics');
+  const [side, setSide] = useState<Side>(() => (useSettings.getState().clipLyrics ? 'both' : 'lyrics'));
+  // One column (phones, narrow windows): the lyrics go right under the clip, above the controls.
+  const narrow = useMedia('(max-width: 1000px)');
+  const clip = side === 'video' || side === 'both';
 
   useEffect(() => {
     if (!open) return;
@@ -33,7 +37,10 @@ export function NowPlaying() {
 
   if (!open || !track) return null;
   const tab = (s: Side, icon: React.ReactNode, label: string) => (
-    <button className={`chip ${side === s ? 'active' : ''}`} onClick={() => { if (s === 'video') useUi.getState().setMiniVideo(false); setSide(s); }}>{icon} {label}</button>
+    <button className={`chip ${side === s ? 'active' : ''}`} onClick={() => {
+      if (s === 'video' || s === 'both') { useUi.getState().setMiniVideo(false); useSettings.getState().set({ clipLyrics: s === 'both' }); }
+      setSide(s);
+    }}>{icon} {label}</button>
   );
 
   return (
@@ -47,9 +54,10 @@ export function NowPlaying() {
         </div>
         <button className="icon-btn" onClick={(e) => openMenu({ x: e.clientX, y: e.clientY, track })} aria-label="Plus d'options"><MoreHorizontal size={24} /></button>
       </div>
-      <div className={`np-body ${side === 'video' ? 'with-video' : ''}`}>
+      <div className={`np-body ${clip ? 'with-video' : ''}`}>
         <div className="np-left">
-          {side === 'video' ? <VideoView variant="np" /> : <Cover src={track.thumbnail} size="min(56vh, 100%)" large radius={14} className="np-cover" />}
+          {clip ? <VideoView variant="np" /> : <Cover src={track.thumbnail} size="min(56vh, 100%)" large radius={14} className="np-cover" />}
+          {side === 'both' && narrow && <div className="np-cl-lyrics"><LyricsView big /></div>}
           <div className="np-meta">
             <div className="grow" style={{ minWidth: 0 }}>
               <h1 className="np-title">{track.title}</h1>
@@ -71,13 +79,15 @@ export function NowPlaying() {
           <div className="chips">
             {tab('lyrics', <Mic2 size={14} />, 'Paroles')}
             {tab('queue', <ListMusic size={14} />, 'File')}
-            {tab('video', <MonitorPlay size={14} />, 'Vidéo')}
+            {tab('video', <MonitorPlay size={14} />, 'Clip')}
+            {tab('both', <Rows2 size={14} />, 'Clip + paroles')}
             {tab('cover', <Disc3 size={14} />, 'Pochette')}
           </div>
           <div className="np-side">
             {side === 'lyrics' && <LyricsView big />}
             {side === 'queue' && <QueuePanel />}
-            {side === 'video' && <div className="empty muted">La vidéo est affichée à gauche, synchronisée avec le son.</div>}
+            {side === 'video' && <div className="empty muted">{narrow ? 'Le clip est affiché en haut' : 'Le clip est affiché à gauche'}, synchronisé avec le son.</div>}
+            {side === 'both' && (narrow ? <div className="empty muted">Les paroles défilent sous le clip.</div> : <LyricsView big />)}
             {side === 'cover' && <div className="np-vinyl"><Cover src={track.thumbnail} size="100%" large radius={999} className="spin-slow" /></div>}
           </div>
         </div>

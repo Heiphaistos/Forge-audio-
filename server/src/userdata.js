@@ -121,6 +121,7 @@ export function sanitizeData(data) {
       volume: Math.min(1, Math.max(0, Number(pl.volume ?? 0.8))),
       rate: Math.min(2, Math.max(0.5, Number(pl.rate) || 1)),
       position: Math.max(0, Number(pl.position) || 0),
+      positionAt: Math.max(0, Number(pl.positionAt) || 0),
     };
   }
   return out;

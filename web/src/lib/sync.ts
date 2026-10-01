@@ -3,7 +3,8 @@ import { api, ApiError, type User } from './api';
 import type { Track } from './types';
 import { merge, type SyncData } from './merge';
 import { useLibrary, slimTrack } from '../store/library';
-import { usePlayer } from '../store/player';
+import { usePlayer, restorePosition } from '../store/player';
+import { clearResume, readResume, saveResume } from './resume';
 import { useSettings } from '../store/ui';
 import { engine } from '../audio/engine';
 import { clearDeviceKeys } from './e2e';
@@ -26,7 +27,6 @@ export const useSync = create<{ user: User | null; status: Status; savedAt: numb
 
 const SETTING_KEYS = ['accent', 'defaultSource', 'visualizer', 'dynamicColors', 'eqEnabled', 'eqPreset', 'eqGains', 'autoplay', 'crossfade', 'gapless', 'normalize', 'shareActivity'] as const;
 const OWNER_KEY = 'forge.owner';
-const POSITION_KEY = 'forge.position';
 const DEBOUNCE = 2000;
 
 let rev = 0;
@@ -45,6 +45,7 @@ export function collect(): SyncData {
   const pl = usePlayer.getState();
   const current = pl.queue[pl.index];
   const queue = pl.queue.filter(remote).map(slimTrack);
+  const saved = readResume();
   return {
     library: {
       playlists: lib.playlists.map((p) => ({ ...p, tracks: p.tracks.filter(remote) })),
@@ -69,7 +70,8 @@ export function collect(): SyncData {
       repeat: pl.repeat,
       volume: pl.volume,
       rate: pl.rate,
-      position: engine.currentTrack ? Math.floor(engine.currentTime) : Number(localStorage.getItem(POSITION_KEY)) || 0,
+      position: engine.currentTrack ? Math.floor(engine.currentTime) : current && saved?.url === current.url ? saved.t : 0,
+      positionAt: engine.currentTrack && !engine.paused ? Date.now() : saved?.at || 0,
     },
   };
 }
@@ -100,9 +102,16 @@ function apply(data: SyncData) {
     // Never swap the queue under a track that is playing on this device.
     if (data.player && !engine.currentTrack) {
       const p = data.player;
-      usePlayer.setState({ queue: p.queue, index: p.index, shuffle: p.shuffle, unshuffled: null, repeat: p.repeat, rate: p.rate, position: p.position });
+      const cur = usePlayer.getState();
+      // Same queue as here: keep its order from before shuffling (not saved on the server).
+      const same = cur.queue.length === p.queue.length && cur.queue.every((t, i) => t.url === p.queue[i]?.url);
+      usePlayer.setState({ queue: p.queue, index: p.index, shuffle: p.shuffle, unshuffled: same ? cur.unshuffled : null, repeat: p.repeat, rate: p.rate });
       usePlayer.getState().setVolume(p.volume);
-      try { localStorage.setItem(POSITION_KEY, String(p.position || 0)); } catch { /* quota */ }
+      // Resume point: the server's when it is about another track or newer (played on another device).
+      const track = p.queue[p.index];
+      const local = readResume();
+      if (track && (local?.url !== track.url || (p.positionAt || 0) > local.at)) saveResume(track.url, p.position || 0, p.positionAt || 0);
+      restorePosition();
     }
   } finally {
     applying = false;
@@ -121,7 +130,9 @@ async function push() {
   dirty = false;
   useSync.setState({ status: 'saving' });
   try {
-    const res = await api.putData(rev, collect());
+    const data = collect();
+    pushedPos = posKey(data);
+    const res = await api.putData(rev, data);
     rev = res.rev;
     useSync.setState({ status: dirty ? 'pending' : 'saved', savedAt: res.updatedAt });
   } catch (err) {
@@ -170,9 +181,16 @@ async function pull() {
 /** Library changed elsewhere (❤ from the Discord bot, live event): fetch it now. */
 export const pullNow = () => pull();
 
+/** Track and second last sent: closing the app after playing on sends the new position too. */
+let pushedPos = '';
+const posKey = (d: SyncData) => `${d.player?.queue[d.player.index]?.url}@${d.player?.position}`;
+
 function beacon() {
-  if (!dirty || !started) return;
-  const body = new Blob([JSON.stringify({ baseRev: rev, data: collect() })], { type: 'application/json' });
+  if (!started) return;
+  const data = collect();
+  if (!dirty && posKey(data) === pushedPos) return;
+  pushedPos = posKey(data);
+  const body = new Blob([JSON.stringify({ baseRev: rev, data })], { type: 'application/json' });
   // sendBeacon survives the page closing; fall back to a keepalive fetch for small payloads.
   if (!navigator.sendBeacon?.('/api/me/data', body) && body.size < 60_000) {
     fetch('/api/me/data', { method: 'POST', body, keepalive: true, headers: { 'content-type': 'application/json' } }).catch(() => {});
@@ -183,7 +201,7 @@ function resetLocal() {
   applying = true;
   useLibrary.setState({ playlists: [], deletedPlaylists: {}, liked: [], unliked: {}, followedArtists: [], unfollowed: {}, hiddenTracks: {}, hiddenArtists: {}, history: [], playCounts: {} });
   usePlayer.setState({ queue: [], index: -1, unshuffled: null, position: 0 });
-  localStorage.removeItem(POSITION_KEY);
+  clearResume();
   applying = false;
 }
 

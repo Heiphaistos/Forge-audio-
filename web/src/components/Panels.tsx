@@ -2,7 +2,8 @@ import { FriendsPanel } from './Friends';
 import { X, Trash2, Loader2, Maximize, Minimize, Maximize2, Radio, GripVertical, GripHorizontal, PictureInPicture2, AppWindow } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { usePlayer, useCurrentTrack } from '../store/player';
-import { useUi } from '../store/ui';
+import { useUi, useSettings } from '../store/ui';
+import { MediaSwitch, centerInScroller } from './ClipLyrics';
 import { api } from '../lib/api';
 import { engine } from '../audio/engine';
 import type { LyricsResult, Track } from '../lib/types';
@@ -108,7 +109,8 @@ export function LyricsView({ big = false }: { big?: boolean }) {
 
   useEffect(() => {
     if (active < 0 || Date.now() - userScroll.current < 4000) return;
-    box.current?.querySelector(`[data-line="${active}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const line = box.current?.querySelector<HTMLElement>(`[data-line="${active}"]`);
+    if (line) centerInScroller(line);
   }, [active]);
 
   if (!track) return <div className="empty">Aucun titre en cours</div>;
@@ -292,17 +294,24 @@ export function MiniVideo() {
 export function RightPanel() {
   const panel = useUi((s) => s.panel);
   const setPanel = useUi((s) => s.setPanel);
+  const both = useSettings((s) => s.clipLyrics);
   if (!panel) return null;
-  const titles = { queue: "File d'attente", lyrics: 'Paroles', video: 'Vidéo', friends: 'Activité des amis' };
+  const titles = { queue: "File d'attente", lyrics: 'Paroles', video: both ? 'Clip et paroles' : 'Vidéo', friends: 'Activité des amis' };
   return (
     <aside className={`right-panel panel-${panel}`}>
       <div className="panel-head">
         <h3>{titles[panel]}</h3>
         <button className="icon-btn" onClick={() => setPanel(null)} aria-label="Fermer le panneau"><X size={18} /></button>
       </div>
+      {(panel === 'video' || panel === 'lyrics') && <MediaSwitch />}
       {panel === 'queue' && <QueuePanel />}
       {panel === 'lyrics' && <div className="panel-body"><LyricsView /></div>}
-      {panel === 'video' && <div className="panel-body"><VideoView /></div>}
+      {panel === 'video' && (
+        <div className={`panel-body ${both ? 'clip-lyrics' : ''}`}>
+          <VideoView />
+          {both && <div className="clip-lyrics-text"><LyricsView /></div>}
+        </div>
+      )}
       {panel === 'friends' && <FriendsPanel />}
     </aside>
   );

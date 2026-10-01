@@ -45,9 +45,11 @@ export function useRemoteControl() {
       const p = usePlayer.getState();
       const t = p.queue[p.index];
       if (!t) return null;
-      const duration = t.isLive ? null : engine.duration;
+      // Reopened app, track not loaded yet: the saved position and the track's known length.
+      const loaded = !!engine.currentTrack;
+      const duration = t.isLive ? null : loaded ? engine.duration : p.duration;
       const liked = useLibrary.getState().liked.some((l) => l.url === t.url);
-      return { title: t.title, author: t.author || '', thumbnail: t.thumbnail, playing: p.playing, position: engine.currentTime, duration: Number.isFinite(duration) ? duration : null, liked };
+      return { title: t.title, author: t.author || '', thumbnail: t.thumbnail, playing: p.playing, position: loaded ? engine.currentTime : p.position, duration: Number.isFinite(duration) ? duration : null, liked };
     };
     window.__forgeBack = () => {
       const ui = useUi.getState();

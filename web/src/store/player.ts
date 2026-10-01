@@ -7,8 +7,7 @@ import { shuffleArray } from '../lib/format';
 import type { RepeatMode, Track } from '../lib/types';
 import { useLibrary, slimTrack, isHidden } from './library';
 import { useSettings, useUi } from './ui';
-
-const POSITION_KEY = 'forge.position';
+import { readResume, resumePoint, saveResume } from '../lib/resume';
 
 interface PlayerState {
   queue: Track[];
@@ -250,8 +249,9 @@ export const usePlayer = create<PlayerState>()(
           const { queue, index } = get();
           if (!queue.length) return;
           if (!engine.currentTrack || engine.currentTrack.url !== queue[index]?.url) {
-            const saved = Number(localStorage.getItem(POSITION_KEY)) || 0;
-            loadIndex(Math.max(0, index), { startAt: saved });
+            // Reopened app: the track waits paused at its saved (or since moved) position.
+            const i = Math.max(0, index);
+            loadIndex(i, { startAt: i === index ? resumePoint(get().position, queue[i].duration, queue[i].isLive) : 0 });
             return;
           }
           if (engine.paused) engine.play().catch((err) => toast(err.message, 'error'));
@@ -262,6 +262,9 @@ export const usePlayer = create<PlayerState>()(
           if (jam('seek', t)) return;
           engine.seek(t);
           set({ position: t });
+          // Not loaded yet (reopened app, still paused): remember where to start from.
+          const cur = get().queue[get().index];
+          if (!engine.currentTrack && cur && !cur.isLive) saveResume(cur.url, t);
         },
 
         setVolume: (v) => {
@@ -349,7 +352,7 @@ export function bindEngine() {
   engine.setVolume(st.volume);
   engine.setMuted(st.muted);
   engine.setRate(st.rate);
-  usePlayer.setState({ position: Number(localStorage.getItem(POSITION_KEY)) || 0 });
+  restorePosition();
 
   let fallbackToldAt = 0;
   engine.onFallback = (track, source) => {
@@ -369,11 +372,19 @@ export function bindEngine() {
       crossedFor = loadSeq;
       usePlayer.getState().crossNext();
     }
-    if (Date.now() - lastSave > 3000) {
-      lastSave = Date.now();
-      try { localStorage.setItem(POSITION_KEY, String(Math.floor(position))); } catch { /* quota */ }
-    }
+    if (Date.now() - lastSave > 5000) savePosition();
   });
+  const savePosition = () => {
+    const track = engine.currentTrack;
+    // Between two tracks (stream not resolved yet) the element still holds the previous one.
+    if (!track || !(engine.seekable || engine.isLive)) return;
+    lastSave = Date.now();
+    saveResume(track.url, engine.isLive || track.isLive ? 0 : engine.currentTime);
+  };
+  engine.on('pause', savePosition);
+  engine.on('seeked', savePosition);
+  window.addEventListener('pagehide', savePosition);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') savePosition(); });
   engine.on('durationchange', () => usePlayer.setState({ duration: engine.duration }));
   engine.on('play', () => usePlayer.setState({ playing: true }));
   engine.on('pause', () => usePlayer.setState({ playing: false }));
@@ -394,7 +405,7 @@ export function bindEngine() {
       engine.load(live, { autoplay: true }).catch(() => {});
       return;
     }
-    try { localStorage.setItem(POSITION_KEY, '0'); } catch { /* quota */ }
+    if (engine.currentTrack) saveResume(engine.currentTrack.url, 0);
     usePlayer.getState().next(true);
   });
   engine.on('error', () => {
@@ -422,6 +433,19 @@ export function bindEngine() {
       useUi.getState().toast('Minuteur de sommeil : bonne nuit 🌙');
     }
   }, 1000);
+}
+
+/**
+ * Put back the position saved for the current track (bar and time right, nothing loaded nor played
+ * until the listener presses play). Also used when the synced library brings a newer one.
+ */
+export function restorePosition() {
+  if (engine.currentTrack) return;
+  const { queue, index } = usePlayer.getState();
+  const track = queue[index];
+  const saved = readResume();
+  const position = track && saved?.url === track.url ? resumePoint(saved.t, track.duration, track.isLive) : 0;
+  usePlayer.setState({ position, duration: track && !track.isLive ? track.duration ?? null : null });
 }
 
 export const useCurrentTrack = () => usePlayer((s) => s.queue[s.index]);

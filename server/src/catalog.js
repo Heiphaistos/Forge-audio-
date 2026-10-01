@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { HttpError, TtlCache } from './util.js';
 import { getJson, dzTrack } from './streaming.js';
+import { registerArtists } from './artists.js';
 
 /**
  * Catalogue from Deezer's public API (no key, free): artist pages (top tracks, discography, similar
@@ -24,7 +25,7 @@ function throttled(fn) {
   return run;
 }
 
-async function dz(path) {
+export async function dz(path) {
   const hit = cache.get(path);
   if (hit !== undefined) return hit;
   const data = await throttled(() => getJson(`${BASE}${path}`, 'Deezer'));
@@ -223,6 +224,7 @@ export async function recommendations(input) {
 }
 
 export function registerCatalog(app) {
+  registerArtists(app);
   app.get('/api/catalog/artist', async (request) => artistPage({ id: request.query.id, name: request.query.name }));
   app.get('/api/catalog/album/:id', async (request) => albumPage(request.params.id));
   app.get('/api/catalog/search', async (request) => searchCatalog(request.query.q));

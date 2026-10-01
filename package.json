@@ -16,7 +16,7 @@
     "dev:web": "npm run dev --workspace web",
     "build": "npm run build --workspace web",
     "start": "npm start --workspace server",
-    "test": "npm test --workspace server && node --experimental-strip-types --test web/src/lib/merge.test.ts web/src/lib/e2e.test.ts",
+    "test": "npm test --workspace server && node --experimental-strip-types --test web/src/lib/merge.test.ts web/src/lib/e2e.test.ts web/src/lib/resume.test.ts",
     "accounts": "npm run accounts --workspace server --",
     "typecheck": "npm run typecheck --workspace web",
     "desktop:install": "npm install --prefix desktop",

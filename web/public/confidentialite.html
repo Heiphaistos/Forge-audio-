@@ -47,7 +47,7 @@
 
   <section>
     <h2>Bibliothèque sauvegardée sur le serveur</h2>
-    <p>Pour la synchroniser entre vos appareils, le serveur enregistre avec votre compte : vos playlists (titres, dossiers, épingles, couvertures que vous envoyez), titres likés, artistes suivis, titres et artistes masqués, radios favorites et radios écoutées récemment (50 dernières), historique d'écoute (1 000 derniers titres), compteurs d'écoute, file d'attente et réglages de lecture. Les fichiers audio locaux que vous ouvrez dans l'application ne quittent jamais votre appareil.</p>
+    <p>Pour la synchroniser entre vos appareils, le serveur enregistre avec votre compte : vos playlists (titres, dossiers, épingles, couvertures que vous envoyez), titres likés, artistes suivis, titres et artistes masqués, radios favorites et radios écoutées récemment (50 dernières), historique d'écoute (1 000 derniers titres), compteurs d'écoute, file d'attente, dernier titre écouté avec sa position de lecture (pour reprendre là où vous vous étiez arrêté, sur le même appareil ou un autre) et réglages de lecture. Les fichiers audio locaux que vous ouvrez dans l'application ne quittent jamais votre appareil.</p>
     <p>Conservation : tant que le compte existe ; l'historique ne garde que les 1 000 dernières écoutes. Suppression complète sur demande.</p>
   </section>
 
@@ -94,7 +94,7 @@
     <h2>Session, cookie et stockage local</h2>
     <ul>
       <li><strong>forge_session</strong> : cookie de session strictement nécessaire (HttpOnly, Secure, SameSite=Lax), valable 180 jours ; la session est effacée du serveur à la déconnexion ou à l'expiration, et toutes vos sessions sont fermées quand votre mot de passe change.</li>
-      <li>Le stockage local de votre navigateur ou de l'application garde une copie de la bibliothèque, la position de lecture, vos réglages, vos recherches récentes et votre dernier identifiant de connexion.</li>
+      <li>Le stockage local de votre navigateur ou de l'application garde une copie de la bibliothèque, le dernier titre écouté et sa position de lecture, vos réglages, vos recherches récentes et votre dernier identifiant de connexion.</li>
       <li>Après des échecs de connexion, votre adresse IP est retenue en mémoire 15 minutes au plus pour bloquer les tentatives répétées ; lors d'une tentative d'inscription, 1 heure au plus.</li>
     </ul>
     <p>Ces éléments sont indispensables au service et ne nécessitent pas de consentement. Aucun cookie publicitaire ni de mesure d'audience, donc aucun bandeau cookies.</p>
@@ -105,7 +105,7 @@
     <p>Forge Audio ne télécharge rien d'avance : quand vous cherchez ou écoutez un titre, <strong>c'est le serveur</strong> qui interroge le service concerné, sans transmettre votre identité :</p>
     <ul>
       <li><strong>YouTube, YouTube Music</strong> (Google, États-Unis), <strong>SoundCloud</strong>, <strong>Dailymotion</strong> et les autres sites des liens que vous collez : recherche, suggestions et flux audio ou vidéo ;</li>
-      <li><strong>Deezer</strong> : pages artiste et album, genres, recommandations ; <strong>Spotify</strong>, <strong>Deezer</strong> et <strong>Apple Music</strong> : lecture des liens de ces services (titre et artiste) pour trouver l'équivalent ;</li>
+      <li><strong>Deezer</strong> : pages artiste et album, annuaire des artistes (classements par pays, genres, artistes proches, recherche), genres, recommandations ; <strong>Spotify</strong>, <strong>Deezer</strong> et <strong>Apple Music</strong> : lecture des liens de ces services (titre et artiste) pour trouver l'équivalent ;</li>
       <li><strong>LRCLIB</strong> : paroles ; <strong>Wikipedia</strong> : biographies des artistes ;</li>
       <li><strong>IONOS</strong> (serveur de messagerie de l'hébergeur, Union européenne) : envoi des mails de vérification et de récupération du compte, à l'adresse que vous avez indiquée ;</li>
       <li><strong>Radio Browser</strong> (annuaire libre et gratuit de radios, <a href="https://www.radio-browser.info/" target="_blank" rel="noopener noreferrer">radio-browser.info</a>) : listes de radios par pays, genre et langue, recherche, logos ; quand vous lancez une radio de l'annuaire, le serveur le signale à Radio Browser (compteur d'écoutes anonyme, comme le demande l'annuaire), sans votre identité ;</li>

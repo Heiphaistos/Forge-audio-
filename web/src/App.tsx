@@ -15,6 +15,7 @@ import { Toasts } from './components/Toasts';
 import { Home } from './views/Home';
 import { Search } from './views/Search';
 import { ArtistView, AlbumView, MixView, GenreView } from './views/Catalog';
+import { ArtistsView } from './views/Artists';
 import { StatsView, BlendView } from './views/Stats';
 import { openLink } from './views/Home';
 import { Library, PlaylistView, Liked, HistoryView } from './views/Library';
@@ -39,6 +40,7 @@ function CurrentView() {
   const view = useUi((s) => s.view);
   switch (view.name) {
     case 'search': return <Search />;
+    case 'artists': return <ArtistsView />;
     case 'artist': return <ArtistView key={`${view.q}:${view.id || ''}`} />;
     case 'album': return <AlbumView key={view.id} />;
     case 'mix': return <MixView key={view.id} />;

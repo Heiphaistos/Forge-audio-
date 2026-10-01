@@ -1,9 +1,9 @@
 import { Check, ExternalLink, Heart, ListEnd, ListPlus, Loader2, Play, Save, Shuffle, UserPlus } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, type AlbumCardData, type AlbumPage, type ArtistCardData, type ArtistPage, type CatalogPlaylist } from '../lib/api';
 import { GENRES } from '../components/Cards';
 import type { Track } from '../lib/types';
-import { formatTotal } from '../lib/format';
+import { formatTime, formatTotal } from '../lib/format';
 import { usePlayer } from '../store/player';
 import { useUi } from '../store/ui';
 import { useLibrary, useIsFollowed } from '../store/library';
@@ -107,6 +107,7 @@ export function ArtistView() {
           <div className="card-grid">{disco.map((a) => <AlbumCard key={a.id} a={a} />)}</div>
         </section>
       )}
+      {!state.loading && <ArtistClips name={title} />}
       {p && p.related.length > 0 && (
         <section className="shelf">
           <div className="shelf-head"><h2>Artistes similaires</h2></div>
@@ -121,6 +122,61 @@ export function ArtistView() {
         </section>
       )}
     </div>
+  );
+}
+
+const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+/**
+ * Music videos of the artist (YouTube, through the regular search), searched once the section comes
+ * near the screen. A click plays the clip in the player with the video panel open.
+ */
+function ArtistClips({ name }: { name: string }) {
+  const [clips, setClips] = useState<Track[] | null>(null);
+  const [visible, setVisible] = useState(false);
+  const box = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const io = new IntersectionObserver((e) => { if (e.some((x) => x.isIntersecting)) setVisible(true); }, { rootMargin: '400px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  useEffect(() => {
+    if (!visible || !name) return;
+    let alive = true;
+    api.search(`${name} official music video`, 'youtube', 16)
+      .then((r) => {
+        const videos = r.tracks.filter((t) => !t.isLive && (!t.duration || t.duration < 900));
+        // Keep the artist's own videos when the search returns enough of them.
+        const own = videos.filter((t) => fold(`${t.title} ${t.author || ''}`).includes(fold(name)));
+        if (alive) setClips((own.length >= 3 ? own : videos).slice(0, 12));
+      })
+      .catch(() => alive && setClips([]));
+    return () => { alive = false; };
+  }, [visible, name]);
+  const play = (i: number) => {
+    if (!clips) return;
+    usePlayer.getState().playList(clips, i);
+    useUi.getState().setPanel('video');
+  };
+  return (
+    <section className="shelf" ref={box}>
+      <div className="shelf-head"><h2>Clips</h2></div>
+      {!clips && <div className="empty small"><Loader2 className="spin" size={20} /> Recherche des clips…</div>}
+      {clips && !clips.length && <div className="empty small">Aucun clip trouvé.</div>}
+      {clips && clips.length > 0 && (
+        <div className="card-grid clip-grid">
+          {clips.map((t, i) => (
+            <div key={t.url} className="card clip-card" role="button" tabIndex={0} onClick={() => play(i)} onKeyDown={(e) => { if (e.key === 'Enter') play(i); }}>
+              <div className="card-cover"><Cover src={t.thumbnail} size="100%" radius={8} />{t.duration ? <span className="clip-time">{formatTime(t.duration)}</span> : null}<span className="card-play" aria-hidden><Play size={20} fill="currentColor" /></span></div>
+              <div className="card-title clamp-2" title={t.title}>{t.title}</div>
+              <div className="card-sub ellipsis">{t.author}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 

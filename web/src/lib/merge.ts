@@ -33,6 +33,8 @@ export interface SyncData {
     volume: number;
     rate: number;
     position: number;
+    /** When `position` was recorded (ms): the newest of this device's and the server's wins. */
+    positionAt?: number;
   } | null;
 }
 
