@@ -352,7 +352,7 @@ export function Settings() {
         <Toggle checked={s.eqEnabled} onChange={(v) => s.set({ eqEnabled: v })} label="Égaliseur activé" hint={`Préréglage : ${s.eqPreset}`} />
         <div className="setting">
           <div className="grow">Fondu enchaîné<div className="muted small">{s.crossfade ? `Le titre suivant démarre ${s.crossfade} s avant la fin` : 'Désactivé'}{s.eqEnabled && s.eqGains.some((g) => g !== 0) || s.visualizer ? ' · sans effet tant que l’égaliseur ou le visualiseur est actif' : ''}</div></div>
-          <input type="range" className="slider" min={0} max={12} step={1} value={s.crossfade} aria-label="Durée du fondu enchaîné" onChange={(e) => s.set({ crossfade: Number(e.target.value) })} />
+          <input type="range" className="slider" min={0} max={12} step={1} value={s.crossfade} style={{ ['--pct' as string]: `${(s.crossfade / 12) * 100}%` }} aria-label="Durée du fondu enchaîné" onChange={(e) => s.set({ crossfade: Number(e.target.value) })} />
         </div>
         <Toggle checked={s.gapless} onChange={(v) => s.set({ gapless: v })} label="Enchaînement sans blanc" hint="Démarre le titre suivant juste avant la fin, sans silence entre les deux" />
         <Toggle checked={s.normalize} onChange={(v) => s.set({ normalize: v })} label="Volume harmonisé" hint="Baisse les titres trop forts pour que tous sonnent au même niveau" />
