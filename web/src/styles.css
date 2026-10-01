@@ -554,7 +554,8 @@ kbd {
   .sidebar .legal-links a { padding: 8px 4px; }
   .sidebar-backdrop { display: block; position: fixed; inset: 0; z-index: 55; background: rgba(0, 0, 0, .55); opacity: 0; pointer-events: none; transition: opacity .25s; }
   .sidebar-backdrop.open { opacity: 1; pointer-events: auto; }
-  .topbar { padding: 10px 12px; }
+  /* Home-screen app on iPhone (status bar black-translucent): stay below the status bar. */
+  .topbar { padding: calc(10px + env(safe-area-inset-top)) 12px 10px; }
   .page { padding: 4px 14px 32px; }
   .page-title { font-size: 26px; }
   .player-bar { grid-template-columns: minmax(0, 1fr) auto; padding: 0 10px; border-top: 1px solid var(--border); gap: 8px; padding-bottom: env(safe-area-inset-bottom); }
@@ -579,7 +580,7 @@ kbd {
   .quick .quick-cover, .quick > .mosaic, .quick > .cover { width: 48px !important; height: 48px !important; }
   .quick-play { display: none; }
   .filter-input input { width: 140px; }
-  .np-head { padding: 10px 12px; }
+  .np-head { padding: calc(10px + env(safe-area-inset-top)) 12px 10px; }
   .np-body { padding: 0 18px 24px; gap: 20px; }
   .np-controls .transport > .icon-btn { display: inline-flex !important; }
   .eq-band input { height: 120px; }
@@ -588,7 +589,7 @@ kbd {
 }
 
 /* ---------- accounts ---------- */
-.login { position: relative; overflow-x: hidden; overflow-y: auto; padding: 16px; justify-content: safe center; }
+.login { position: relative; overflow-x: hidden; overflow-y: auto; padding: calc(16px + env(safe-area-inset-top)) 16px 16px; justify-content: safe center; }
 .login-glow {
   position: fixed; inset: -30%; pointer-events: none;
   background: radial-gradient(circle at 30% 30%, rgba(var(--accent-rgb), .28), transparent 45%), radial-gradient(circle at 75% 70%, rgba(215, 38, 61, .2), transparent 45%);
@@ -708,7 +709,7 @@ kbd {
 .people .admin-row .avatar { flex: none; }
 .thread-page { display: flex; flex-direction: column; min-height: 100%; }
 /* Who you are talking to stays visible while scrolling (under the 54-61 px top bar). */
-.thread-head { margin: 0 0 8px; padding: 6px 0; position: sticky; top: 54px; z-index: 4; background: rgba(21, 18, 16, 0.92); backdrop-filter: blur(12px); }
+.thread-head { margin: 0 0 8px; padding: 6px 0; position: sticky; top: calc(54px + env(safe-area-inset-top)); z-index: 4; background: rgba(21, 18, 16, 0.92); backdrop-filter: blur(12px); }
 @media (min-width: 821px) { .thread-head { top: 60px; } }
 .thread-title { font-size: 22px; font-weight: 800; margin: 0; }
 .thread { display: flex; flex-direction: column; gap: 6px; flex: 1; padding: 4px 0 12px; }
