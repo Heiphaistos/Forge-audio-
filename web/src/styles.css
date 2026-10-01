@@ -532,7 +532,8 @@ kbd {
 .setting > .slider::-webkit-slider-thumb { opacity: 1; }
 .setting > .slider::-moz-range-thumb { opacity: 1; }
 .setting:last-of-type { border-bottom: 0; }
-.swatches { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; min-width: 0; }
+.swatches { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.setting:has(> .swatches) { flex-wrap: wrap; } /* on a phone the swatches go under their label, in one row */
 .swatch { width: 26px; height: 26px; border-radius: 50%; border: 2px solid transparent; transition: transform .15s; }
 .swatch:hover { transform: scale(1.12); }
 .swatch.active { border-color: #fff; box-shadow: 0 0 0 2px var(--bg) inset; }
