@@ -60,7 +60,7 @@ export function ContextMenu() {
         <div className="menu-title" title={t.title}>{t.title}</div>
         <button role="menuitem" onClick={act(() => playNow(t))}><Play size={16} /> Lire maintenant</button>
         <button role="menuitem" onClick={act(() => addNext([t]))}><ListPlus size={16} /> Lire ensuite</button>
-        <button role="menuitem" onClick={act(() => enqueue([t]))}><ListEnd size={16} /> {inJam ? 'Ajouter à la file du Jam' : 'Ajouter à la file d\'attente'}</button>
+        <button role="menuitem" onClick={act(() => enqueue([t]))}><ListEnd size={16} /> {inJam ? 'Ajouter à l’écoute partagée' : 'Ajouter à la file d\'attente'}</button>
         <button role="menuitem" onClick={() => openPicker([t])}><ListMusic size={16} /> Ajouter à une playlist…</button>
         {menu.playlistId !== undefined && menu.index !== undefined && (
           <button role="menuitem" onClick={act(() => {

@@ -22,7 +22,7 @@ import { registerCatalog } from './catalog.js';
 import { registerLoudness } from './loudness.js';
 import { registerRadio } from './radio.js';
 
-export const VERSION = '0.21.1';
+export const VERSION = '0.21.2';
 
 const IMAGE_HOSTS = /(^|\.)(ytimg\.com|ggpht\.com|googleusercontent\.com|sndcdn\.com|dmcdn\.net|dailymotion\.com|bcbits\.com|vimeocdn\.com|jtvnw\.net|scdn\.co|spotifycdn\.com|dzcdn\.net|mzstatic\.com)$/i;
 

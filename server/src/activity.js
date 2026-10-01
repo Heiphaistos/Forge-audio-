@@ -100,11 +100,11 @@ export function registerActivity(app, { accounts, userData, hub, friends }) {
     const other = String(otherName || '').toLowerCase();
     const acc = accounts.get(other);
     // Same answer for an unknown account and for someone who is not a friend.
-    if (!acc || !friends.are(username, other)) throw new HttpError('Blend possible uniquement avec vos amis', 404, 'NOT_FRIENDS');
+    if (!acc || !friends.are(username, other)) throw new HttpError('Mélange possible uniquement avec vos amis', 404, 'NOT_FRIENDS');
     const mine = dataOf(username);
     const theirs = dataOf(other);
-    if (!sharing(theirs)) throw new HttpError(`${acc.displayName} ne partage pas son activité : Blend indisponible`, 403, 'NOT_SHARED');
-    if (!sharing(mine)) throw new HttpError('Activez « Partager mon activité » pour créer un Blend', 403, 'NOT_SHARED');
+    if (!sharing(theirs)) throw new HttpError(`${acc.displayName} ne partage pas son activité : Mélange indisponible`, 403, 'NOT_SHARED');
+    if (!sharing(mine)) throw new HttpError('Activez « Partager mon activité » pour créer un Mélange', 403, 'NOT_SHARED');
     return { with: { username: other, displayName: acc.displayName }, ...blend(tasteOf(mine?.library), tasteOf(theirs?.library)) };
   };
 

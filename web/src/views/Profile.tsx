@@ -99,8 +99,8 @@ function FriendActions({ p }: { p: Profile }) {
   return (
     <div className="actions wrap">
       <button className="btn btn-primary" onClick={() => navigate({ name: 'messages', id: p.username })}><MessageCircle size={16} /> Message</button>
-      <button className="btn btn-ghost" disabled={busy} onClick={() => run(async () => { if (!useJam.getState().jam) await jam.start(); await jam.invite(p.username); })}><Radio size={16} /> {inJam ? 'Inviter au Jam' : 'Lancer un Jam et inviter'}</button>
-      <button className="btn btn-ghost" onClick={() => navigate({ name: 'blend', id: p.username })}><Blend size={16} /> Blend</button>
+      <button className="btn btn-ghost" disabled={busy} onClick={() => run(async () => { if (!useJam.getState().jam) await jam.start(); await jam.invite(p.username); })}><Radio size={16} /> {inJam ? 'Inviter à l’écoute partagée' : 'Écouter ensemble'}</button>
+      <button className="btn btn-ghost" onClick={() => navigate({ name: 'blend', id: p.username })}><Blend size={16} /> Mélange</button>
       <button className="btn btn-ghost" disabled={busy} onClick={() => { if (confirm(`Retirer ${name} de vos amis ?`)) run(async () => { await people.remove(p.username); navigate({ name: 'friends' }); }, `${name} n’est plus dans vos amis`); }}><UserMinus size={16} /> Retirer</button>
       <button className="btn btn-ghost danger" disabled={busy} onClick={() => {
         if (confirm(`Bloquer ${name} ? Cette personne ne pourra plus vous demander en ami ni vous écrire, et ne verra plus votre profil ni votre activité.`)) run(async () => { await people.block(p.username); navigate({ name: 'friends' }); }, `${name} est bloqué`);

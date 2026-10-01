@@ -106,7 +106,7 @@ function JamButton() {
   const setJamOpen = useUi((s) => s.setJamOpen);
   if (!social) return null;
   return (
-    <button className={`icon-btn ${inJam ? 'on' : ''}`} onClick={() => setJamOpen(true)} aria-label="Jam : écouter ensemble" title={inJam ? 'Jam en cours' : 'Jam : écouter ensemble'}>
+    <button className={`icon-btn ${inJam ? 'on' : ''}`} onClick={() => setJamOpen(true)} aria-label="Écoute partagée : écouter ensemble" title={inJam ? 'Écoute partagée en cours' : 'Écoute partagée : écouter ensemble'}>
       <Radio size={18} />
     </button>
   );

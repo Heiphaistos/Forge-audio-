@@ -93,7 +93,7 @@ export function BlendView() {
   const [state, setState] = useState<{ data: BlendResult | null; error: string | null }>({ data: null, error: null });
   useEffect(() => { setState({ data: null, error: null }); api.blend(user).then((data) => setState({ data, error: null })).catch((e) => setState({ data: null, error: e.message })); }, [user]);
   if (state.error) return <div className="page"><div className="empty error">{state.error}</div></div>;
-  if (!state.data) return <div className="page"><div className="empty"><Loader2 className="spin" size={28} /> Préparation du Blend…</div></div>;
+  if (!state.data) return <div className="page"><div className="empty"><Loader2 className="spin" size={28} /> Préparation du Mélange…</div></div>;
   const { tracks, match, common } = state.data;
   const name = state.data.with.displayName;
   return (
@@ -101,7 +101,7 @@ export function BlendView() {
       <div className="hero">
         <Cover src={tracks[0]?.thumbnail ?? null} size={200} radius={10} />
         <div className="hero-info">
-          <div className="muted small">BLEND</div>
+          <div className="muted small">MÉLANGE</div>
           <h1 className="hero-title">Vous + {name}</h1>
           <div className="muted small">{match} % de goûts en commun · {common} titre{common > 1 ? 's' : ''} que vous aimez tous les deux · {tracks.length} titres</div>
         </div>
@@ -111,7 +111,7 @@ export function BlendView() {
           <div className="actions">
             <button className="play-btn big" onClick={() => playList(tracks)} aria-label="Lire"><Play size={26} fill="currentColor" className="nudge" /></button>
             <button className="icon-btn big" onClick={() => playList(tracks, 0, { shuffle: true })} aria-label="Lecture aléatoire"><Shuffle size={24} /></button>
-            <button className="btn btn-ghost" onClick={() => { const pl = useLibrary.getState().createPlaylist(`Blend · ${name}`, tracks); toast(`Enregistré dans « ${pl.name} »`, 'success'); }}><Save size={16} /> Enregistrer comme playlist</button>
+            <button className="btn btn-ghost" onClick={() => { const pl = useLibrary.getState().createPlaylist(`Mélange · ${name}`, tracks); toast(`Enregistré dans « ${pl.name} »`, 'success'); }}><Save size={16} /> Enregistrer comme playlist</button>
           </div>
           <TrackList tracks={tracks} listKey={`blend:${user}`} />
         </>

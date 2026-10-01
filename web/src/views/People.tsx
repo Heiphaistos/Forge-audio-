@@ -83,7 +83,7 @@ export function FriendsView() {
                   <span className="ellipsis"><b>{f.displayName}</b> <span className="muted">@{f.username}</span></span>
                 </button>
                 <button className="icon-btn" title="Message" aria-label={`Écrire à ${f.displayName}`} onClick={() => navigate({ name: 'messages', id: f.username })}><MessageCircle size={17} /></button>
-                <button className="icon-btn" title="Blend" aria-label={`Blend avec ${f.displayName}`} onClick={() => navigate({ name: 'blend', id: f.username })}><Blend size={17} /></button>
+                <button className="icon-btn" title="Mélange" aria-label={`Mélange avec ${f.displayName}`} onClick={() => navigate({ name: 'blend', id: f.username })}><Blend size={17} /></button>
                 <button className="icon-btn" title="Retirer des amis" aria-label={`Retirer ${f.displayName} des amis`} onClick={() => { if (confirm(`Retirer ${f.displayName} de vos amis ?`)) act(() => people.remove(f.username)); }}><UserMinus size={17} /></button>
                 <button className="icon-btn" title="Bloquer" aria-label={`Bloquer ${f.displayName}`} onClick={() => block(f.username, f.displayName)}><Ban size={16} /></button>
               </div>

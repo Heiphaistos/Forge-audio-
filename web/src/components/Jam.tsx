@@ -16,8 +16,8 @@ export function JamBanner() {
   return (
     <button className="jam-banner" onClick={() => setOpen(true)}>
       <Radio size={15} />
-      <span className="ellipsis grow">{j.host === me ? 'Votre Jam' : `Jam de ${nameOf(j.host)}`} · code <b>{j.code}</b> · {j.participants.length} participant{j.participants.length > 1 ? 's' : ''}</span>
-      {unread > 0 && <span className="badge" aria-label={`${unread} message${unread > 1 ? 's' : ''} non lu${unread > 1 ? 's' : ''} dans le Jam`}>{unread}</span>}
+      <span className="ellipsis grow">{j.host === me ? 'Votre écoute partagée' : `Écoute partagée de ${nameOf(j.host)}`} · code <b>{j.code}</b> · {j.participants.length} participant{j.participants.length > 1 ? 's' : ''}</span>
+      {unread > 0 && <span className="badge" aria-label={`${unread} message${unread > 1 ? 's' : ''} non lu${unread > 1 ? 's' : ''} dans l’écoute partagée`}>{unread}</span>}
     </button>
   );
 }
@@ -33,7 +33,7 @@ function JamChat() {
     <div>
       <h3 className="small muted">Discussion</h3>
       <div ref={box} className="thread jam-chat" role="log" aria-live="polite">
-        {!messages.length && <p className="muted small">Aucun message. La discussion disparaît à la fin du Jam.</p>}
+        {!messages.length && <p className="muted small">Aucun message. La discussion disparaît à la fin de l’écoute partagée.</p>}
         {messages.map((m) => (
           <div key={m.id} className={`bubble ${m.from === me ? 'mine' : ''}`}>
             {m.from !== me && <div className="bubble-meta">{m.displayName || m.from}</div>}
@@ -41,7 +41,7 @@ function JamChat() {
           </div>
         ))}
       </div>
-      <Composer onSend={jamSay} placeholder="Écrire au Jam" />
+      <Composer onSend={jamSay} placeholder="Écrire aux participants" />
     </div>
   );
 }
@@ -74,19 +74,19 @@ export function JamPanel() {
 
   return (
     <div className="modal-backdrop" onClick={close}>
-      <div className="modal jam-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Jam">
+      <div className="modal jam-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Écoute partagée">
         <div className="modal-head">
-          <h2><Radio size={20} /> Jam</h2>
+          <h2><Radio size={20} /> Écoute partagée</h2>
           <button className="icon-btn" onClick={close} aria-label="Fermer"><X size={20} /></button>
         </div>
         {!j ? (
           <>
             <p className="muted small">Écoutez ensemble, chacun sur son appareil : tout le monde ajoute des titres à la même file et entend la même chose au même moment.</p>
             <button className="btn btn-primary full" disabled={busy} onClick={() => run(jam.start)}>
-              {busy ? <Loader2 size={16} className="spin" /> : <Radio size={16} />} Lancer un Jam avec ma file d'attente
+              {busy ? <Loader2 size={16} className="spin" /> : <Radio size={16} />} Lancer une écoute partagée avec ma file d'attente
             </button>
             <form className="row gap" onSubmit={(e) => { e.preventDefault(); if (code.trim()) run(() => jam.join(code)); }}>
-              <input className="input grow jam-code-input" placeholder="Code du Jam (6 caractères)" value={code} maxLength={6} onChange={(e) => setCode(e.target.value.toUpperCase())} aria-label="Code du Jam" autoCapitalize="characters" />
+              <input className="input grow jam-code-input" placeholder="Code à 6 caractères" value={code} maxLength={6} onChange={(e) => setCode(e.target.value.toUpperCase())} aria-label="Code de l’écoute partagée" autoCapitalize="characters" />
               <button className="btn btn-ghost" disabled={busy || code.trim().length < 6}>Rejoindre</button>
             </form>
           </>
@@ -131,7 +131,7 @@ export function JamPanel() {
               <p className="muted small"><Users size={13} /> {j.everyoneControls ? 'Tout le monde peut contrôler la lecture.' : `${nameOf(j.host)} contrôle la lecture ; vous pouvez ajouter des titres (menu ⋯ ou « Ajouter à la file »).`}</p>
             )}
             <button className="btn btn-ghost danger" disabled={busy} onClick={() => run(async () => { await jam.leave(); close(); })}>
-              <LogOut size={16} /> {host ? 'Terminer le Jam pour tout le monde' : 'Quitter le Jam'}
+              <LogOut size={16} /> {host ? 'Terminer l’écoute partagée pour tous' : 'Quitter l’écoute partagée'}
             </button>
           </>
         )}

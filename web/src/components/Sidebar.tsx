@@ -140,7 +140,7 @@ export function Sidebar() {
               <span className="nav-square jam"><Users size={15} /></span><span>Activité des amis</span>
             </button>
             <button className={`nav-item ${inJam ? 'active' : ''}`} onClick={() => { setJamOpen(true); setOpen(false); }}>
-              <span className="nav-square jam"><Radio size={15} /></span><span>{inJam ? 'Jam en cours' : 'Jam : écouter ensemble'}</span>
+              <span className="nav-square jam"><Radio size={15} /></span><span>{inJam ? 'Écoute partagée en cours' : 'Écoute partagée'}</span>
             </button>
           </Section>
         )}

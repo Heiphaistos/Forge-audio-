@@ -166,7 +166,7 @@ function applyJam(j: Jam) {
   }
   if (Math.abs(engine.currentTime - at) > 2.5) engine.seek(at);
   if (j.playing && engine.paused) {
-    engine.play().catch(() => toast('Touchez ▶ pour entendre le Jam (lecture automatique bloquée par le navigateur)', 'info'));
+    engine.play().catch(() => toast('Touchez ▶ pour entendre l’écoute partagée (lecture automatique bloquée par le navigateur)', 'info'));
   } else if (!j.playing && !engine.paused) engine.pause();
 }
 
@@ -186,7 +186,7 @@ export const jam = {
     setJam(j);
     return j;
   },
-  join: async (code: string) => { const { jam: j } = await api.jamJoin(code); setJam(j); toast(`Vous avez rejoint le Jam de ${nameOf(j.host)}`, 'success'); return j; },
+  join: async (code: string) => { const { jam: j } = await api.jamJoin(code); setJam(j); toast(`Vous avez rejoint l’écoute partagée de ${nameOf(j.host)}`, 'success'); return j; },
   leave: async () => {
     const j = useJam.getState().jam;
     if (!j) return;
@@ -219,7 +219,7 @@ setJamRouter((op, arg) => {
   const j = useJam.getState().jam;
   if (!j) return false;
   const ctl = (action: string, extra = {}) => {
-    if (!canControl(j)) { toast('Seul l\'hôte contrôle la lecture de ce Jam', 'info'); return; }
+    if (!canControl(j)) { toast('Seul l\'hôte contrôle la lecture de cette écoute partagée', 'info'); return; }
     jam.control(action, extra).catch(fail);
   };
   switch (op) {
@@ -234,17 +234,17 @@ setJamRouter((op, arg) => {
     case 'playNow':
       jam.add([arg as Track], true).then((nj) => {
         if (nj && canControl(nj)) return jam.control('jump', { index: nj.index + 1 });
-        toast('Ajouté au Jam, joué ensuite', 'success');
+        toast('Ajouté à l’écoute partagée, joué ensuite', 'success');
       }).catch(fail);
       break;
     case 'playList': case 'addNext':
-      jam.add(arg as Track[], true).then(() => toast(`${(arg as Track[]).length > 1 ? `${(arg as Track[]).length} titres ajoutés` : 'Ajouté'} au Jam, joué ensuite`, 'success')).catch(fail);
+      jam.add(arg as Track[], true).then(() => toast(`${(arg as Track[]).length > 1 ? `${(arg as Track[]).length} titres ajoutés` : 'Ajouté'} à l’écoute partagée, joué ensuite`, 'success')).catch(fail);
       break;
     case 'enqueue':
-      jam.add(arg as Track[]).then(() => toast(`${(arg as Track[]).length > 1 ? `${(arg as Track[]).length} titres ajoutés` : 'Ajouté'} à la file du Jam`, 'success')).catch(fail);
+      jam.add(arg as Track[]).then(() => toast(`${(arg as Track[]).length > 1 ? `${(arg as Track[]).length} titres ajoutés` : 'Ajouté'} à l’écoute partagée`, 'success')).catch(fail);
       break;
     case 'probe': break;
-    case 'blocked': toast('Pas disponible pendant un Jam : la file est commune', 'info'); break;
+    case 'blocked': toast('Pas disponible pendant une écoute partagée : la file est commune', 'info'); break;
   }
   return true;
 });
@@ -337,7 +337,7 @@ export function startSocial(user: User) {
         // Jam window closed: say it, or the message goes unnoticed.
         const away = m.from !== user.username && !useUi.getState().jamOpen;
         useJamChat.setState({ messages: [...c.messages, m].slice(-200), unread: c.unread + (away ? 1 : 0) });
-        if (away) toast(`${m.displayName || m.from} (Jam) : ${m.text.length > 80 ? `${m.text.slice(0, 80)}…` : m.text}`, 'info', { label: 'Ouvrir', run: () => useUi.getState().setJamOpen(true) });
+        if (away) toast(`${m.displayName || m.from} (écoute partagée) : ${m.text.length > 80 ? `${m.text.slice(0, 80)}…` : m.text}`, 'info', { label: 'Ouvrir', run: () => useUi.getState().setJamOpen(true) });
       }
     }
     else if (e.type === 'shared') {
@@ -350,13 +350,13 @@ export function startSocial(user: User) {
     } else if (e.type === 'jam') {
       const before = useJam.getState().jam;
       const next = (e.jam as Jam | null) || null;
-      if (!next && before) toast(String(e.reason || 'Vous avez quitté le Jam'));
-      if (e.joined && e.joined !== user.username) toast(`${nameOf(String(e.joined))} a rejoint le Jam`);
+      if (!next && before) toast(String(e.reason || 'Vous avez quitté l’écoute partagée'));
+      if (e.joined && e.joined !== user.username) toast(`${nameOf(String(e.joined))} a rejoint l’écoute partagée`);
       const added = e.added as { by: string; count: number; title: string } | undefined;
-      if (added && added.by !== user.username) toast(`${nameOf(added.by)} a ajouté ${added.count > 1 ? `${added.count} titres` : `« ${added.title} »`} au Jam`);
+      if (added && added.by !== user.username) toast(`${nameOf(added.by)} a ajouté ${added.count > 1 ? `${added.count} titres` : `« ${added.title} »`} à l’écoute partagée`);
       setJam(next);
     } else if (e.type === 'jam-invite') {
-      toast(`${String(e.from)} vous invite à son Jam`, 'info', { label: 'Rejoindre', run: () => jam.join(String(e.code)).catch(fail) });
+      toast(`${String(e.from)} vous invite à son écoute partagée`, 'info', { label: 'Rejoindre', run: () => jam.join(String(e.code)).catch(fail) });
     }
   };
   connect(onEvent);

@@ -29,7 +29,7 @@ export class JamHub {
   }
 
   sweep() {
-    for (const j of this.jams.values()) if (Date.now() - j.updatedAt > IDLE_MS) this.end(j, 'Jam terminé (inactif depuis 12 h)');
+    for (const j of this.jams.values()) if (Date.now() - j.updatedAt > IDLE_MS) this.end(j, 'Écoute partagée terminée (inactive depuis 12 h)');
   }
 
   code() {
@@ -66,7 +66,7 @@ export class JamHub {
 
   require(id, username) {
     const j = this.jams.get(String(id));
-    if (!j || !j.participants.has(username)) throw new HttpError('Jam introuvable ou terminé', 404, 'NO_JAM');
+    if (!j || !j.participants.has(username)) throw new HttpError('Écoute partagée introuvable ou terminée', 404, 'NO_JAM');
     return j;
   }
 
@@ -96,9 +96,9 @@ export class JamHub {
   /** `refused(host)`: true when the host and this user blocked each other (same answer as a wrong code). */
   join(user, code, refused = () => false) {
     const j = [...this.jams.values()].find((x) => x.code === String(code || '').trim().toUpperCase());
-    if (!j || (!j.participants.has(user.username) && refused(j.host))) throw new HttpError('Aucun Jam avec ce code', 404, 'NO_JAM');
+    if (!j || (!j.participants.has(user.username) && refused(j.host))) throw new HttpError('Aucune écoute partagée avec ce code', 404, 'NO_JAM');
     if (!j.participants.has(user.username)) {
-      if (j.participants.size >= MAX_PARTICIPANTS) throw new HttpError('Ce Jam est complet', 400);
+      if (j.participants.size >= MAX_PARTICIPANTS) throw new HttpError('Cette écoute partagée est complète', 400);
       const old = this.mine(user.username);
       if (old && old.id !== j.id) this.leave(old.id, user.username);
       j.participants.set(user.username, this.person(user));
@@ -110,7 +110,7 @@ export class JamHub {
 
   leave(id, username) {
     const j = this.require(id, username);
-    if (j.host === username) return this.end(j, 'L\'hôte a terminé le Jam');
+    if (j.host === username) return this.end(j, 'L\'hôte a terminé l’écoute partagée');
     j.participants.delete(username);
     this.byUser.delete(username);
     this.hub.emit(username, { type: 'jam', jam: null });
@@ -160,7 +160,7 @@ export class JamHub {
     const j = this.require(id, username);
     const fresh = cleanTracks(tracks, MAX_QUEUE).map((t) => ({ ...t, addedBy: username }));
     if (!fresh.length) throw new HttpError('Aucun titre à ajouter', 400);
-    if (j.queue.length + fresh.length > MAX_QUEUE) throw new HttpError(`${MAX_QUEUE} titres au maximum dans un Jam`, 400);
+    if (j.queue.length + fresh.length > MAX_QUEUE) throw new HttpError(`${MAX_QUEUE} titres au maximum dans une écoute partagée`, 400);
     if (next && j.index >= 0) j.queue.splice(j.index + 1, 0, ...fresh);
     else j.queue.push(...fresh);
     if (j.index < 0) { j.index = 0; j.position = 0; j.positionAt = Date.now(); }
@@ -196,7 +196,7 @@ export class JamHub {
    */
   control(id, username, { action, position, index, from }) {
     const j = this.require(id, username);
-    if (action !== 'advance' && !this.canControl(j, username)) throw new HttpError('Seul l\'hôte contrôle la lecture de ce Jam', 403, 'FORBIDDEN');
+    if (action !== 'advance' && !this.canControl(j, username)) throw new HttpError('Seul l\'hôte contrôle la lecture de cette écoute partagée', 403, 'FORBIDDEN');
     if (action === 'advance' && j.host !== username && !j.everyoneControls) return this.view(j);
     const now = Date.now();
     const go = (i) => { j.index = i; j.position = 0; j.positionAt = now; };

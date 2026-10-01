@@ -43,7 +43,7 @@ export function FriendsPanel() {
             </button>
             <div className="muted small ellipsis">{f.track.author}</div>
           </div>
-          <button className="icon-btn" onClick={() => navigate({ name: 'blend', id: f.user })} aria-label={`Blend avec ${f.displayName}`} title={`Blend avec ${f.displayName}`}><Blend size={17} /></button>
+          <button className="icon-btn" onClick={() => navigate({ name: 'blend', id: f.user })} aria-label={`Mélange avec ${f.displayName}`} title={`Mélange avec ${f.displayName}`}><Blend size={17} /></button>
         </div>
       ))}
     </div>

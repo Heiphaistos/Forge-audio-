@@ -2,7 +2,7 @@
   "id": "/",
   "name": "Forge Audio",
   "short_name": "Forge Audio",
-  "description": "Votre musique, sans pub, depuis YouTube, SoundCloud, Dailymotion et plus.",
+  "description": "Votre musique sans pub : recherche, playlists, radios et paroles, sur tous vos appareils.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0c0a09",
