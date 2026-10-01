@@ -9,6 +9,7 @@ import { Friends, registerFriends } from './friends.js';
 import { Messages, registerMessages, messageLimiter, checkRate } from './messages.js';
 import { Profiles, registerProfiles } from './profiles.js';
 import { registerKeys } from './keys.js';
+import { Devices, registerDevices } from './devices.js';
 
 /**
  * Everything between accounts: friends, private messages, live events, shared playlists, Jam, and
@@ -20,6 +21,7 @@ export function registerSocial(app, { accounts, userData, dataDir, keys, botToke
   const hub = new EventHub();
   const shared = new SharedPlaylists(dataDir);
   const jams = new JamHub(hub);
+  const devices = new Devices(hub);
   const links = new DiscordLinks(dataDir);
   const friends = new Friends(dataDir);
   const messages = new Messages(dataDir, app.log);
@@ -32,7 +34,9 @@ export function registerSocial(app, { accounts, userData, dataDir, keys, botToke
   const sharedEvent = (users, playlist, extra = {}) => hub.emit(users, { type: 'shared', id: playlist?.id ?? extra.id, playlist: playlist ?? null, ...extra });
 
   // ---------- Live events ----------
-  app.get('/api/events', async (request, reply) => streamEvents(hub, request, reply, me(request)));
+  // ?device=<id>&name=<name>: this stream is also a remote-controllable device (devices.js).
+  app.get('/api/events', async (request, reply) => streamEvents(hub, request, reply, me(request), (send) => devices.attach(me(request), request.query, send)));
+  registerDevices(app, { devices });
 
   // ---------- Friends and private messages ----------
   registerFriends(app, {
