@@ -585,7 +585,7 @@ kbd {
   .pb-cover .cover { width: 48px !important; height: 48px !important; }
   .right-panel { inset: 0 0 var(--player-h) 0; width: auto; border-radius: 0; }
   .track-head { display: none; }
-  .track-row { grid-template-columns: minmax(0, 1fr) 36px 36px; height: 64px; padding: 0 4px; }
+  .track-row { grid-template-columns: minmax(0, 1fr) 44px 44px; height: 64px; padding: 0 4px; }
   .tr-index, .tr-duration { display: none; }
   .tr-like, .tr-more { opacity: 1; }
   .hero { flex-direction: column; align-items: flex-start; }
@@ -784,3 +784,11 @@ kbd {
 }
 .friend-link.user-name { display: block; max-width: 100%; }
 
+/* Touch screens: every control is at least 44 x 44 px (a fingertip), inline text links excepted. */
+@media (pointer: coarse) {
+  .icon-btn, .play-btn, .queue-cover, .swatch, .topbar-search { min-width: 44px; min-height: 44px; }
+  .btn, .chip, .context-menu button, input:not([type=range]):not([type=checkbox]):not([type=radio]), select, textarea { min-height: 44px; }
+  .filter-input { padding-block: 0; }
+  .friend-link.grow, .friend-track { min-height: 44px; }
+  .chips.small .chip { min-height: 44px; }
+}
