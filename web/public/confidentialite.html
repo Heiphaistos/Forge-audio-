@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0c0a09">
+  <title>Confidentialité · Forge Audio</title>
+  <meta name="description" content="Données traitées par le lecteur Forge Audio : compte, bibliothèque, historique, services tiers, durées de conservation et droits RGPD.">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/legal.css">
+</head>
+<body>
+<main>
+  <header>
+    <a class="logo" href="/"><img src="/icon.svg" alt="" width="32" height="32"><span>Forge <b>Audio</b></span></a>
+    <nav aria-label="Pages légales">
+      <a href="/mentions-legales.html">Mentions légales</a>
+      <a href="/confidentialite.html" aria-current="page">Confidentialité</a>
+      <a href="/cgu.html">CGU</a>
+    </nav>
+  </header>
+
+  <h1>Politique de confidentialité</h1>
+  <p class="updated">Dernière mise à jour : 1er octobre 2026</p>
+  <p class="intro">En bref : le lecteur <strong>connect.forgeaudio.heiphaistos.org</strong> est réservé à des comptes créés par l'éditeur. Il garde votre bibliothèque musicale pour la retrouver sur tous vos appareils. Pas de publicité, pas de revente, pas de mesure d'audience, pas de cookie de pistage. Les données sont stockées sur un serveur de l'éditeur hébergé par IONOS dans l'Union européenne.</p>
+
+  <section>
+    <h2>Responsable de traitement</h2>
+    <p>L'éditeur (voir les <a href="/mentions-legales.html">mentions légales</a>), joignable à <a href="mailto:contact.forgeinformatique@heiphaistos.org">contact.forgeinformatique@heiphaistos.org</a>.</p>
+  </section>
+
+  <section>
+    <h2>Compte</h2>
+    <p>Il n'y a pas d'inscription publique : l'éditeur crée chaque compte à la demande. Un compte contient un identifiant, un nom affiché et une empreinte du mot de passe (scrypt) — le mot de passe lui-même n'est jamais stocké. Aucune adresse e-mail n'est demandée.</p>
+    <p>Finalité : vous authentifier. Base légale : exécution du service (article 6.1.b du RGPD). Conservation : jusqu'à la suppression du compte, sur simple demande.</p>
+  </section>
+
+  <section>
+    <h2>Bibliothèque sauvegardée sur le serveur</h2>
+    <p>Pour la synchroniser entre vos appareils, le serveur enregistre avec votre compte : vos playlists (titres, dossiers, épingles, couvertures que vous envoyez), titres likés, artistes suivis, titres et artistes masqués, historique d'écoute (1 000 derniers titres), compteurs d'écoute, file d'attente et réglages de lecture. Les fichiers audio locaux que vous ouvrez dans l'application ne quittent jamais votre appareil.</p>
+    <p>Conservation : tant que le compte existe ; l'historique ne garde que les 1 000 dernières écoutes. Suppression complète sur demande.</p>
+  </section>
+
+  <section>
+    <h2>Fonctions entre comptes</h2>
+    <ul>
+      <li><strong>Activité des amis</strong> : le titre que vous écoutez et vos statistiques sont visibles par les autres comptes du lecteur, qui peuvent aussi créer un « Blend » avec vos goûts. Activé par défaut, désactivable dans Paramètres ; désactivé, rien n'est transmis.</li>
+      <li><strong>Playlists partagées</strong> : les membres que vous invitez voient et modifient leurs titres.</li>
+      <li><strong>Jam</strong> (écoute à plusieurs) : file et position de lecture partagées, gardées en mémoire vive seulement, effacées à la fin de la session.</li>
+      <li><strong>Liaison Discord</strong> (facultative) : si vous liez votre compte au bot Discord HeiphaisBot, le serveur garde la correspondance entre votre compte et votre identifiant Discord, pour que vos likes et playlists partagées soient les mêmes des deux côtés. Déliable sur demande.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Session, cookie et stockage local</h2>
+    <ul>
+      <li><strong>forge_session</strong> : cookie de session strictement nécessaire (HttpOnly, Secure, SameSite=Lax), valable 180 jours ; la session est effacée du serveur à la déconnexion ou à l'expiration, et toutes vos sessions sont fermées quand votre mot de passe change.</li>
+      <li>Le stockage local de votre navigateur ou de l'application garde une copie de la bibliothèque, la position de lecture, vos réglages, vos recherches récentes et votre dernier identifiant de connexion.</li>
+      <li>Après des échecs de connexion, votre adresse IP est retenue en mémoire 15 minutes au plus pour bloquer les tentatives répétées.</li>
+    </ul>
+    <p>Ces éléments sont indispensables au service et ne nécessitent pas de consentement. Aucun cookie publicitaire ni de mesure d'audience, donc aucun bandeau cookies.</p>
+  </section>
+
+  <section>
+    <h2>Services tiers</h2>
+    <p>Forge Audio ne télécharge rien d'avance : quand vous cherchez ou écoutez un titre, <strong>c'est le serveur</strong> qui interroge le service concerné, sans transmettre votre identité :</p>
+    <ul>
+      <li><strong>YouTube, YouTube Music</strong> (Google, États-Unis), <strong>SoundCloud</strong>, <strong>Dailymotion</strong> et les autres sites des liens que vous collez : recherche, suggestions et flux audio ou vidéo ;</li>
+      <li><strong>Deezer</strong> : pages artiste et album, genres, recommandations ; <strong>Spotify</strong>, <strong>Deezer</strong> et <strong>Apple Music</strong> : lecture des liens de ces services (titre et artiste) pour trouver l'équivalent ;</li>
+      <li><strong>LRCLIB</strong> : paroles ; <strong>Wikipedia</strong> : biographies des artistes.</li>
+    </ul>
+    <p>Exception : les <strong>pochettes et miniatures</strong> sont chargées directement par votre navigateur depuis les serveurs d'images de ces services (YouTube, SoundCloud, Deezer…), qui reçoivent donc votre adresse IP. Les applications de bureau et Android vérifient aussi leurs mises à jour auprès de GitHub et de forgeaudio.heiphaistos.org. La police de caractères est servie par le lecteur lui-même (aucun appel à Google Fonts).</p>
+  </section>
+
+  <section>
+    <h2>Journaux techniques du serveur</h2>
+    <p>Le serveur web enregistre pour chaque requête l'adresse IP, la date, la page demandée et le navigateur utilisé. Finalité : sécurité, prévention des abus et diagnostic. Base légale : intérêt légitime (article 6.1.f du RGPD). Conservation : 12 mois maximum.</p>
+  </section>
+
+  <section>
+    <h2>Destinataires</h2>
+    <p>Les données ne sont accessibles qu'à l'éditeur et, pour ce que vous partagez (activité, playlists partagées, Jam), aux autres comptes du lecteur. Elles ne sont ni vendues, ni cédées, ni utilisées pour du profilage publicitaire.</p>
+  </section>
+
+  <section>
+    <h2>Vos droits</h2>
+    <p>Vous disposez des droits d'accès, de rectification, d'effacement, de limitation, d'opposition et de portabilité (articles 15 à 22 du RGPD). Pour les exercer, écrivez à <a href="mailto:contact.forgeinformatique@heiphaistos.org">contact.forgeinformatique@heiphaistos.org</a> — réponse sous un mois. Vous pouvez aussi exporter vous-même votre bibliothèque (bouton « Exporter » de la Bibliothèque).</p>
+    <p>En cas de désaccord, vous pouvez saisir la CNIL : <a href="https://www.cnil.fr" rel="noopener noreferrer" target="_blank">cnil.fr</a>.</p>
+  </section>
+
+  <p class="foot"><a href="/">Retour au lecteur</a> · <a href="/mentions-legales.html">Mentions légales</a> · <a href="/cgu.html">Conditions d'utilisation</a></p>
+</main>
+</body>
+</html>

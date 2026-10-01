@@ -2,7 +2,7 @@ import { ChevronLeft, ChevronRight, Menu, Search as SearchIcon, Loader2, Lock, E
 import { useEffect, useState } from 'react';
 import { useUi } from './store/ui';
 import { usePlayer } from './store/player';
-import { Sidebar, Logo } from './components/Sidebar';
+import { Sidebar, Logo, LegalLinks } from './components/Sidebar';
 import { PlayerBar } from './components/PlayerBar';
 import { RightPanel, MiniVideo } from './components/Panels';
 import { NowPlaying } from './components/NowPlaying';
@@ -115,6 +115,7 @@ function Login({ onDone }: { onDone: (user: User) => void }) {
         <p className="muted small center-text">Astuce : laissez votre navigateur enregistrer le mot de passe.</p>
         {inMobileApp() && <p className="muted small center-text">Serveur : <b>{location.host}</b> · <a className="link accent" href={changeServerUrl()}>Changer</a></p>}
         {window.forgeDesktop && <p className="muted small center-text">Serveur : <b>{location.host}</b> · <button type="button" className="link accent" onClick={() => window.forgeDesktop?.setServer(null)}>Utiliser sans compte (bibliothèque locale)</button></p>}
+        <LegalLinks />
       </form>
     </div>
   );

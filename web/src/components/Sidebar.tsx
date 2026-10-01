@@ -113,6 +113,7 @@ export function Sidebar() {
         </div>
         <UserBlock />
         {item({ name: 'settings' }, <Settings size={20} />, 'Paramètres')}
+        <LegalLinks />
       </aside>
     </>
   );
@@ -144,5 +145,16 @@ function UserBlock() {
       </div>
       {user.username !== 'local' && <button className="icon-btn" onClick={() => logout()} title="Se déconnecter" aria-label="Se déconnecter"><LogOut size={17} /></button>}
     </div>
+  );
+}
+
+/** Links to the static legal pages (web/public/*.html, served next to the app). */
+export function LegalLinks() {
+  return (
+    <nav className="legal-links" aria-label="Informations légales">
+      <a href="/mentions-legales.html">Mentions légales</a>
+      <a href="/confidentialite.html">Confidentialité</a>
+      <a href="/cgu.html">CGU</a>
+    </nav>
   );
 }
