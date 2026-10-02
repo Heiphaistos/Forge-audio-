@@ -221,8 +221,11 @@ export const useLibrary = create<LibraryState>()(
   ),
 );
 
-/** Spotify playlist imports used to give every track the playlist's image (ab67706c…) instead of its album art (ab67616d…). */
-const wrongSpotifyCover = (t: Track) => /^https:\/\/open\.spotify\.com\/track\//.test(t.url) && !/ab67616d/.test(t.thumbnail || '');
+/**
+ * Spotify playlist imports used to give every track the playlist's image instead of its album art: ab67706c… or the
+ * 4-album mosaic (mosaic.scdn.co/300/ab67616d…ab67616d…, which also contains « ab67616d »). Album art = /image/ab67616d….
+ */
+const wrongSpotifyCover = (t: Track) => /^https:\/\/open\.spotify\.com\/track\//.test(t.url) && !/\/image\/ab67616d/.test(t.thumbnail || '');
 
 /** Put the real album art on the Spotify tracks of the library (likes and playlists); run once after the library loads. */
 export async function repairSpotifyCovers() {

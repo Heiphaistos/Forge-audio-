@@ -1,7 +1,8 @@
 import { Plus, Upload, Download, FolderOpen, Heart, Play, Shuffle, Trash2, Pencil, Copy, RefreshCw, ListEnd, Loader2, ArrowDownUp, Search as SearchIcon, Check, Users, GitMerge, Pin, PinOff, ImagePlus, Folder, ListPlus } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
-import { repairSpotifyCovers, useLibrary } from '../store/library';
+import { useLibrary } from '../store/library';
 import { parseSpotifyLiked } from '../lib/spotifyLiked';
+import { SpotifyImportDialog } from '../components/SpotifyImportDialog';
 import { usePlayer } from '../store/player';
 import { useUi } from '../store/ui';
 import { PlaylistCard } from '../components/Cards';
@@ -58,6 +59,7 @@ export function Library() {
   const fileInput = useRef<HTMLInputElement>(null);
   const [sort, setSort] = useState<'recent' | 'name' | 'size'>('recent');
   const [merging, setMerging] = useState(false);
+  const [spotifyImport, setSpotifyImport] = useState<Track[] | null>(null);
   const [folder, setFolder] = useState<string | null>(null);
   const folders = useMemo(() => [...new Set(playlists.map((p) => p.folder).filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b, 'fr')), [playlists]);
 
@@ -84,11 +86,9 @@ export function Library() {
           try {
             const text = await f.text();
             const spotify = parseSpotifyLiked(text);
-            if (spotify) {
-              const n = useLibrary.getState().likeTracks(spotify);
-              toast(`${n} titre(s) liké(s) Spotify importé(s) sur ${spotify.length}`, 'success');
-              repairSpotifyCovers().catch(() => {});
-            } else {
+            if (spotify?.length) setSpotifyImport(spotify);
+            else if (spotify) toast('Aucun titre Spotify dans ce fichier', 'error');
+            else {
               const r = importData(text);
               toast(`${r.playlists} playlist(s) et ${r.liked} titre(s) liké(s) importés`, 'success');
             }
@@ -116,6 +116,7 @@ export function Library() {
         </div>
       )}
       {merging && <MergeDialog onClose={() => setMerging(false)} />}
+      {spotifyImport && <SpotifyImportDialog tracks={spotifyImport} onClose={() => setSpotifyImport(null)} />}
       <div className="card-grid">
         <div className="card liked-card" onClick={() => navigate({ name: 'liked' })}>
           <div className="liked-card-inner">
