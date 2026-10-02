@@ -40,6 +40,8 @@ jobs:
       - run: npm ci --prefix desktop
       - name: Mac self-update check (latest release)
         if: runner.os == 'macOS'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node desktop/scripts/test-mac-updater.mjs
       # electron-builder needs rpmbuild for the Fedora / openSUSE package
       - if: runner.os == 'Linux'

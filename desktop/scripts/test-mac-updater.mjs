@@ -4,10 +4,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { appBundle, installOnExit, stageMacUpdate } from '../mac-updater.js';
 
-const latest = await (await fetch('https://api.github.com/repos/Heiphaistos/Forge-audio-/releases/latest')).json();
+const auth = process.env.GH_TOKEN ? { authorization: `Bearer ${process.env.GH_TOKEN}` } : {};
+const latest = await (await fetch('https://api.github.com/repos/Heiphaistos/Forge-audio-/releases/latest', { headers: auth })).json();
 const version = latest.tag_name.replace(/^v/, '');
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'forge-mac-update-'));
 const bundle = path.join(root, 'Applications', 'Forge Audio.app');
@@ -19,6 +20,10 @@ assert.throws(() => appBundle('/Volumes/Forge Audio/Forge Audio.app/Contents/Mac
 
 const staged = await stageMacUpdate(version, path.join(root, 'work'), { bundle });
 console.log('prêt :', staged);
+// arm64 builds are ad hoc signed, x64 ones not at all: the swap must leave the downloaded state untouched.
+const codesign = (p) => spawnSync('/usr/bin/codesign', ['--verify', '--deep', p], { encoding: 'utf8' }).status;
+const before = codesign(staged);
+if (process.arch === 'arm64') assert.equal(before, 0, 'build arm64 sans signature ad hoc : ne se lancerait pas');
 
 const fakeApp = spawn('/bin/sleep', ['2']);
 const swap = installOnExit(staged, { bundle, pid: fakeApp.pid });
@@ -27,7 +32,5 @@ assert.ok(!fs.existsSync(path.join(bundle, 'Contents/old-version')), 'ancienne a
 assert.ok(!fs.existsSync(`${bundle}.old`), 'copie de secours retirée');
 assert.ok(fs.existsSync(path.join(bundle, 'Contents/MacOS/Forge Audio')), 'nouvel exécutable en place');
 console.log(`mac-updater OK (${version}, ${process.arch})`);
-const { spawnSync } = await import('node:child_process');
-const sig = spawnSync('/usr/bin/codesign', ['--verify', '--deep', bundle], { encoding: 'utf8' });
-assert.equal(sig.status, 0, `signature de l'app remplacée invalide : ${sig.stderr}`);
-console.log('signature (ad hoc) valide après remplacement');
+assert.equal(codesign(bundle), before, 'signature modifiée par le remplacement');
+console.log(`signature inchangée après remplacement (codesign ${before})`);

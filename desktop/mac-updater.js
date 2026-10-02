@@ -6,6 +6,8 @@ import { promisify } from 'node:util';
 
 const run = promisify(execFile);
 const API = 'https://api.github.com/repos/Heiphaistos/Forge-audio-/releases/tags/';
+// CI only (shared runner IPs hit the anonymous rate limit); the app itself never has a token.
+const apiHeaders = () => ({ accept: 'application/vnd.github+json', ...(process.env.GH_TOKEN ? { authorization: `Bearer ${process.env.GH_TOKEN}` } : {}) });
 
 /**
  * macOS self-update without an Apple signing certificate (electron-updater/Squirrel.Mac refuses unsigned apps):
@@ -24,7 +26,7 @@ export function appBundle(execPath = process.execPath) {
 
 export async function stageMacUpdate(version, workDir, { arch = process.arch, bundle = appBundle() } = {}) {
   const name = `ForgeAudio-${version}-mac-${arch}.zip`;
-  const release = await (await fetch(API + encodeURIComponent(`v${version}`), { headers: { accept: 'application/vnd.github+json' } })).json();
+  const release = await (await fetch(API + encodeURIComponent(`v${version}`), { headers: apiHeaders() })).json();
   const asset = release.assets?.find((a) => a.name === name);
   const expected = /^sha256:([0-9a-f]{64})$/.exec(asset?.digest || '')?.[1];
   if (!asset || !expected) throw new Error(`${name} introuvable dans la release`);
