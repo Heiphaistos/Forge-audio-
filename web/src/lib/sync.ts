@@ -9,6 +9,7 @@ import { useSettings } from '../store/ui';
 import { engine } from '../audio/engine';
 import { clearDeviceKeys } from './e2e';
 import { flushStorage } from './storage';
+import { clearOffline } from '../store/offline';
 
 /**
  * Keeps the signed-in user's library on the server: playlists (Spotify / Deezer / YouTube imports
@@ -210,7 +211,7 @@ export async function startSync(user: User) {
   useSync.setState({ user, status: 'loading' });
   // Another account used this browser before: do not leak its library into this one.
   const owner = localStorage.getItem(OWNER_KEY);
-  if (owner && owner !== user.username) resetLocal();
+  if (owner && owner !== user.username) { resetLocal(); await clearOffline(); }
 
   const doc = await api.getData<SyncData>();
   rev = doc.rev;
@@ -249,6 +250,7 @@ export async function logout() {
   localStorage.removeItem(OWNER_KEY);
   flushStorage();
   await clearDeviceKeys(); // the message key leaves this device with the session
+  await clearOffline(); // downloaded titles too
   await api.logout().catch(() => {});
   location.reload();
 }

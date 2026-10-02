@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, Menu, Search as SearchIcon, Loader2, Lock, Eye, EyeOff, User as UserIcon } from 'lucide-react';
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { useUi } from './store/ui';
 import { usePlayer } from './store/player';
 import { Sidebar, Logo, LegalLinks } from './components/Sidebar';
@@ -23,12 +23,14 @@ import { Settings, inMobileApp, changeServerUrl } from './views/Settings';
 import { SharedPlaylistView } from './views/Shared';
 import { FriendsView, MessagesView } from './views/People';
 import { ProfileView } from './views/Profile';
+import { OfflineView } from './views/Offline';
+import { useOffline, setOnline } from './store/offline';
 import { JamPanel, JamBanner } from './components/Jam';
 import { SelectionBar } from './components/SelectionBar';
 import { startSocial } from './store/social';
 import { initKeys, setupKeys, useKeys } from './store/keys';
 import { useAudioEffects, useAudioMix, useMediaSession, useRemoteControl, useShortcuts, useTheme } from './hooks';
-import { api, type User } from './lib/api';
+import { api, ApiError, type User } from './lib/api';
 import { startSync } from './lib/sync';
 import { startRadioMeta } from './lib/radio';
 
@@ -38,7 +40,11 @@ startRadioMeta();
 
 function CurrentView() {
   const view = useUi((s) => s.view);
+  // No server: only what is downloaded is offered (every other page would only show errors).
+  const online = useOffline((s) => s.online);
+  if (!online) return <OfflineView />;
   switch (view.name) {
+    case 'offline': return <OfflineView />;
     case 'search': return <Search />;
     case 'artists': return <ArtistsView />;
     case 'artist': return <ArtistView key={`${view.q}:${view.id || ''}`} />;
@@ -153,6 +159,9 @@ export function App() {
   const [auth, setAuth] = useState<'checking' | 'ok' | 'required'>('checking');
   const panel = useUi((s) => s.panel);
   const hasTrack = usePlayer((s) => s.index >= 0 && s.queue.length > 0);
+  const online = useOffline((s) => s.online);
+  /** Started without a server: sign-in check, sync and social start once it is back. */
+  const pending = useRef(false);
   useMediaSession();
   useShortcuts();
   useTheme();
@@ -179,10 +188,18 @@ export function App() {
     setAuth('ok');
   };
 
+  const check = () => api.health()
+    .then((h) => { pending.current = false; setOnline(true); return h.authRequired && !h.authenticated ? setAuth('required') : enter(h.user, h.sync); })
+    .catch((err) => {
+      // Network down or server unreachable: open the app on the downloaded titles.
+      if (!(err instanceof ApiError) || err.status >= 500) { pending.current = true; setOnline(false); }
+      setAuth('ok');
+    });
+
+  useEffect(() => { if (online && pending.current) check(); }, [online]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
-    api.health()
-      .then((h) => (h.authRequired && !h.authenticated ? setAuth('required') : enter(h.user, h.sync)))
-      .catch(() => setAuth('ok'));
+    check();
     const expired = () => setAuth('required');
     window.addEventListener('forge:auth-required', expired);
     return () => window.removeEventListener('forge:auth-required', expired);

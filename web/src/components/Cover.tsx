@@ -1,6 +1,7 @@
 import { Music2 } from 'lucide-react';
 import { useState } from 'react';
 import { coverUrl } from '../lib/format';
+import { useOffline } from '../store/offline';
 
 export function Cover({ src, size = 48, large = false, radius = 6, className = '' }: { src: string | null | undefined; size?: number | string; large?: boolean; radius?: number; className?: string }) {
   // 0: large variant, 1: original thumbnail, 2: placeholder
@@ -10,9 +11,11 @@ export function Cover({ src, size = 48, large = false, radius = 6, className = '
     setPrevSrc(src);
     setStage(large ? 0 : 1);
   }
-  const url = stage === 0 ? coverUrl(src, true) : src;
+  // A downloaded title shows the cover saved with it (works offline, no data used).
+  const local = useOffline((s) => (src ? s.covers[src] : undefined));
+  const url = local || (stage === 0 ? coverUrl(src, true) : src);
   const style = { width: size, height: size, borderRadius: radius };
-  if (!url || stage === 2) {
+  if (!url || (stage === 2 && !local)) {
     return (
       <div className={`cover cover-empty ${className}`} style={style}>
         <Music2 size={typeof size === 'number' ? Math.max(16, size * 0.4) : 32} />

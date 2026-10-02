@@ -1,4 +1,4 @@
-import { Home, Search, Library, RadioTower, Heart, History, Plus, Settings, X, LogOut, Cloud, CloudOff, Loader2, Radio, Users, Pin, Folder, BarChart3, UserPlus, MessageCircle, ChevronRight, MicVocal } from 'lucide-react';
+import { Home, Search, Library, RadioTower, Heart, History, Plus, Settings, X, LogOut, Cloud, CloudOff, Loader2, Radio, Users, Pin, Folder, BarChart3, UserPlus, MessageCircle, ChevronRight, MicVocal, CircleArrowDown } from 'lucide-react';
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { Playlist } from '../lib/types';
 import { useInbox, useJam, usePeople, useShared } from '../store/social';
@@ -6,6 +6,7 @@ import { useSync, logout } from '../lib/sync';
 import { useUi, type View } from '../store/ui';
 import { useLibrary } from '../store/library';
 import { usePlayer } from '../store/player';
+import { useOffline } from '../store/offline';
 import { Mosaic } from './Cover';
 import { PlayingBars } from './TrackList';
 
@@ -53,6 +54,7 @@ export function Sidebar() {
   const setOpen = useUi((s) => s.setSidebarOpen);
   const playlists = useLibrary((s) => s.playlists);
   const likedCount = useLibrary((s) => s.liked.length);
+  const offlineCount = useOffline((s) => Object.keys(s.items).length);
   const createPlaylist = useLibrary((s) => s.createPlaylist);
   const playingUrl = usePlayer((s) => (s.playing ? s.queue[s.index]?.url : undefined));
   const sharedLists = useShared((s) => s.list);
@@ -123,6 +125,9 @@ export function Sidebar() {
           </button>
           <button className={`nav-item ${view.name === 'history' ? 'active' : ''}`} onClick={() => navigate({ name: 'history' })}>
             <span className="nav-square hist"><History size={15} /></span><span>Historique</span>
+          </button>
+          <button className={`nav-item ${view.name === 'offline' ? 'active' : ''}`} onClick={() => navigate({ name: 'offline' })}>
+            <span className="nav-square hist"><CircleArrowDown size={15} /></span><span>Hors ligne</span>{offlineCount > 0 && <span className="count">{offlineCount}</span>}
           </button>
           <button className={`nav-item ${view.name === 'stats' ? 'active' : ''}`} onClick={() => navigate({ name: 'stats' })}>
             <span className="nav-square hist"><BarChart3 size={15} /></span><span>Vos stats</span>

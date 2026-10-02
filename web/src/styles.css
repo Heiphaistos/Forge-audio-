@@ -810,3 +810,15 @@ kbd {
   .friend-link.grow, .friend-track { min-height: 44px; }
   .chips.small .chip { min-height: 44px; }
 }
+
+/* ---------- Hors ligne (views/Offline.tsx) ---------- */
+.offline-gradient { background: linear-gradient(135deg, #0f5132, #1dcd84 60%, #c9f7e2); color: #fff; }
+.offline-btn.on { color: #1dcd84; border-color: rgba(29, 205, 132, .5); }
+.offline-banner { width: 100%; margin: 4px 0 8px; }
+.offline-progress { display: flex; align-items: center; gap: 12px; padding: 12px 14px; margin: 0 0 12px; border-radius: 10px; background: var(--surface-2); font-size: 14px; min-width: 0; }
+.offline-bar { height: 4px; margin-top: 8px; border-radius: 2px; background: var(--surface-3); overflow: hidden; }
+.offline-bar i { display: block; height: 100%; background: #1dcd84; transition: width .3s; }
+.offline-sets { margin: 0 0 12px; }
+.offline-set { max-width: 100%; min-width: 0; padding-right: 4px; }
+.offline-set .icon-btn { width: 28px; height: 28px; }
+.tr-offline { color: #1dcd84; flex-shrink: 0; vertical-align: -2px; margin-right: 4px; }

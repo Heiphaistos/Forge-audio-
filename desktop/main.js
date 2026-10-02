@@ -184,11 +184,15 @@ if (!app.requestSingleInstanceLock()) {
       const { response } = await dialog.showMessageBox(win, {
         type: 'warning',
         message: `Le serveur ${remote} est injoignable.`,
-        detail: 'Vous pouvez réessayer, ou utiliser le lecteur local (bibliothèque propre à cet ordinateur).',
-        buttons: ['Réessayer', 'Mode local'],
+        detail: 'Vous pouvez réessayer, écouter les titres téléchargés sur cet ordinateur (Hors ligne), ou utiliser le lecteur local (bibliothèque propre à cet ordinateur).',
+        buttons: ['Réessayer', 'Hors ligne', 'Mode local'],
         defaultId: 0,
       });
       if (response === 0) return openApp();
+      // The server's page is kept by its service worker: it opens on the downloaded titles.
+      if (response === 1) {
+        try { await win.loadURL(`${remote}/`); return; } catch { return openApp(); }
+      }
     }
     const ytdlp = server ? null : await ensureYtdlp(app.getPath('userData'), {
       onProgress: (p) => win?.webContents.executeJavaScript(`document.getElementById('t').textContent = 'Téléchargement de yt-dlp… ${Math.round(p * 100)} %'`).catch(() => {}),

@@ -71,6 +71,12 @@ class AudioEngine {
   private listeners = new Set<Listener>();
   /** Told when a track plays from SoundCloud / Dailymotion because YouTube blocks the server. */
   onFallback?: (track: Track, source: string) => void;
+  /** Downloaded copy of a track (store/offline.ts), played instead of the stream, online too. */
+  localSource?: (track: Track) => Promise<Playback | null> | null;
+  /** Loudness measured when the track was downloaded (undefined = not downloaded). */
+  localLufs?: (url: string) => number | null | undefined;
+  /** No server: tracks that are not downloaded fail at once instead of waiting for the network. */
+  isOffline?: () => boolean;
   private mediaListeners: [MediaEventName, EventListener][] = [];
 
   constructor() {
@@ -263,6 +269,13 @@ class AudioEngine {
     if (track.source === 'radio') {
       return Promise.resolve({ src: `/api/radio/listen/${encodeURIComponent(track.url.split('/').pop() || '')}`, seekable: false, duration: null, isLive: true, mime: 'audio/mpeg' });
     }
+    const local = this.localSource?.(track);
+    if (local) return local.then((pb) => pb ?? this.resolveRemote(track));
+    return this.resolveRemote(track);
+  }
+
+  private resolveRemote(track: Track): Promise<Playback> {
+    if (this.isOffline?.()) return Promise.reject(new Error('non disponible hors ligne'));
     const q = this.quality;
     const hit = this.prefetched.get(track.url);
     if (hit && hit.q === q && Date.now() - hit.at < 60 * 60 * 1000) return hit.promise;
@@ -274,7 +287,7 @@ class AudioEngine {
   }
 
   prefetch(track: Track | undefined) {
-    if (!track || track.isLive || this.mix.saver) return;
+    if (!track || track.isLive || this.mix.saver || this.isOffline?.()) return;
     this.resolve(track).catch(() => {});
     this.gainFor(track);
   }
@@ -300,10 +313,14 @@ class AudioEngine {
   /** Loudness correction of a track (1 = unchanged), measured once by the server. */
   private gainFor(track: Track): Promise<number> {
     if (!this.mix.normalize || track.isLive || track.source === 'local' || track.url.startsWith('blob:')) return Promise.resolve(1);
+    const toGain = (lufs: number | null) => (lufs == null || lufs <= TARGET_LUFS ? 1 : Math.max(0.2, Math.pow(10, (TARGET_LUFS - lufs) / 20)));
+    const known = this.localLufs?.(track.url);
+    if (known != null) return Promise.resolve(toGain(known));
+    if (this.isOffline?.()) return Promise.resolve(1);
     let p = this.loudness.get(track.url);
     if (!p) {
       p = api.loudness(track.url)
-        .then(({ lufs }) => (lufs == null || lufs <= TARGET_LUFS ? 1 : Math.max(0.2, Math.pow(10, (TARGET_LUFS - lufs) / 20))))
+        .then(({ lufs }) => toGain(lufs))
         .catch(() => { this.loudness.delete(track.url); return 1; });
       this.loudness.set(track.url, p);
       if (this.loudness.size > 500) this.loudness.delete(this.loudness.keys().next().value!);

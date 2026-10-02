@@ -8,6 +8,7 @@ import type { RepeatMode, Track } from '../lib/types';
 import { useLibrary, slimTrack, isHidden } from './library';
 import { useSettings, useUi } from './ui';
 import { readResume, resumePoint, saveResume } from '../lib/resume';
+import { useOffline } from './offline';
 
 interface PlayerState {
   queue: Track[];
@@ -81,6 +82,15 @@ export const usePlayer = create<PlayerState>()(
           if (seq === loadSeq && !autoplay) set({ buffering: false });
         } catch (err) {
           if (seq !== loadSeq) return;
+          // No server: quietly go on with the next downloaded title (no error per missing one).
+          const off = useOffline.getState();
+          if (!off.online) {
+            set({ error: null, buffering: false, playing: false });
+            const j = get().queue.findIndex((t, k) => k > i && !!off.items[t.url]);
+            if (autoplay && j > 0) loadIndex(j);
+            else if (!off.items[track.url]) toast(`« ${track.title} » n’est pas disponible hors ligne`);
+            return;
+          }
           // A server hiccup on the first request (stream 502 while yt-dlp warms up) surfaces as
           // « no supported source »: resolve again once before giving up on the track.
           if (!retry && err instanceof DOMException && err.name === 'NotSupportedError') {
@@ -227,7 +237,7 @@ export const usePlayer = create<PlayerState>()(
           if (index < queue.length - 1) return loadIndex(index + 1);
           if (repeat === 'all' && queue.length) return loadIndex(0);
           const current = queue[index];
-          if (current && useSettings.getState().autoplay) {
+          if (current && useSettings.getState().autoplay && useOffline.getState().online) {
             await get().startRadio(current);
             if (get().index < get().queue.length - 1) return loadIndex(get().index + 1);
           }
