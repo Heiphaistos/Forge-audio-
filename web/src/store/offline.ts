@@ -19,7 +19,9 @@ import { useUi } from './ui';
 const CHUNK = 1024 * 1024;
 const MAX_BYTES = 300 * CHUNK;
 const PREFS = 'forge.offline';
-export const LIMITS_MB = [512, 1024, 2048, 5120, 10240, 20480];
+// 500 Mo to 1 To; 20 Go by default (the device's free space is the real ceiling, shown in « Hors ligne »).
+export const LIMITS_MB = [512, 1024, 2048, 5120, 10240, 20480, 51200, 102400, 204800, 512000, 1048576];
+const DEFAULT_LIMIT_MB = 20480;
 
 export interface OfflineItem { url: string; track: Track; pins: string[]; size: number; mime: string; lufs: number | null; at: number; thumb: string | null }
 interface Stored extends Omit<OfflineItem, 'thumb'> { audio: Blob; cover: Blob | null }
@@ -44,8 +46,10 @@ interface OfflineState {
 const readPrefs = (): { sets: string[]; limitMb: number } => {
   try {
     const p = JSON.parse(localStorage.getItem(PREFS) || '{}');
-    return { sets: Array.isArray(p.sets) ? p.sets.filter((s: unknown) => typeof s === 'string') : [], limitMb: LIMITS_MB.includes(p.limitMb) ? p.limitMb : 2048 };
-  } catch { return { sets: [], limitMb: 2048 }; }
+    // Prefs without `v` were saved when the default was 2 Go: that untouched default becomes the new one.
+    const limitMb = !LIMITS_MB.includes(p.limitMb) || (!p.v && p.limitMb === 2048) ? DEFAULT_LIMIT_MB : p.limitMb;
+    return { sets: Array.isArray(p.sets) ? p.sets.filter((s: unknown) => typeof s === 'string') : [], limitMb };
+  } catch { return { sets: [], limitMb: DEFAULT_LIMIT_MB }; }
 };
 
 export const useOffline = create<OfflineState>(() => ({
@@ -61,7 +65,7 @@ export const useOffline = create<OfflineState>(() => ({
 
 const savePrefs = () => {
   const { sets, limitMb } = useOffline.getState();
-  try { localStorage.setItem(PREFS, JSON.stringify({ sets, limitMb })); } catch { /* quota */ }
+  try { localStorage.setItem(PREFS, JSON.stringify({ v: 2, sets, limitMb })); } catch { /* quota */ }
 };
 
 // ---------------------------------------------------------------- IndexedDB
@@ -236,6 +240,8 @@ export function toggleTrack(track: Track) {
 }
 
 export function toggleSet(set: string, on: boolean) {
+  // Ask the browser not to evict the downloaded titles when the device runs short of space.
+  if (on) navigator.storage?.persist?.().catch(() => {});
   const sets = useOffline.getState().sets.filter((s) => s !== set);
   useOffline.setState({ sets: on ? [...sets, set] : sets });
   savePrefs();

@@ -68,6 +68,13 @@ export function registerBatchDownload(app, { media, ytdlp, zipLimit = ZIP32_LIMI
     const job = jobs.get(request.params.id);
     // Unknown, expired and someone else's id look the same.
     if (!job || job.expires < Date.now() || job.username !== request.user.username) throw new HttpError('Lien de téléchargement expiré ou inconnu', 404, 'NOT_FOUND');
+    const range = request.headers.range;
+    request.log.info({ range, ua: request.headers['user-agent'] }, 'Archive de playlist demandée');
+    // The archive is built while it is sent: no byte range exists. A downloader splitting the file in parts or
+    // resuming (Xiaomi's opens a second ranged connection after ~12 s) must not stop the stream in progress.
+    if (range && !/^bytes=0-$/.test(range)) {
+      return reply.code(416).header('accept-ranges', 'none').header('content-range', 'bytes */*').send();
+    }
     const previous = running.get(job.username);
     if (previous && previous.id !== request.params.id) throw new HttpError('Un téléchargement de playlist est déjà en cours', 409, 'BUSY');
     previous?.abort.abort(); // same link asked again: the newest request wins
@@ -84,6 +91,7 @@ export function registerBatchDownload(app, { media, ytdlp, zipLimit = ZIP32_LIMI
     reply.header('content-type', 'application/zip');
     reply.header('content-disposition', `attachment; filename="${filename.replace(/[^\x20-\x7e]|"/g, '_')}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
     reply.header('cache-control', 'no-store');
+    reply.header('accept-ranges', 'none');
 
     (async () => {
       const failed = [];

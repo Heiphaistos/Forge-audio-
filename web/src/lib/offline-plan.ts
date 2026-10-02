@@ -47,6 +47,7 @@ export function planOffline(sets: string[], collections: Record<string, Track[] 
 
 /** « 1,2 Go », « 340 Mo ». */
 export function formatBytes(n: number): string {
+  if (n >= 1024 ** 4) return `${(n / 1024 ** 4).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} To`;
   if (n >= 1024 ** 3) return `${(n / 1024 ** 3).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} Go`;
   return `${Math.max(0, Math.round(n / 1024 ** 2)).toLocaleString('fr-FR')} Mo`;
 }

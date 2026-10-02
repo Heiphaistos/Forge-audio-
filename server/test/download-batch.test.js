@@ -146,6 +146,9 @@ test('batch download: same link asked again (Android WebView then DownloadManage
     first.res.on('error', () => {});
     assert.equal(first.res.statusCode, 200);
     killed.length = 0;
+    const ranged = await app.inject({ url: `/api/download/batch/${id}`, headers: { cookie: evan, range: 'bytes=6233164-' } });
+    assert.equal(ranged.statusCode, 416, 'no byte range in an archive built on the fly');
+    assert.ok(!killed.includes('slow'), 'a ranged request (split or resumed download) leaves the stream alone');
     const second = await app.inject({ url: `/api/download/batch/${id}`, headers: { cookie: evan } });
     assert.equal(second.statusCode, 200);
     assert.ok(killed.includes('slow'), 'premier flux arrêté');
