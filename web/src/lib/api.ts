@@ -107,6 +107,16 @@ export interface SharedPlaylist {
   rev: number;
 }
 
+/** A device of the same account (another tab, the desktop or Android app), see server/src/devices.js. */
+export interface DeviceState { track: Track | null; playing: boolean; position: number; positionAt: number; volume: number; jam: boolean; hasNext: boolean }
+export interface Device { id: string; name: string; kind: 'web' | 'desktop' | 'android'; since: number; state: DeviceState | null }
+export type DeviceCommand =
+  | { action: 'play' | 'pause' | 'next' | 'prev' }
+  | { action: 'seek'; position: number }
+  | { action: 'volume'; volume: number }
+  | { action: 'load'; tracks: Track[]; index: number; position: number; playing: boolean }
+  | { action: 'handoff'; target: string };
+
 export interface Jam {
   id: string;
   code: string;
@@ -201,6 +211,9 @@ export const api = {
   sharedRemove: (id: string, url: string) => send<{ playlist: SharedPlaylist }>('DELETE', `/api/shared/${id}/tracks?${new URLSearchParams({ url })}`, {}),
   sharedMove: (id: string, from: number, to: number) => send<{ playlist: SharedPlaylist }>('POST', `/api/shared/${id}/move`, { from, to }),
   sharedLeave: (id: string) => send<{ ok: true; deleted: boolean }>('DELETE', `/api/shared/${id}`, {}),
+  deviceState: (id: string, body: { name: string; state: Omit<DeviceState, 'positionAt'> }) => send<{ ok: true }>('POST', `/api/devices/${id}/state`, body),
+  deviceCommand: (id: string, from: string, cmd: DeviceCommand) => send<{ ok: true }>('POST', `/api/devices/${id}/command`, { ...cmd, from }),
+  castLink: (url: string) => send<{ src: string; expiresAt: number }>('POST', '/api/cast/link', { url }),
   jam: () => get<{ jam: Jam | null }>('/api/jam'),
   jamStart: (p: { tracks: Track[]; index: number; position: number; playing: boolean }) => send<{ jam: Jam }>('POST', '/api/jam', p),
   jamJoin: (code: string) => send<{ jam: Jam }>('POST', '/api/jam/join', { code }),

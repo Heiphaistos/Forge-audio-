@@ -395,6 +395,21 @@ kbd {
 }
 .pop-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-top: 6px; }
 .popover label { margin-bottom: 10px; cursor: pointer; }
+.dev-pop { max-height: min(70vh, 560px); overflow-y: auto; }
+.dev-rename { width: 100%; margin: 6px 0 4px; }
+.dev-item { border: 1px solid var(--border); border-radius: 10px; padding: 10px; margin-top: 8px; min-width: 0; }
+.dev-item.playing { border-color: rgba(var(--accent-rgb), .6); }
+.dev-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.dev-text { min-width: 0; flex: 1; }
+.dev-name { font-weight: 600; }
+.dev-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.dev-controls { display: flex; align-items: center; gap: 4px; margin-top: 6px; }
+.dev-time { margin-left: auto; font-variant-numeric: tabular-nums; }
+.dev-cast { margin-top: 10px; }
+.dev-vol { display: flex; align-items: center; gap: 8px; margin-top: 8px; color: var(--muted); }
+@media (max-width: 700px) {
+  .popover.dev-pop { position: fixed; left: 8px; right: 8px; bottom: calc(96px + env(safe-area-inset-bottom)); width: auto; }
+}
 
 /* ---------- right panel ---------- */
 .right-panel { background: var(--surface); border-radius: var(--radius); display: flex; flex-direction: column; min-height: 0; overflow: hidden; animation: fade-up .2s ease; }
