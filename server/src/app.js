@@ -25,7 +25,7 @@ import { registerTranslate } from './translate.js';
 import { registerBatchDownload } from './download-batch.js';
 import { registerCast, CAST_PATH } from './cast.js';
 
-export const VERSION = '0.22.0';
+export const VERSION = '0.22.1';
 
 const IMAGE_HOSTS = /(^|\.)(ytimg\.com|ggpht\.com|googleusercontent\.com|sndcdn\.com|dmcdn\.net|dailymotion\.com|bcbits\.com|vimeocdn\.com|jtvnw\.net|scdn\.co|spotifycdn\.com|dzcdn\.net|mzstatic\.com)$/i;
 
@@ -58,7 +58,7 @@ function readCookie(header, name) {
  * @param {object} [opts.translate] test hooks of the lyrics translation (translate.js)
  * @param {number|null} [opts.zipLimit] test hook: size cap of playlist zips (default: just under 4 GiB)
  */
-export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null, dataDir = null, accountsFile = null, logger = true, mailer = createMailer(), radio = {}, translate = {}, zipLimit = null } = {}) {
+export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null, dataDir = null, accountsFile = null, logger = true, mailer = createMailer(), radio: radioHooks = {}, translate = {}, zipLimit = null } = {}) {
   const app = Fastify({ logger, trustProxy: 'loopback,uniquelocal', disableRequestLogging: true, bodyLimit: 10 * 1024 * 1024 });
   const accounts = new Accounts(accountsFile);
   const sessions = new Sessions(dataDir ? path.join(dataDir, 'sessions.json') : null);
@@ -247,7 +247,7 @@ export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null,
   registerCovers(app, { dataDir });
   registerCatalog(app);
   registerLoudness(app, { media, ffmpeg, ytdlp });
-  registerRadio(app, { version: VERSION, dataDir, ffmpeg, ...radio });
+  registerRadio(app, { version: VERSION, dataDir, ffmpeg, ...radioHooks });
   registerTranslate(app, { dataDir, ...translate });
   // AAC in MP4 for cast devices: the format every receiver plays.
   registerCast(app, { dataDir, stream: async (request, reply, url) => media.stream(request, reply, await playableUrl(ytdlp, url), 'audio', { start: Math.max(0, Number(request.query.start) || 0), pref: 'mp4' }) });
