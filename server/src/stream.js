@@ -203,6 +203,8 @@ export class MediaService {
     }
     return {
       stdout: ff.stdout,
+      /** ffmpeg's exit code (null when killed or not started). */
+      exited: new Promise((resolve) => { ff.on('close', resolve); ff.on('error', () => resolve(null)); }),
       kill: () => procs.forEach((p) => { try { p.kill('SIGKILL'); } catch { /* gone */ } }),
     };
   }
@@ -216,8 +218,9 @@ export class MediaService {
 
   /**
    * Download as a file: mp3 (transcoded, tagged), m4a/opus original audio, or mp4 video with sound.
+   * Returns the running process and the file name/type (used alone by /api/download, in a zip by download-batch.js).
    */
-  async download(request, reply, url, format) {
+  async openDownload(url, format) {
     const audio = await this.resolve(url, 'audio', format === 'video' ? 'mp4' : 'webm');
     // YouTube titles often already start with the artist ("Daft Punk - Instant Crush"): don't repeat it.
     const titleHasArtist = audio.artist && audio.title?.toLowerCase().startsWith(audio.artist.toLowerCase());
@@ -249,6 +252,11 @@ export class MediaService {
     } else {
       throw new HttpError('Format de téléchargement inconnu (mp3, audio ou video)');
     }
+    return { proc, filename, type };
+  }
+
+  async download(request, reply, url, format) {
+    const { proc, filename, type } = await this.openDownload(url, format);
     reply.raw.on('close', () => proc.kill());
     reply.header('content-type', type);
     reply.header('content-disposition', `attachment; filename="${filename.replace(/"/g, '')}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
