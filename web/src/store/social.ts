@@ -7,6 +7,7 @@ import type { Track } from '../lib/types';
 import { usePlayer, setJamRouter } from './player';
 import { useSettings, useUi } from './ui';
 import { openMessage, sealFor, type ShownMessage } from './keys';
+import { deviceQuery, onDeviceEvent, startDevices } from './devices';
 
 /**
  * Between accounts: friends, private messages, shared playlists, Jam (group listening + chat) and
@@ -266,7 +267,8 @@ let retries = 0;
  * answers 502 while the server restarts for a deployment): reopen it ourselves, 2 s then up to 30 s.
  */
 function connect(onEvent: (m: MessageEvent) => void) {
-  source = new EventSource('/api/events');
+  // Each open page is also a device of the account, remote-controllable (store/devices.ts).
+  source = new EventSource(`/api/events?${deviceQuery()}`);
   source.onopen = () => { retries = 0; };
   source.onmessage = onEvent;
   source.onerror = () => {
@@ -288,6 +290,7 @@ export function startSocial(user: User) {
   useJam.setState({ me: user.username });
   if (started || typeof EventSource === 'undefined') return;
   started = true;
+  startDevices();
   // Report each track started here (the history entry is pushed when playback really starts).
   useLibrary.subscribe((st, prev) => {
     const h = st.history[0];
@@ -297,6 +300,7 @@ export function startSocial(user: User) {
   const onEvent = (m: MessageEvent) => {
     let e: { type: string; [k: string]: unknown };
     try { e = JSON.parse(m.data); } catch { return; }
+    if (e.type === 'hello' || e.type === 'devices' || e.type === 'device-command') onDeviceEvent(e);
     if (e.type === 'hello') refreshAll();
     else if (e.type === 'library') pullNow();
     else if (e.type === 'discord') discord.refresh().catch(() => {});

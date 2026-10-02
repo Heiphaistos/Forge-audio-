@@ -23,6 +23,7 @@ import { registerLoudness } from './loudness.js';
 import { registerRadio } from './radio.js';
 import { registerTranslate } from './translate.js';
 import { registerBatchDownload } from './download-batch.js';
+import { registerCast, CAST_PATH } from './cast.js';
 
 export const VERSION = '0.21.2';
 
@@ -104,7 +105,8 @@ export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null,
     if (!p.startsWith('/api/')) return;
     request.user = userOf(request);
     // /api/bot/*: HeiphaisBot, authenticated by its bearer token (social.js), not by a session.
-    if (!request.user && !PUBLIC.has(p) && !p.startsWith('/api/bot/') && !p.startsWith('/api/recovery/')) return reply.code(401).send({ error: 'Connexion requise', code: 'AUTH_REQUIRED' });
+    // CAST_PATH: a cast device has no session, its signed link authorizes it (cast.js).
+    if (!request.user && !PUBLIC.has(p) && p !== CAST_PATH && !p.startsWith('/api/bot/') && !p.startsWith('/api/recovery/')) return reply.code(401).send({ error: 'Connexion requise', code: 'AUTH_REQUIRED' });
   });
 
   const cookie = (request, value, maxAge) => {
@@ -247,6 +249,8 @@ export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null,
   registerLoudness(app, { media, ffmpeg, ytdlp });
   registerRadio(app, { version: VERSION, dataDir, ffmpeg, ...radio });
   registerTranslate(app, { dataDir, ...translate });
+  // AAC in MP4 for cast devices: the format every receiver plays.
+  registerCast(app, { dataDir, stream: async (request, reply, url) => media.stream(request, reply, await playableUrl(ytdlp, url), 'audio', { start: Math.max(0, Number(request.query.start) || 0), pref: 'mp4' }) });
 
   // ---------- API ----------
   app.get('/api/health', async (request, reply) => {

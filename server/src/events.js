@@ -27,8 +27,11 @@ export class EventHub {
   }
 }
 
-/** Stream a user's events on a hijacked Fastify reply (text/event-stream, ping every 25 s). */
-export function streamEvents(hub, request, reply, username) {
+/**
+ * Stream a user's events on a hijacked Fastify reply (text/event-stream, ping every 25 s).
+ * `attach(send)` (optional) runs once the stream is open and returns a cleanup run when it closes.
+ */
+export function streamEvents(hub, request, reply, username, attach = null) {
   reply.hijack();
   const res = reply.raw;
   res.writeHead(200, {
@@ -40,6 +43,7 @@ export function streamEvents(hub, request, reply, username) {
   const send = (event) => { res.write(`data: ${JSON.stringify(event)}\n\n`); };
   send({ type: 'hello', now: Date.now() });
   const off = hub.subscribe(username, send);
+  const detach = attach?.(send);
   const ping = setInterval(() => res.write(': ping\n\n'), 25_000);
-  request.raw.on('close', () => { clearInterval(ping); off(); });
+  request.raw.on('close', () => { clearInterval(ping); off(); detach?.(); });
 }

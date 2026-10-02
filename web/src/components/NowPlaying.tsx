@@ -1,3 +1,4 @@
+import { DevicesButton } from './Devices';
 import { ChevronDown, Heart, ListMusic, Users, Mic2, MonitorPlay, MoreHorizontal, Disc3, Rows2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useCurrentTrack } from '../store/player';
@@ -73,6 +74,7 @@ export function NowPlaying() {
           <div className="np-bottom">
             <VolumeControl />
             {visualizer && <Visualizer bars={40} className="np-viz" />}
+            <DevicesButton />
           </div>
         </div>
         <div className="np-right">
