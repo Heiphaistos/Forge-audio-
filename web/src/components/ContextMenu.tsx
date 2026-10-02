@@ -1,10 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Play, ListPlus, ListEnd, ListMusic, Heart, Radio, User, Download, ExternalLink, Link2, Share2, Trash2, Film, FileAudio, EyeOff, Eye, UserX } from 'lucide-react';
+import { Play, ListPlus, ListEnd, ListMusic, Heart, Radio, User, Download, ExternalLink, Link2, Share2, Trash2, Film, FileAudio, EyeOff, Eye, UserX, CircleArrowDown } from 'lucide-react';
 import { useUi } from '../store/ui';
 import { usePlayer } from '../store/player';
 import { useLibrary, artistKey } from '../store/library';
 import { api } from '../lib/api';
 import { shared, useJam } from '../store/social';
+import { useOffline, toggleTrack, trackPinned } from '../store/offline';
+import { offlineEligible } from '../lib/offline-plan';
 
 export function ContextMenu() {
   const menu = useUi((s) => s.menu);
@@ -17,6 +19,8 @@ export function ContextMenu() {
   const inJam = useJam((s) => !!s.jam);
   const trackHidden = useLibrary((s) => !!menu && (s.hiddenTracks[menu.track.url]?.at || 0) > 0);
   const artistHidden = useLibrary((s) => !!menu?.track.author && (s.hiddenArtists[artistKey(menu.track.author)]?.at || 0) > 0);
+  // Re-render when downloads change so the « hors ligne » entry stays right.
+  useOffline((s) => (menu ? `${!!s.items[menu.track.url]}|${s.queue.length}|${s.active?.url}` : ''));
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ x: 0, y: 0 });
 
@@ -86,6 +90,14 @@ export function ContextMenu() {
           <button role="menuitem" onClick={act(() => { useLibrary.getState().setHidden('artist', artistKey(t.author!), t.author!, !artistHidden); toast(artistHidden ? `${t.author} de nouveau recommandé` : `${t.author} ne sera plus recommandé`); })}>
             <UserX size={16} /> {artistHidden ? `Recommander de nouveau ${t.author}` : `Ne plus recommander ${t.author}`}
           </button>
+        )}
+        {offlineEligible(t) && (
+          <>
+            <div className="menu-sep" />
+            <button role="menuitem" onClick={act(() => toast(toggleTrack(t) ? `« ${t.title} » sera disponible hors ligne` : 'Retiré de l’écoute hors ligne', 'success'))}>
+              <CircleArrowDown size={16} /> {trackPinned(t.url) ? 'Retirer du hors ligne' : 'Disponible hors ligne'}
+            </button>
+          </>
         )}
         {!isLocal && !t.isLive && (
           <>

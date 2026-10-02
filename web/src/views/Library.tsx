@@ -15,6 +15,7 @@ import { ImportBox } from './Home';
 import { api } from '../lib/api';
 import { formatTotal, timeAgo, uid } from '../lib/format';
 import type { Track } from '../lib/types';
+import { OfflineButton } from './Offline';
 
 function downloadText(name: string, text: string) {
   const a = document.createElement('a');
@@ -224,6 +225,7 @@ export function PlaylistView() {
         <button className="play-btn big" disabled={!pl.tracks.length} onClick={() => playList(shown)} aria-label="Lire"><Play size={26} fill="currentColor" className="nudge" /></button>
         <button className="icon-btn big" disabled={!pl.tracks.length} onClick={() => playList(shown, 0, { shuffle: true })} aria-label="Lecture aléatoire" title="Lecture aléatoire"><Shuffle size={24} /></button>
         <button className="btn btn-ghost" disabled={!pl.tracks.length} onClick={() => enqueue(shown)}><ListEnd size={16} /> File d'attente</button>
+        <OfflineButton set={`pl:${pl.id}`} tracks={pl.tracks} name={pl.name} />
         <button className="btn btn-ghost" onClick={() => { setName(pl.name); setDesc(pl.description); setFolderInput(pl.folder || ''); setEditing(true); }}><Pencil size={16} /> Modifier</button>
         <button className="btn btn-ghost" onClick={() => { updatePlaylist(pl.id, { pinned: !pl.pinned }); toast(pl.pinned ? 'Désépinglée' : 'Épinglée en haut de la liste', 'success'); }}>{pl.pinned ? <><PinOff size={16} /> Désépingler</> : <><Pin size={16} /> Épingler</>}</button>
         <button className="btn btn-ghost" onClick={() => coverInput.current?.click()}><ImagePlus size={16} /> Image</button>
@@ -318,6 +320,7 @@ export function Liked() {
         <button className="play-btn big" disabled={!liked.length} onClick={() => playList(shown)} aria-label="Lire"><Play size={26} fill="currentColor" className="nudge" /></button>
         <button className="icon-btn big" disabled={!liked.length} onClick={() => playList(shown, 0, { shuffle: true })} aria-label="Lecture aléatoire"><Shuffle size={24} /></button>
         <button className="btn btn-ghost" disabled={!liked.length} onClick={() => enqueue(shown)}><ListEnd size={16} /> File d'attente</button>
+        <OfflineButton set="liked" tracks={liked} name="Titres likés" />
         <button className="btn btn-ghost" disabled={!shown.length} onClick={() => useUi.getState().openPicker(shown)} title="Nouvelle playlist (ou une existante) avec ces titres ; vos likes ne bougent pas">
           <ListPlus size={16} /> {filter ? `Créer une playlist avec ces ${shown.length} titres` : `Créer une playlist avec les ${shown.length} titres`}
         </button>

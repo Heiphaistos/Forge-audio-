@@ -1,4 +1,4 @@
-import { Heart, MoreHorizontal, Play, GripVertical, Radio, Check, ListChecks } from 'lucide-react';
+import { Heart, MoreHorizontal, Play, GripVertical, Radio, Check, ListChecks, CircleArrowDown } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
 import { useSelection } from '../store/selection';
 import type { Track } from '../lib/types';
@@ -6,6 +6,7 @@ import { formatTime, formatViews } from '../lib/format';
 import { usePlayer } from '../store/player';
 import { useIsLiked, useLibrary } from '../store/library';
 import { useUi } from '../store/ui';
+import { useOffline } from '../store/offline';
 import { Cover } from './Cover';
 import { SourceBadge } from './SourceBadge';
 
@@ -35,6 +36,7 @@ export const TrackRow = memo(function TrackRow({ track, index, onPlay, playlistI
   const isCurrent = usePlayer((s) => s.queue[s.index]?.url === track.url);
   const playing = usePlayer((s) => s.playing);
   const liked = useIsLiked(track.url);
+  const offline = useOffline((s) => !!s.items[track.url]);
   const toggleLike = useLibrary((s) => s.toggleLike);
   const openMenu = useUi((s) => s.openMenu);
   const navigate = useUi((s) => s.navigate);
@@ -90,6 +92,7 @@ export const TrackRow = memo(function TrackRow({ track, index, onPlay, playlistI
         <div className="tr-text">
           <div className="tr-title" title={track.title}>{track.title}</div>
           <div className="tr-sub">
+            {offline && <CircleArrowDown size={13} className="tr-offline" aria-label="Disponible hors ligne" />}
             {track.isLive && <span className="live-dot"><Radio size={11} /> DIRECT</span>}
             {track.author && (
               <button className="link" onClick={(e) => { e.stopPropagation(); navigate({ name: 'artist', q: track.author! }); }}>{track.author}</button>

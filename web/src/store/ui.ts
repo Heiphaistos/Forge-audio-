@@ -4,7 +4,7 @@ import { lazyStorage } from '../lib/storage';
 import type { Track } from '../lib/types';
 import { EQ_PRESETS } from '../audio/engine';
 
-export type ViewName = 'home' | 'search' | 'library' | 'playlist' | 'shared' | 'liked' | 'history' | 'settings' | 'artist' | 'album' | 'mix' | 'stats' | 'blend' | 'genre' | 'friends' | 'messages' | 'profile' | 'radio' | 'artists';
+export type ViewName = 'home' | 'search' | 'library' | 'playlist' | 'shared' | 'liked' | 'history' | 'settings' | 'artist' | 'album' | 'mix' | 'stats' | 'blend' | 'genre' | 'friends' | 'messages' | 'profile' | 'radio' | 'artists' | 'offline';
 
 export interface View {
   name: ViewName;
