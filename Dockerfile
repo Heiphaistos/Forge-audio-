@@ -13,7 +13,9 @@ RUN npm run build && npm prune --omit=dev --omit=optional
 FROM node:22-trixie-slim
 # Standalone yt-dlp build: bundles curl_cffi (impersonation, required by Dailymotion).
 # Owned by node so `docker exec forge-audio yt-dlp -U` can update it without a rebuild.
+# upgrade : l image de base retarde sur les correctifs de securite Debian/Alpine (scan Trivy 2026-10-02).
 RUN apt-get update \
+  && apt-get upgrade -y \
   && apt-get install -y --no-install-recommends ffmpeg ca-certificates curl \
   && ARCH=$(dpkg --print-architecture) \
   && curl -fsSL "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux$([ "$ARCH" = arm64 ] && echo _aarch64)" -o /usr/local/bin/yt-dlp \
