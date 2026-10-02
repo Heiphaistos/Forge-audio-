@@ -159,36 +159,36 @@ export function registerProfiles(app, { accounts, userData, friends, activity, p
     return reply.send(fs.createReadStream(full));
   });
 
-  app.get('/api/profiles/:username', async (request) => {
-    const viewer = me(request);
-    const target = visible(viewer, request.params.username);
+  /** What `viewer` sees of `raw`'s profile (generic 404 unless itself or a friend). Shared with the bot route (social.js). */
+  const profileView = (viewer, raw) => {
+    const target = visible(viewer, raw);
     const p = profiles.get(target);
     const data = libraryOf(target);
     const self = target === viewer;
     const withActivity = p.showStats && sharing(data);
     const stats = withActivity ? activity.statsOf(target, 28) : null;
     return {
-      profile: {
-        username: target,
-        displayName: accounts.get(target)?.displayName || target,
-        bio: p.bio,
-        avatar: avatarUrl(target, p.avatar),
-        self,
-        friendsSince: self ? null : friends.of(viewer).find((f) => f.username === target)?.since ?? null,
-        playlists: shown(data).map((pl) => ({
-          id: pl.id, name: pl.name, description: pl.description, cover: pl.cover,
-          count: pl.tracks.length,
-          duration: pl.tracks.reduce((a, t) => a + (Number(t.duration) || 0), 0),
-          thumbnails: pl.tracks.slice(0, 4).map((t) => t.thumbnail || null),
-        })),
-        // Activity and stats only if the person shares both (« Partager mon activité » + « sur mon profil »).
-        activity: withActivity ? {
-          now: activity.nowOf(target),
-          stats: { days: stats.days, plays: stats.plays, minutes: stats.minutes, topArtists: stats.topArtists.slice(0, 5), topTracks: stats.topTracks.slice(0, 5) },
-        } : null,
-      },
+      username: target,
+      displayName: accounts.get(target)?.displayName || target,
+      bio: p.bio,
+      avatar: avatarUrl(target, p.avatar),
+      self,
+      friendsSince: self ? null : friends.of(viewer).find((f) => f.username === target)?.since ?? null,
+      playlists: shown(data).map((pl) => ({
+        id: pl.id, name: pl.name, description: pl.description, cover: pl.cover,
+        count: pl.tracks.length,
+        duration: pl.tracks.reduce((a, t) => a + (Number(t.duration) || 0), 0),
+        thumbnails: pl.tracks.slice(0, 4).map((t) => t.thumbnail || null),
+      })),
+      // Activity and stats only if the person shares both (« Partager mon activité » + « sur mon profil »).
+      activity: withActivity ? {
+        now: activity.nowOf(target),
+        stats: { days: stats.days, plays: stats.plays, minutes: stats.minutes, topArtists: stats.topArtists.slice(0, 5), topTracks: stats.topTracks.slice(0, 5) },
+      } : null,
     };
-  });
+  };
+
+  app.get('/api/profiles/:username', async (request) => ({ profile: profileView(me(request), request.params.username) }));
 
   app.get('/api/profiles/:username/playlists/:id', async (request) => {
     const target = visible(me(request), request.params.username);
@@ -196,4 +196,6 @@ export function registerProfiles(app, { accounts, userData, friends, activity, p
     if (!pl) throw new HttpError('Playlist introuvable', 404, 'NOT_FOUND');
     return { playlist: { id: pl.id, name: pl.name, description: pl.description, cover: pl.cover, owner: target, tracks: pl.tracks } };
   });
+
+  return { profileView };
 }

@@ -213,7 +213,7 @@ test('friend activity and Blend follow the « share my activity » setting', asy
 });
 
 test('bot: friend activity, stats and Blend of linked Discord members', async () => {
-  const { app, evan, polo, befriend } = await setup();
+  const { app, evan, polo, lohan, befriend } = await setup();
   await befriend('polo', 'evan');
   const bot = async (method, url) => {
     const res = await app.inject({ method, url, headers: { authorization: `Bearer ${BOT}` } });
@@ -240,4 +240,15 @@ test('bot: friend activity, stats and Blend of linked Discord members', async ()
   const bl = (await bot('GET', '/api/bot/users/111111111111111111/blend/222222222222222222')).body;
   assert.equal(bl.with.username, 'polo');
   assert.equal(bl.tracks[0].url, track(1).url);
+
+  const pr = await bot('GET', '/api/bot/users/111111111111111111/profile/222222222222222222');
+  assert.equal(pr.status, 200);
+  assert.equal(pr.body.profile.username, 'polo');
+  assert.equal('avatar' in pr.body.profile, false, 'no session-only address');
+  assert.equal((await bot('GET', '/api/bot/users/111111111111111111/profile/111111111111111111')).body.profile.self, true);
+  await link(lohan, '333333333333333333');
+  const stranger = await bot('GET', '/api/bot/users/111111111111111111/profile/333333333333333333');
+  assert.deepEqual([stranger.status, stranger.body.code], [404, 'NOT_FOUND'], 'not a friend: same 404');
+  assert.equal((await bot('GET', '/api/bot/users/111111111111111111/profile/444444444444444444')).status, 404, 'not linked');
+  assert.equal((await bot('GET', '/api/bot/users/999999999999999999/profile/222222222222222222')).body.code, 'NOT_LINKED');
 });

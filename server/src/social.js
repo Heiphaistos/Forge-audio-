@@ -51,7 +51,7 @@ export function registerSocial(app, { accounts, userData, dataDir, keys, botToke
   });
   registerMessages(app, { accounts, friends, messages, hub, keys });
   registerKeys(app, { accounts, friends, messages, keys });
-  registerProfiles(app, { accounts, userData, friends, activity, profiles, hub });
+  const { profileView } = registerProfiles(app, { accounts, userData, friends, activity, profiles, hub });
 
   // Accounts one can share with / invite: friends only (names only).
   app.get('/api/users', async (request) => ({ users: accounts.list().filter((u) => friends.are(me(request), u.username)) }));
@@ -149,6 +149,14 @@ export function registerSocial(app, { accounts, userData, dataDir, keys, botToke
   });
   app.get('/api/bot/users/:discordId/activity', async (request) => ({ friends: activity.friendsOf(linked(request)) }));
   app.get('/api/bot/users/:discordId/stats', async (request) => activity.statsOf(linked(request), Math.min(3650, Math.max(1, Number(request.query.days) || 28))));
+  /** Forge Audio profile of another linked member, as the web shows it (itself or a friend only; no avatar: it needs a session). */
+  app.get('/api/bot/users/:discordId/profile/:otherId', async (request) => {
+    const viewer = linked(request);
+    const other = links.usernameOf(request.params.otherId);
+    if (!other || !isAccount(other)) throw new HttpError('Profil introuvable', 404, 'NOT_FOUND');
+    const { avatar, ...profile } = profileView(viewer, other);
+    return { profile };
+  });
   /** Blend with another linked Discord member. */
   app.get('/api/bot/users/:discordId/blend/:otherId', async (request) => {
     const username = linked(request);
