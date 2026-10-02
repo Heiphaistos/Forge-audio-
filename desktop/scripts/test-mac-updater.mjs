@@ -8,7 +8,10 @@ import { spawn, spawnSync } from 'node:child_process';
 import { appBundle, installOnExit, stageMacUpdate } from '../mac-updater.js';
 
 const auth = process.env.GH_TOKEN ? { authorization: `Bearer ${process.env.GH_TOKEN}` } : {};
-const latest = await (await fetch('https://api.github.com/repos/Heiphaistos/Forge-audio-/releases/latest', { headers: auth })).json();
+// Newest release that already has this Mac's zip (on a tag build, the release being made may not have it yet).
+const releases = await (await fetch('https://api.github.com/repos/Heiphaistos/Forge-audio-/releases?per_page=10', { headers: auth })).json();
+const latest = releases.find((r) => !r.draft && r.assets.some((x) => x.name === `ForgeAudio-${r.tag_name.slice(1)}-mac-${process.arch}.zip`));
+assert.ok(latest, `aucune release avec le zip ${process.arch}`);
 const version = latest.tag_name.replace(/^v/, '');
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'forge-mac-update-'));
 const bundle = path.join(root, 'Applications', 'Forge Audio.app');

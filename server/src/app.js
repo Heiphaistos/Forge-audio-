@@ -25,7 +25,7 @@ import { registerTranslate } from './translate.js';
 import { registerBatchDownload } from './download-batch.js';
 import { registerCast, CAST_PATH } from './cast.js';
 
-export const VERSION = '0.22.5';
+export const VERSION = '0.22.6';
 
 const IMAGE_HOSTS = /(^|\.)(ytimg\.com|ggpht\.com|googleusercontent\.com|sndcdn\.com|dmcdn\.net|dailymotion\.com|bcbits\.com|vimeocdn\.com|jtvnw\.net|scdn\.co|spotifycdn\.com|dzcdn\.net|mzstatic\.com)$/i;
 
