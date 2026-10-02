@@ -20,10 +20,9 @@ assert.throws(() => appBundle('/Volumes/Forge Audio/Forge Audio.app/Contents/Mac
 
 const staged = await stageMacUpdate(version, path.join(root, 'work'), { bundle });
 console.log('prêt :', staged);
-// arm64 builds are ad hoc signed, x64 ones not at all: the swap must leave the downloaded state untouched.
+// Builds are not signed as bundles (only Electron's own Mach-O signatures): the swap must leave that state untouched.
 const codesign = (p) => spawnSync('/usr/bin/codesign', ['--verify', '--deep', p], { encoding: 'utf8' }).status;
 const before = codesign(staged);
-if (process.arch === 'arm64') assert.equal(before, 0, 'build arm64 sans signature ad hoc : ne se lancerait pas');
 
 const fakeApp = spawn('/bin/sleep', ['2']);
 const swap = installOnExit(staged, { bundle, pid: fakeApp.pid });
@@ -34,3 +33,13 @@ assert.ok(fs.existsSync(path.join(bundle, 'Contents/MacOS/Forge Audio')), 'nouve
 console.log(`mac-updater OK (${version}, ${process.arch})`);
 assert.equal(codesign(bundle), before, 'signature modifiée par le remplacement');
 console.log(`signature inchangée après remplacement (codesign ${before})`);
+
+// The real proof: the swapped app starts and stays up (macOS kills a binary with a broken signature at once).
+const exe = path.join(bundle, 'Contents/MacOS/Forge Audio');
+const started = spawn(exe, [], { stdio: 'ignore', env: { ...process.env, HOME: root } });
+let exit = null;
+started.on('exit', (code, signal) => { exit = signal || code; });
+await new Promise((r) => setTimeout(r, 8000));
+assert.equal(exit, null, `l'app remplacée s'est arrêtée au lancement (${exit})`);
+started.kill();
+console.log('app remplacée lancée et toujours active après 8 s');
