@@ -4,6 +4,7 @@ import { lazyStorage } from '../lib/storage';
 import type { Artist, HiddenEntry, Playlist, RadioStation, Track, HistoryEntry } from '../lib/types';
 import { uid } from '../lib/format';
 import { artistKey } from '../lib/merge';
+import { api } from '../lib/api';
 
 const HISTORY_MAX = 1000;
 
@@ -219,6 +220,24 @@ export const useLibrary = create<LibraryState>()(
     { name: 'forge.library', version: 1, storage: lazyStorage },
   ),
 );
+
+/** Spotify playlist imports used to give every track the playlist's image (ab67706c…) instead of its album art (ab67616d…). */
+const wrongSpotifyCover = (t: Track) => /^https:\/\/open\.spotify\.com\/track\//.test(t.url) && !/ab67616d/.test(t.thumbnail || '');
+
+/** Put the real album art on the Spotify tracks of the library (likes and playlists); run once after the library loads. */
+export async function repairSpotifyCovers() {
+  const { liked, playlists } = useLibrary.getState();
+  const urls = [...new Set([...liked, ...playlists.flatMap((p) => p.tracks)].filter(wrongSpotifyCover).map((t) => t.url))];
+  if (!urls.length) return;
+  const covers: Record<string, string> = {};
+  for (let i = 0; i < urls.length; i += 200) Object.assign(covers, (await api.spotifyCovers(urls.slice(i, i + 200))).covers);
+  if (!Object.keys(covers).length) return;
+  const fix = (t: Track) => (covers[t.url] ? { ...t, thumbnail: covers[t.url] } : t);
+  useLibrary.setState((s) => ({
+    liked: s.liked.map(fix),
+    playlists: s.playlists.map((p) => (p.tracks.some((t) => covers[t.url]) ? { ...p, tracks: p.tracks.map(fix), updatedAt: Date.now() } : p)),
+  }));
+}
 
 export const useIsLiked = (url: string | undefined) => useLibrary((s) => !!url && s.liked.some((t) => t.url === url));
 /** Left out of radio / autoplay / recommendations? */

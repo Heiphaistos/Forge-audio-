@@ -1,10 +1,22 @@
 import { Copy, Crown, Loader2, LogOut, Radio, Send, Users, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import type { User } from '../lib/api';
+import type { Jam, User } from '../lib/api';
 import { useUi } from '../store/ui';
 import { jam, jamSay, nameOf, otherAccounts, useJam, useJamChat, usePeople } from '../store/social';
 import { Composer } from '../views/People';
 import { useEscape } from '../hooks';
+
+const PERMS: [keyof Jam['perms'], string, string][] = [
+  ['playback', 'Mettre en pause et avancer dans le titre', 'Lecture, pause et déplacement dans le titre en cours.'],
+  ['skip', 'Changer de titre', 'Titre suivant ou précédent, choisir un titre de la file, lancer tout de suite un titre ou une playlist.'],
+  ['queue', 'Gérer la file', 'Vider la file, retirer et réordonner les titres de tout le monde.'],
+];
+
+function guestRights(j: Jam) {
+  const ok = PERMS.filter(([p]) => j.perms?.[p]).map(([, label]) => label.toLowerCase());
+  const base = 'Vous pouvez ajouter des titres et retirer les vôtres';
+  return ok.length ? `${base}, et aussi : ${ok.join(' ; ')}.` : `${base} ; ${nameOf(j.host)} garde le contrôle de la lecture.`;
+}
 
 /** Top banner while in a Jam: whose Jam, how many people, opens the Jam window. */
 export function JamBanner() {
@@ -123,12 +135,18 @@ export function JamPanel() {
             )}
             <JamChat />
             {host ? (
-              <label className="setting">
-                <input type="checkbox" checked={j.everyoneControls} onChange={(e) => run(() => jam.everyone(e.target.checked))} />
-                <span><b>Tout le monde contrôle la lecture</b><br /><span className="muted small">Sinon, seul vous (l'hôte) mettez en pause, passez ou revenez en arrière. Tout le monde peut ajouter des titres.</span></span>
-              </label>
+              <div>
+                <h3 className="small muted">Ce que les invités peuvent faire</h3>
+                {PERMS.map(([perm, label, hint]) => (
+                  <label key={perm} className="setting">
+                    <input type="checkbox" checked={!!j.perms?.[perm]} disabled={busy} onChange={(e) => run(() => jam.setPerms({ [perm]: e.target.checked }))} />
+                    <span><b>{label}</b><br /><span className="muted small">{hint}</span></span>
+                  </label>
+                ))}
+                <p className="muted small">Tout le monde peut ajouter des titres et retirer les siens.</p>
+              </div>
             ) : (
-              <p className="muted small"><Users size={13} /> {j.everyoneControls ? 'Tout le monde peut contrôler la lecture.' : `${nameOf(j.host)} contrôle la lecture ; vous pouvez ajouter des titres (menu ⋯ ou « Ajouter à la file »).`}</p>
+              <p className="muted small"><Users size={13} /> {guestRights(j)}</p>
             )}
             <button className="btn btn-ghost danger" disabled={busy} onClick={() => run(async () => { await jam.leave(); close(); })}>
               <LogOut size={16} /> {host ? 'Terminer l’écoute partagée pour tous' : 'Quitter l’écoute partagée'}

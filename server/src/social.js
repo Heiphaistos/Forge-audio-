@@ -115,6 +115,8 @@ export function registerSocial(app, { accounts, userData, dataDir, keys, botToke
   });
   app.post('/api/jam/:id/add', async (request) => ({ jam: jams.add(request.params.id, me(request), request.body?.tracks, !!request.body?.next) }));
   app.post('/api/jam/:id/remove', async (request) => ({ jam: jams.remove(request.params.id, me(request), request.body?.index) }));
+  app.post('/api/jam/:id/clear', async (request) => ({ jam: jams.clear(request.params.id, me(request)) }));
+  app.post('/api/jam/:id/move', async (request) => ({ jam: jams.move(request.params.id, me(request), request.body?.from, request.body?.to) }));
   app.post('/api/jam/:id/control', async (request) => ({ jam: jams.control(request.params.id, me(request), request.body || {}) }));
   app.patch('/api/jam/:id', async (request) => ({ jam: jams.settings(request.params.id, me(request), request.body || {}) }));
 

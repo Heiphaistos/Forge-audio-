@@ -28,6 +28,7 @@ import { useOffline, setOnline } from './store/offline';
 import { JamPanel, JamBanner } from './components/Jam';
 import { SelectionBar } from './components/SelectionBar';
 import { startSocial } from './store/social';
+import { repairSpotifyCovers } from './store/library';
 import { initKeys, setupKeys, useKeys } from './store/keys';
 import { useAudioEffects, useAudioMix, useMediaSession, useRemoteControl, useShortcuts, useTheme } from './hooks';
 import { api, ApiError, type User } from './lib/api';
@@ -184,6 +185,7 @@ export function App() {
     if (user && sync) {
       // Load the saved library before showing the app, so it never flashes empty.
       await Promise.race([startSync(user).catch(() => useUi.getState().toast('Bibliothèque en ligne indisponible, nouvel essai automatique', 'error')), new Promise((r) => setTimeout(r, 8000))]);
+      repairSpotifyCovers().catch(() => {});
     }
     setAuth('ok');
   };

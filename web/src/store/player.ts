@@ -57,7 +57,7 @@ interface PlayerState {
  * Set while in a Jam (store/social.ts): playback and queue actions go to the shared session, whose
  * state then drives this player. Returns true when it handled the action.
  */
-type JamOp = 'toggle' | 'next' | 'ended' | 'prev' | 'seek' | 'jump' | 'playNow' | 'addNext' | 'enqueue' | 'playList' | 'remove' | 'blocked' | 'probe';
+type JamOp = 'toggle' | 'next' | 'ended' | 'prev' | 'seek' | 'jump' | 'playNow' | 'addNext' | 'enqueue' | 'playList' | 'remove' | 'clear' | 'move' | 'blocked' | 'probe';
 let jamRouter: ((op: JamOp, arg?: unknown) => boolean) | null = null;
 export function setJamRouter(fn: typeof jamRouter) { jamRouter = fn; }
 const jam = (op: JamOp, arg?: unknown) => !!jamRouter && jamRouter(op, arg);
@@ -183,7 +183,7 @@ export const usePlayer = create<PlayerState>()(
         },
 
         move: (from, to) => {
-          if (jam('blocked')) return;
+          if (jam('move', { from, to })) return;
           const { queue, index } = get();
           if (from === to) return;
           const q = [...queue];
@@ -197,7 +197,7 @@ export const usePlayer = create<PlayerState>()(
         },
 
         clearUpcoming: () => {
-          if (jam('blocked')) return;
+          if (jam('clear')) return;
           const { queue, index } = get();
           set({ queue: queue.slice(0, index + 1), unshuffled: null });
         },

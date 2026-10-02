@@ -80,16 +80,36 @@ test('Jam: join by code, everyone adds, host controls, idempotent advance', asyn
   assert.deepEqual(added.body.jam.queue.map((t) => t.url), [track(1).url, track(3).url, track(2).url]);
   assert.equal(added.body.jam.queue[1].addedBy, 'polo');
 
-  assert.equal((await polo('POST', `/api/jam/${id}/control`, { action: 'pause' })).status, 403, 'only the host controls');
-  await evan('PATCH', `/api/jam/${id}`, { everyoneControls: true });
+  assert.deepEqual(start.body.jam.perms, { playback: true, skip: true, queue: true }, 'guests may do everything by default');
+  assert.equal((await polo('PATCH', `/api/jam/${id}`, { perms: { skip: true } })).status, 403, 'only the host sets the rights');
+  await evan('PATCH', `/api/jam/${id}`, { perms: { playback: false, skip: false, queue: false } });
+  assert.equal((await polo('POST', `/api/jam/${id}/control`, { action: 'pause' })).status, 403, 'pause not allowed');
+  assert.equal((await polo('POST', `/api/jam/${id}/control`, { action: 'jump', index: 2 })).status, 403, 'track change not allowed');
+  assert.equal((await polo('POST', `/api/jam/${id}/move`, { from: 2, to: 1 })).status, 403, 'reorder not allowed');
+  assert.equal((await polo('POST', `/api/jam/${id}/remove`, { index: 2 })).status, 403, "someone else's track");
+  await evan('PATCH', `/api/jam/${id}`, { perms: { playback: true } });
   assert.equal((await polo('POST', `/api/jam/${id}/control`, { action: 'pause' })).body.jam.playing, false);
+  assert.equal((await polo('POST', `/api/jam/${id}/control`, { action: 'next' })).status, 403, 'still no track change');
+  await evan('PATCH', `/api/jam/${id}`, { perms: { skip: true, queue: true } });
 
   const a1 = await evan('POST', `/api/jam/${id}/control`, { action: 'advance', from: 0 });
   const a2 = await polo('POST', `/api/jam/${id}/control`, { action: 'advance', from: 0 });
   assert.equal(a1.body.jam.index, 1);
   assert.equal(a2.body.jam.index, 1, 'a second "track ended" for the same track does not skip another');
 
-  assert.equal((await polo('POST', `/api/jam/${id}/remove`, { index: 2 })).status, 200, 'everyone controls: can remove');
+  const moved = await polo('POST', `/api/jam/${id}/move`, { from: 2, to: 0 });
+  assert.equal(moved.body.jam.queue[0].url, track(2).url);
+  assert.equal(moved.body.jam.index, 2, 'the current track keeps playing after a move');
+  await evan('POST', `/api/jam/${id}/move`, { from: 0, to: 2 });
+  assert.equal((await polo('POST', `/api/jam/${id}/remove`, { index: 2 })).status, 200, 'queue right: can remove');
+  await polo('POST', `/api/jam/${id}/add`, { tracks: [track(4), track(5)] });
+  await evan('POST', `/api/jam/${id}/add`, { tracks: [track(6)] });
+  await evan('PATCH', `/api/jam/${id}`, { perms: { queue: false } });
+  const own = await polo('POST', `/api/jam/${id}/clear`);
+  assert.deepEqual(own.body.jam.queue.slice(own.body.jam.index + 1).map((t) => t.url), [track(6).url], 'without the right, only my own tracks go');
+  await evan('PATCH', `/api/jam/${id}`, { perms: { queue: true } });
+  const cleared = await polo('POST', `/api/jam/${id}/clear`);
+  assert.equal(cleared.body.jam.queue.length, cleared.body.jam.index + 1, 'everything after the current track is gone');
   assert.equal((await polo('POST', `/api/jam/${id}/leave`)).body.jam, null);
   assert.equal((await evan('GET', '/api/jam')).body.jam.participants.length, 1);
   await evan('POST', `/api/jam/${id}/leave`);
@@ -251,4 +271,12 @@ test('bot: friend activity, stats and Blend of linked Discord members', async ()
   assert.deepEqual([stranger.status, stranger.body.code], [404, 'NOT_FOUND'], 'not a friend: same 404');
   assert.equal((await bot('GET', '/api/bot/users/111111111111111111/profile/444444444444444444')).status, 404, 'not linked');
   assert.equal((await bot('GET', '/api/bot/users/999999999999999999/profile/222222222222222222')).body.code, 'NOT_LINKED');
+});
+
+test('Spotify covers: only Spotify track links, 200 at most', async () => {
+  const { evan } = await setup();
+  assert.equal((await evan('POST', '/api/spotify/covers', { urls: ['http://127.0.0.1/track/x'] })).status, 400);
+  assert.equal((await evan('POST', '/api/spotify/covers', { urls: 'nope' })).status, 400);
+  assert.equal((await evan('POST', '/api/spotify/covers', { urls: Array(201).fill('https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC') })).status, 400);
+  assert.deepEqual((await evan('POST', '/api/spotify/covers', { urls: [] })).body, { covers: {} });
 });

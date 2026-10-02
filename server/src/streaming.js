@@ -73,6 +73,33 @@ function track({ title, artists, durationMs, thumbnail, url, source }) {
   };
 }
 
+export const SPOTIFY_TRACK = /^https:\/\/open\.spotify\.com\/track\/[A-Za-z0-9]{22}$/;
+const coverCache = new TtlCache({ ttlMs: 7 * 24 * 3600 * 1000, max: 20_000 });
+
+/**
+ * Album art of Spotify tracks (the embed of a playlist has no image per track, only the playlist's): the public
+ * oEmbed of each track, 6 at a time, cached a week. Returns { url: image } for the ones found.
+ */
+export async function spotifyCovers(urls) {
+  const out = {};
+  const todo = [...new Set(urls)].filter((u) => SPOTIFY_TRACK.test(u));
+  const work = async () => {
+    for (let u = todo.shift(); u; u = todo.shift()) {
+      let img = coverCache.get(u);
+      if (img === undefined) {
+        try {
+          const res = await fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(u)}`, { headers: { 'user-agent': UA }, signal: AbortSignal.timeout(5000) });
+          img = res.ok ? (await res.json()).thumbnail_url || null : null;
+          if (res.ok) coverCache.set(u, img);
+        } catch { img = null; }
+      }
+      if (img) out[u] = img;
+    }
+  };
+  await Promise.all(Array.from({ length: 6 }, work));
+  return out;
+}
+
 /** Spotify's public embed page carries the metadata (and up to 100 titles of a list), no API key needed. */
 async function resolveSpotify(ref) {
   let html;
@@ -92,6 +119,8 @@ async function resolveSpotify(ref) {
     title: t.title, artists: [t.subtitle], durationMs: t.duration, thumbnail: cover, source: 'spotify',
     url: t.uri?.startsWith('spotify:track:') ? `https://open.spotify.com/track/${t.uri.split(':')[2]}` : null,
   })).filter((t) => t.url);
+  const covers = await spotifyCovers(tracks.map((t) => t.url));
+  for (const t of tracks) t.thumbnail = covers[t.url] || t.thumbnail;
   return { title: [entity.name || entity.title, entity.subtitle].filter(Boolean).join(' — '), tracks };
 }
 

@@ -117,11 +117,14 @@ export type DeviceCommand =
   | { action: 'load'; tracks: Track[]; index: number; position: number; playing: boolean }
   | { action: 'handoff'; target: string };
 
+export interface JamPerms { playback: boolean; skip: boolean; queue: boolean }
+
 export interface Jam {
   id: string;
   code: string;
   host: string;
-  everyoneControls: boolean;
+  /** What the guests may do (the host always may): play/pause/seek, change the track, manage the queue. */
+  perms: JamPerms;
   participants: { username: string; displayName: string; joinedAt: number }[];
   queue: SharedTrack[];
   index: number;
@@ -228,7 +231,10 @@ export const api = {
   jamAdd: (id: string, tracks: Track[], next = false) => send<{ jam: Jam }>('POST', `/api/jam/${id}/add`, { tracks, next }),
   jamRemove: (id: string, index: number) => send<{ jam: Jam }>('POST', `/api/jam/${id}/remove`, { index }),
   jamControl: (id: string, body: { action: string; position?: number; index?: number; from?: number }) => send<{ jam: Jam }>('POST', `/api/jam/${id}/control`, body),
-  jamSettings: (id: string, everyoneControls: boolean) => send<{ jam: Jam }>('PATCH', `/api/jam/${id}`, { everyoneControls }),
+  jamSettings: (id: string, perms: Partial<JamPerms>) => send<{ jam: Jam }>('PATCH', `/api/jam/${id}`, { perms }),
+  spotifyCovers: (urls: string[]) => send<{ covers: Record<string, string> }>('POST', '/api/spotify/covers', { urls }),
+  jamClear: (id: string) => send<{ jam: Jam }>('POST', `/api/jam/${id}/clear`, {}),
+  jamMove: (id: string, from: number, to: number) => send<{ jam: Jam }>('POST', `/api/jam/${id}/move`, { from, to }),
   catalogArtist: (q: { id?: number; name?: string }) => get<ArtistPage>('/api/catalog/artist', { id: q.id, name: q.name }),
   catalogAlbum: (id: number) => get<AlbumPage>(`/api/catalog/album/${id}`),
   catalogSearch: (q: string, signal?: AbortSignal) => get<CatalogSearch>('/api/catalog/search', { q }, signal),

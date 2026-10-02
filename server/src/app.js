@@ -7,7 +7,7 @@ import { runYtdlp, buildListArgs, parseYtdlpJson } from './ytdlp.js';
 import { search, suggest, radio, SOURCES } from './search.js';
 import { MediaService } from './stream.js';
 import { findLyrics } from './lyrics.js';
-import { resolveStreamingLink, playableUrl, withDrmFallback, withBotFallback } from './streaming.js';
+import { resolveStreamingLink, playableUrl, withDrmFallback, withBotFallback, spotifyCovers, SPOTIFY_TRACK } from './streaming.js';
 import { HttpError, isPublicUrl, clampInt, TtlCache } from './util.js';
 import { Accounts, Sessions, LoginLimiter, normalizeUsername, isValidUsername, checkPasswordPolicy, hashPassword } from './accounts.js';
 import { Invites, registerAdmin } from './invites.js';
@@ -25,7 +25,7 @@ import { registerTranslate } from './translate.js';
 import { registerBatchDownload } from './download-batch.js';
 import { registerCast, CAST_PATH } from './cast.js';
 
-export const VERSION = '0.22.7';
+export const VERSION = '0.23.0';
 
 const IMAGE_HOSTS = /(^|\.)(ytimg\.com|ggpht\.com|googleusercontent\.com|sndcdn\.com|dmcdn\.net|dailymotion\.com|bcbits\.com|vimeocdn\.com|jtvnw\.net|scdn\.co|spotifycdn\.com|dzcdn\.net|mzstatic\.com)$/i;
 
@@ -273,6 +273,15 @@ export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null,
   });
 
   app.get('/api/suggest', async (request) => ({ suggestions: await suggest(request.query.q) }));
+
+  // Album art for Spotify tracks imported before covers were fetched per track (they all show the playlist's).
+  app.post('/api/spotify/covers', async (request) => {
+    const urls = request.body?.urls;
+    if (!Array.isArray(urls) || urls.length > 200 || !urls.every((u) => typeof u === 'string' && SPOTIFY_TRACK.test(u))) {
+      throw new HttpError('Liste de liens de titres Spotify attendue (200 au maximum)');
+    }
+    return { covers: await spotifyCovers(urls) };
+  });
 
   app.get('/api/resolve', async (request) => {
     const url = requirePublicUrl(request.query.url);

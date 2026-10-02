@@ -178,7 +178,8 @@ setInterval(() => {
   if (Math.abs(engine.currentTime - livePosition(j)) > 2.5) engine.seek(livePosition(j));
 }, 5000);
 
-const canControl = (j: Jam) => j.host === useJam.getState().me || j.everyoneControls;
+type Perm = keyof Jam['perms'];
+export const jamCan = (j: Jam, perm: Perm) => j.host === useJam.getState().me || !!j.perms?.[perm];
 
 export const jam = {
   start: async () => {
@@ -212,33 +213,51 @@ export const jam = {
     const j = useJam.getState().jam;
     if (j) setJam((await api.jamControl(j.id, { action, ...extra })).jam);
   },
-  everyone: async (on: boolean) => { const j = useJam.getState().jam; if (j) setJam((await api.jamSettings(j.id, on)).jam); },
+  setPerms: async (perms: Partial<Jam['perms']>) => { const j = useJam.getState().jam; if (j) setJam((await api.jamSettings(j.id, perms)).jam); },
+  clear: async () => {
+    const j = useJam.getState().jam;
+    if (!j) return;
+    const before = j.queue.length;
+    const nj = (await api.jamClear(j.id)).jam;
+    setJam(nj);
+    const gone = before - nj.queue.length;
+    toast(gone ? `${gone} titre${gone > 1 ? 's' : ''} retiré${gone > 1 ? 's' : ''} de la file` : 'Rien à retirer', gone ? 'success' : 'info');
+  },
+  move: async (from: number, to: number) => { const j = useJam.getState().jam; if (j) setJam((await api.jamMove(j.id, from, to)).jam); },
 };
 
 /** While in a Jam, the player's actions go to the shared session (see store/player.ts). */
 setJamRouter((op, arg) => {
   const j = useJam.getState().jam;
   if (!j) return false;
-  const ctl = (action: string, extra = {}) => {
-    if (!canControl(j)) { toast('Seul l\'hôte contrôle la lecture de cette écoute partagée', 'info'); return; }
+  const ctl = (perm: Perm, action: string, extra = {}) => {
+    if (!jamCan(j, perm)) { toast(perm === 'playback' ? `${nameOf(j.host)} ne permet pas de mettre en pause` : `${nameOf(j.host)} ne permet pas de changer de titre`, 'info'); return; }
     jam.control(action, extra).catch(fail);
   };
+  // With the right to change the track, « play » plays it now; otherwise it comes next.
+  const addAndPlay = (tracks: Track[]) => jam.add(tracks, true).then((nj) => {
+    if (nj && jamCan(nj, 'skip')) return jam.control('jump', { index: nj.index + 1 });
+    toast(`${tracks.length > 1 ? `${tracks.length} titres ajoutés` : 'Ajouté'} à l’écoute partagée, joué ensuite`, 'success');
+  }).catch(fail);
   switch (op) {
-    case 'toggle': ctl(j.playing ? 'pause' : 'play'); break;
-    case 'next': ctl('next'); break;
-    case 'prev': ctl('prev'); break;
+    case 'toggle': ctl('playback', j.playing ? 'pause' : 'play'); break;
+    case 'next': ctl('skip', 'next'); break;
+    case 'prev': ctl('skip', 'prev'); break;
     // Track over on this device: the server moves on once (idempotent), whoever reports it first.
     case 'ended': jam.control('advance', { from: j.index }).catch(() => {}); break;
-    case 'seek': ctl('seek', { position: Number(arg) }); break;
-    case 'jump': ctl('jump', { index: Number(arg) }); break;
+    case 'seek': ctl('playback', 'seek', { position: Number(arg) }); break;
+    case 'jump': ctl('skip', 'jump', { index: Number(arg) }); break;
     case 'remove': jam.remove(Number(arg)).catch(fail); break;
-    case 'playNow':
-      jam.add([arg as Track], true).then((nj) => {
-        if (nj && canControl(nj)) return jam.control('jump', { index: nj.index + 1 });
-        toast('Ajouté à l’écoute partagée, joué ensuite', 'success');
-      }).catch(fail);
+    case 'clear': jam.clear().catch(fail); break;
+    case 'move': {
+      if (!jamCan(j, 'queue')) { toast(`${nameOf(j.host)} ne permet pas de réorganiser la file`, 'info'); break; }
+      const { from, to } = arg as { from: number; to: number };
+      jam.move(from, to).catch(fail);
       break;
-    case 'playList': case 'addNext':
+    }
+    case 'playNow': addAndPlay([arg as Track]); break;
+    case 'playList': addAndPlay(arg as Track[]); break;
+    case 'addNext':
       jam.add(arg as Track[], true).then(() => toast(`${(arg as Track[]).length > 1 ? `${(arg as Track[]).length} titres ajoutés` : 'Ajouté'} à l’écoute partagée, joué ensuite`, 'success')).catch(fail);
       break;
     case 'enqueue':

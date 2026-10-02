@@ -6,7 +6,9 @@ import { cleanText } from './messages.js';
 /**
  * Jam (Spotify-style group session): a host starts it, friends join with a code or an invitation,
  * everybody adds tracks to one shared queue and each device plays the same track at the same
- * position. The host controls playback (or everyone, if the host allows it).
+ * position. The host always controls everything; what the others may do is ticked by the host (PERMS):
+ * play/pause/seek, change the track (next, previous, jump, play a track now), manage the queue (clear it,
+ * remove or move anyone's tracks). Everybody may add tracks and remove their own.
  *
  * Kept in memory: a Jam ends when its host leaves or after 12 h without activity (and at a restart).
  * Position model: `position` seconds at server time `positionAt`; while playing, the current
@@ -18,6 +20,8 @@ const MAX_PARTICIPANTS = 50;
 const IDLE_MS = 12 * 3600 * 1000;
 const MAX_CHAT = 200;
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+export const PERMS = ['playback', 'skip', 'queue'];
+const allPerms = (on) => Object.fromEntries(PERMS.map((p) => [p, on]));
 
 export class JamHub {
   constructor(hub) {
@@ -42,7 +46,7 @@ export class JamHub {
   /** Public state sent to participants (live position included). */
   view(j) {
     return {
-      id: j.id, code: j.code, host: j.host, everyoneControls: j.everyoneControls,
+      id: j.id, code: j.code, host: j.host, perms: { ...j.perms },
       participants: [...j.participants.values()],
       queue: j.queue, index: j.index, playing: j.playing,
       position: j.position, positionAt: j.positionAt, serverNow: Date.now(),
@@ -80,7 +84,7 @@ export class JamHub {
     const queue = cleanTracks(tracks, MAX_QUEUE).map((t) => ({ ...t, addedBy: user.username }));
     const now = Date.now();
     const j = {
-      id: crypto.randomBytes(9).toString('base64url'), code: this.code(), host: user.username, everyoneControls: false,
+      id: crypto.randomBytes(9).toString('base64url'), code: this.code(), host: user.username, perms: allPerms(true),
       participants: new Map([[user.username, this.person(user)]]),
       chat: [],
       queue, index: queue.length ? Math.min(Math.max(0, Number(index) || 0), queue.length - 1) : -1,
@@ -152,8 +156,12 @@ export class JamHub {
     return this.require(id, username).chat;
   }
 
-  canControl(j, username) {
-    return j.host === username || j.everyoneControls;
+  can(j, username, perm) {
+    return j.host === username || !!j.perms[perm];
+  }
+
+  forbid(j, username, perm, message) {
+    if (!this.can(j, username, perm)) throw new HttpError(message, 403, 'FORBIDDEN');
   }
 
   add(id, username, tracks, next = false) {
@@ -175,17 +183,42 @@ export class JamHub {
     if (!t) throw new HttpError('Titre introuvable', 400);
     if (i === j.index) throw new HttpError('Impossible de retirer le titre en cours', 400);
     // Everyone removes what they added; the host (or everyone when allowed) removes anything.
-    if (t.addedBy !== username && !this.canControl(j, username)) throw new HttpError('Seul l\'hôte peut retirer les titres des autres', 403, 'FORBIDDEN');
+    if (t.addedBy !== username) this.forbid(j, username, 'queue', 'L\'hôte ne permet pas de retirer les titres des autres');
     j.queue.splice(i, 1);
     if (i < j.index) j.index -= 1;
     this.broadcast(j);
     return this.view(j);
   }
 
-  settings(id, username, { everyoneControls }) {
+  /** Empty what comes after the current track: everything (queue right), otherwise only one's own tracks. */
+  clear(id, username) {
+    const j = this.require(id, username);
+    const all = this.can(j, username, 'queue');
+    const before = j.queue.length;
+    j.queue = j.queue.filter((t, i) => i <= j.index || (!all && t.addedBy !== username));
+    if (j.queue.length !== before) this.broadcast(j, { cleared: { by: username, count: before - j.queue.length } });
+    return this.view(j);
+  }
+
+  move(id, username, from, to) {
+    const j = this.require(id, username);
+    this.forbid(j, username, 'queue', 'L\'hôte ne permet pas de réorganiser la file');
+    const [f, t] = [Number(from), Number(to)];
+    if (!j.queue[f] || !j.queue[t]) throw new HttpError('Titre introuvable', 400);
+    const [m] = j.queue.splice(f, 1);
+    j.queue.splice(t, 0, m);
+    if (f === j.index) j.index = t;
+    else if (f < j.index && t >= j.index) j.index -= 1;
+    else if (f > j.index && t <= j.index) j.index += 1;
+    this.broadcast(j);
+    return this.view(j);
+  }
+
+  /** Host only: { perms: { playback, skip, queue } } (booleans; missing keys unchanged). */
+  settings(id, username, { perms } = {}) {
     const j = this.require(id, username);
     if (j.host !== username) throw new HttpError('Seul l\'hôte peut changer ce réglage', 403, 'FORBIDDEN');
-    j.everyoneControls = !!everyoneControls;
+    for (const p of PERMS) if (typeof perms?.[p] === 'boolean') j.perms[p] = perms[p];
     this.broadcast(j);
     return this.view(j);
   }
@@ -196,8 +229,9 @@ export class JamHub {
    */
   control(id, username, { action, position, index, from }) {
     const j = this.require(id, username);
-    if (action !== 'advance' && !this.canControl(j, username)) throw new HttpError('Seul l\'hôte contrôle la lecture de cette écoute partagée', 403, 'FORBIDDEN');
-    if (action === 'advance' && j.host !== username && !j.everyoneControls) return this.view(j);
+    if (['play', 'pause', 'seek'].includes(action)) this.forbid(j, username, 'playback', 'L\'hôte ne permet pas de mettre en pause ou de déplacer la lecture');
+    else if (action !== 'advance') this.forbid(j, username, 'skip', 'L\'hôte ne permet pas de changer de titre');
+    if (action === 'advance' && !this.can(j, username, 'skip')) return this.view(j);
     const now = Date.now();
     const go = (i) => { j.index = i; j.position = 0; j.positionAt = now; };
     switch (action) {
