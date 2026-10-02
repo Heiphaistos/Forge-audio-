@@ -13,7 +13,7 @@ export function OfflineButton({ set, tracks, name }: { set: string; tracks: Trac
   const on = useOffline((s) => s.sets.includes(set));
   const eligible = useMemo(() => tracks.filter(offlineEligible), [tracks]);
   const done = useOffline((s) => eligible.reduce((n, t) => n + (s.items[t.url] ? 1 : 0), 0));
-  const label = !on ? 'Télécharger' : done < eligible.length ? `Téléchargement ${done}/${eligible.length}` : 'Disponible hors ligne';
+  const label = !on ? 'Hors ligne' : done < eligible.length ? `Téléchargement ${done}/${eligible.length}` : 'Disponible hors ligne';
   return (
     <button className={`btn btn-ghost offline-btn ${on ? 'on' : ''}`} disabled={!on && !eligible.length} aria-pressed={on}
       title={on ? 'Retirer de l’écoute hors ligne' : 'Garder ces titres sur cet appareil pour les écouter sans connexion'}
