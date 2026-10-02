@@ -4,6 +4,7 @@ import { useUi } from '../store/ui';
 import { usePlayer } from '../store/player';
 import { useLibrary, artistKey } from '../store/library';
 import { api } from '../lib/api';
+import { startDownload } from './DownloadAll';
 import { shared, useJam } from '../store/social';
 
 export function ContextMenu() {
@@ -45,12 +46,7 @@ export function ContextMenu() {
   const act = (fn: () => void) => () => { fn(); openMenu(null); };
   const isLocal = t.source === 'local';
   const download = (format: 'mp3' | 'audio' | 'video') => act(() => {
-    const a = document.createElement('a');
-    a.href = api.downloadUrl(t.url, format);
-    a.download = '';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    startDownload(api.downloadUrl(t.url, format));
     toast('Téléchargement lancé…');
   });
 
