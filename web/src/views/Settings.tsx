@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { CheckCircle2, XCircle, Github, Loader2 } from 'lucide-react';
+import { CheckCircle2, XCircle, Github, Loader2, ChevronLeft, ChevronRight, UserRound, Palette, Play, Gauge, Users, MonitorSmartphone, Database, ShieldCheck, Keyboard, Info, type LucideIcon } from 'lucide-react';
+import { LAYOUTS } from '../lib/layouts';
 import { ACCENTS, useSettings, useUi } from '../store/ui';
 import { discord, useDiscord, useJam } from '../store/social';
 import { useSync } from '../lib/sync';
@@ -305,6 +306,43 @@ function Toggle({ checked, onChange, label, hint }: { checked: boolean; onChange
   );
 }
 
+type Cat = 'compte' | 'apparence' | 'lecture' | 'qualite' | 'social' | 'applis' | 'donnees' | 'admin' | 'clavier' | 'apropos';
+const CATS: { id: Cat; label: string; hint: string; icon: LucideIcon }[] = [
+  { id: 'compte', label: 'Compte', hint: 'Profil, mot de passe, e-mail, code de secours', icon: UserRound },
+  { id: 'apparence', label: 'Apparence', hint: 'Disposition, couleurs, visualiseur', icon: Palette },
+  { id: 'lecture', label: 'Lecture', hint: 'Enchaînement, égaliseur, titres masqués', icon: Play },
+  { id: 'qualite', label: 'Qualité et données', hint: 'Qualité du flux, données mobiles', icon: Gauge },
+  { id: 'social', label: 'Social et Discord', hint: 'Activité partagée, HeiphaisBot', icon: Users },
+  { id: 'applis', label: 'Applications', hint: 'Bureau, mobile, serveur utilisé', icon: MonitorSmartphone },
+  { id: 'donnees', label: 'Données', hint: 'Bibliothèque, cache de cet appareil', icon: Database },
+  { id: 'admin', label: 'Administration', hint: 'Comptes et codes d’invitation', icon: ShieldCheck },
+  { id: 'clavier', label: 'Raccourcis clavier', hint: 'Toutes les touches', icon: Keyboard },
+  { id: 'apropos', label: 'À propos', hint: 'Version, serveur, code source', icon: Info },
+];
+const CAT_KEY = 'forge.settingsCat';
+const wide = () => typeof matchMedia === 'function' && matchMedia('(min-width: 821px)').matches;
+
+function LayoutPicker() {
+  const layout = useSettings((st) => st.layout);
+  const set = useSettings((st) => st.set);
+  return (
+    <>
+      <div className="setting" style={{ cursor: 'default' }}><div className="grow">Disposition<div className="muted small">Agencement de l’écran sur ordinateur et tablette ; le téléphone garde sa présentation.</div></div></div>
+      <div className="layout-grid" role="radiogroup" aria-label="Disposition">
+        {LAYOUTS.map((l) => (
+          <button key={l.id} role="radio" aria-checked={layout === l.id} className={`layout-card ${layout === l.id ? 'active' : ''}`} onClick={() => set({ layout: l.id })}>
+            <span className="layout-thumb" aria-hidden style={{ gridTemplateColumns: l.preview.cols, gridTemplateRows: l.preview.rows, gridTemplateAreas: l.preview.areas.map((a) => `'${a}'`).join(' '), gap: ('gap' in l.preview ? l.preview.gap : 2) + 'px' }}>
+              {[...new Set(l.preview.areas.join(' ').split(' ').filter((a) => a !== '.'))].map((a) => <span key={a} className={`a-${a}`} style={{ gridArea: a }} />)}
+            </span>
+            <b>{l.name}</b>
+            <span className="muted">{l.hint}</span>
+          </button>
+        ))}
+      </div>
+    </>
+  );
+}
+
 export function Settings() {
   const s = useSettings();
   const [health, setHealth] = useState<Health | null>(null);
@@ -314,106 +352,176 @@ export function Settings() {
     l: useLibrary((st) => st.liked.length),
     h: useLibrary((st) => st.history.length),
   };
+  const admin = health?.user?.role === 'admin';
+  const cats = CATS.filter((c) => c.id !== 'admin' || admin);
+  // Wide screen: a category is always shown (the last one opened). Phone: the list first, then one category.
+  const [cat, setCatState] = useState<Cat | null>(() => {
+    let saved: string | null = null;
+    try { saved = sessionStorage.getItem(CAT_KEY); } catch { /* storage blocked */ }
+    return CATS.some((c) => c.id === saved) ? (saved as Cat) : wide() ? 'compte' : null;
+  });
+  const setCat = (c: Cat | null) => {
+    setCatState(c);
+    try { if (c) sessionStorage.setItem(CAT_KEY, c); else sessionStorage.removeItem(CAT_KEY); } catch { /* storage blocked */ }
+    document.querySelector('.main-scroll')?.scrollTo({ top: 0 });
+  };
+  const current = cats.find((c) => c.id === cat) || null;
 
   useEffect(() => { api.health().then(setHealth).catch((e) => setHealthError(e.message)); }, []);
 
   return (
     <div className="page settings">
       <h1 className="page-title">Paramètres</h1>
-      <MyProfileCard />
-      <PasswordCard />
-      <EmailCard />
-      <BackupCodeCard />
+      <div className={`settings-layout ${current ? 'in-cat' : ''}`}>
+        <nav className="settings-nav" aria-label="Catégories des paramètres">
+          {cats.map(({ id, label, hint, icon: Icon }) => (
+            <button key={id} data-cat={id} className={current?.id === id ? 'active' : ''} aria-current={current?.id === id ? 'page' : undefined} onClick={() => setCat(id)}>
+              <Icon size={18} />
+              <span className="sn-text"><span>{label}</span><span className="sn-hint">{hint}</span></span>
+              <ChevronRight size={18} className="sn-chev" />
+            </button>
+          ))}
+        </nav>
+        <div className="settings-content">
+          {current && (
+            <>
+              <button className="btn btn-ghost btn-sm settings-back" onClick={() => setCat(null)}><ChevronLeft size={16} /> Paramètres</button>
+              <h2 className="settings-cat-title">{current.label}</h2>
+            </>
+          )}
 
-      <section className="settings-card">
-        <h2>Apparence</h2>
-        <div className="setting">
-          <div className="grow">Couleur d'accent</div>
-          <div className="swatches">
-            {Object.entries(ACCENTS).map(([name, rgb]) => (
-              <button key={name} className={`swatch ${s.accent === name ? 'active' : ''}`} style={{ background: `rgb(${rgb})` }} title={name} aria-label={name} onClick={() => s.set({ accent: name })} />
-            ))}
-          </div>
+          {current?.id === 'compte' && (
+            <>
+              <MyProfileCard />
+              <PasswordCard />
+              <EmailCard />
+              <BackupCodeCard />
+            </>
+          )}
+
+          {current?.id === 'apparence' && (
+            <section className="settings-card">
+              <LayoutPicker />
+              <div className="setting">
+                <div className="grow">Couleur d'accent</div>
+                <div className="swatches">
+                  {Object.entries(ACCENTS).map(([name, rgb]) => (
+                    <button key={name} className={`swatch ${s.accent === name ? 'active' : ''}`} style={{ background: `rgb(${rgb})` }} title={name} aria-label={name} onClick={() => s.set({ accent: name })} />
+                  ))}
+                </div>
+              </div>
+              <Toggle checked={s.dynamicColors} onChange={(v) => s.set({ dynamicColors: v })} label="Couleurs dynamiques" hint="Teinte l'interface selon la pochette en cours de lecture" />
+              <Toggle checked={s.visualizer} onChange={(v) => s.set({ visualizer: v })} label="Visualiseur audio" hint="Barres de fréquences animées dans le lecteur" />
+            </section>
+          )}
+
+          {current?.id === 'lecture' && (
+            <>
+              <section className="settings-card">
+                <h2>Général</h2>
+                <div className="setting">
+                  <div className="grow">Source de recherche par défaut</div>
+                  <select className="select" value={s.defaultSource} onChange={(e) => s.set({ defaultSource: e.target.value })}>
+                    {['all', 'youtube', 'ytmusic', 'soundcloud', 'dailymotion'].map((k) => <option key={k} value={k}>{SOURCE_LABELS[k]}</option>)}
+                  </select>
+                </div>
+                <Toggle checked={s.autoplay} onChange={(v) => s.set({ autoplay: v })} label="Lecture automatique" hint="Quand la file est terminée, enchaîne sur des titres similaires (radio)" />
+                <Toggle checked={s.normalize} onChange={(v) => s.set({ normalize: v })} label="Volume harmonisé" hint="Baisse les titres trop forts pour que tous sonnent au même niveau" />
+              </section>
+              <section className="settings-card">
+                <h2>Enchaînement et égaliseur</h2>
+                <div className="setting">
+                  <div className="grow">Fondu enchaîné<div className="muted small">{s.crossfade ? `Le titre suivant démarre ${s.crossfade} s avant la fin` : 'Désactivé'}{s.eqEnabled && s.eqGains.some((g) => g !== 0) || s.visualizer ? ' · sans effet tant que l’égaliseur ou le visualiseur est actif' : ''}</div></div>
+                  <input type="range" className="slider" min={0} max={12} step={1} value={s.crossfade} style={{ ['--pct' as string]: `${(s.crossfade / 12) * 100}%` }} aria-label="Durée du fondu enchaîné" onChange={(e) => s.set({ crossfade: Number(e.target.value) })} />
+                </div>
+                <Toggle checked={s.gapless} onChange={(v) => s.set({ gapless: v })} label="Enchaînement sans blanc" hint="Démarre le titre suivant juste avant la fin, sans silence entre les deux" />
+                <Toggle checked={s.eqEnabled} onChange={(v) => s.set({ eqEnabled: v })} label="Égaliseur activé" hint={`Préréglage : ${s.eqPreset}`} />
+              </section>
+              <HiddenCard />
+            </>
+          )}
+
+          {current?.id === 'qualite' && (
+            <section className="settings-card">
+              <div className="setting">
+                <div className="grow">Qualité du flux<div className="muted small">Élevée ≈ 160 kbit/s · Normale ≈ 128 kbit/s · Basse ≈ 50 kbit/s</div></div>
+                <select className="select" value={s.quality} onChange={(e) => s.set({ quality: e.target.value as typeof s.quality })}>
+                  <option value="high">Élevée</option><option value="normal">Normale</option><option value="low">Basse</option>
+                </select>
+              </div>
+              <div className="setting">
+                <div className="grow">Économie de données<div className="muted small">Qualité basse et pas de préchargement du titre suivant</div></div>
+                <select className="select" value={s.dataSaver} onChange={(e) => s.set({ dataSaver: e.target.value as typeof s.dataSaver })}>
+                  <option value="off">Jamais</option><option value="auto">Sur données mobiles</option><option value="on">Toujours</option>
+                </select>
+              </div>
+            </section>
+          )}
+
+          {current?.id === 'social' && (
+            <>
+              <section className="settings-card">
+                <h2>Activité</h2>
+                <Toggle checked={s.shareActivity} onChange={(v) => s.set({ shareActivity: v })} label="Partager mon activité d’écoute" hint="Vos amis voient ce que vous écoutez et peuvent créer un Mélange avec vous" />
+              </section>
+              <DiscordLinkCard />
+            </>
+          )}
+
+          {current?.id === 'applis' && (
+            <>
+              <DesktopServer />
+              <MobileServer />
+              <DownloadApps />
+            </>
+          )}
+
+          {current?.id === 'donnees' && (
+            <section className="settings-card">
+              <p className="muted">{counts.p} playlists · {counts.l} titres likés · {counts.h} écoutes dans l'historique. Tout est sauvegardé automatiquement sur le serveur et retrouvé à chaque connexion, sur tous vos appareils. Les fichiers audio locaux sont lus depuis votre appareil et ne sont jamais envoyés.</p>
+              <button className="btn btn-ghost danger" onClick={() => {
+                if (confirm('Vider le cache de cet appareil ? Votre bibliothèque sauvegardée sur le serveur sera rechargée.')) {
+                  ['forge.library', 'forge.player', 'forge.settings', 'forge.position', 'forge.recentSearches'].forEach((k) => localStorage.removeItem(k));
+                  location.reload();
+                }
+              }}>Vider le cache de cet appareil</button>
+            </section>
+          )}
+
+          {current?.id === 'admin' && admin && <AdminCard />}
+
+          {current?.id === 'clavier' && (
+            <section className="settings-card">
+              <div className="shortcuts">
+                {SHORTCUTS.map(([k, d]) => <div key={k} className="shortcut"><kbd>{k}</kbd><span>{d}</span></div>)}
+              </div>
+            </section>
+          )}
+
+          {current?.id === 'apropos' && (
+            <>
+              <section className="settings-card">
+                <h2>Serveur</h2>
+                {health ? (
+                  <>
+                    <div className="setting"><div className="grow">Forge Audio</div><span className="muted">v{health.version}</span></div>
+                    <div className="setting">
+                      <div className="grow">yt-dlp</div>
+                      {health.ytdlp ? <span className="ok"><CheckCircle2 size={16} /> {health.ytdlp}</span> : <span className="bad"><XCircle size={16} /> introuvable</span>}
+                    </div>
+                  </>
+                ) : <p className={healthError ? 'bad' : 'muted'}>{healthError || 'Vérification…'}</p>}
+                <p className="muted small">Sources prises en charge : YouTube, YouTube Music, SoundCloud, Dailymotion, Bandcamp, Vimeo, Twitch et plus de 1 000 sites via les liens (yt-dlp).</p>
+              </section>
+              <section className="settings-card">
+                <h2>À propos</h2>
+                <p className="muted">Forge Audio est un lecteur libre et sans publicité. Le contenu appartient à ses auteurs : soutenez les artistes que vous aimez.</p>
+                <a className="btn btn-ghost" href="https://github.com/Heiphaistos/Forge-audio-" target="_blank" rel="noreferrer"><Github size={16} /> Code source</a>
+              </section>
+            </>
+          )}
         </div>
-        <Toggle checked={s.dynamicColors} onChange={(v) => s.set({ dynamicColors: v })} label="Couleurs dynamiques" hint="Teinte l'interface selon la pochette en cours de lecture" />
-        <Toggle checked={s.visualizer} onChange={(v) => s.set({ visualizer: v })} label="Visualiseur audio" hint="Barres de fréquences animées dans le lecteur" />
-      </section>
-
-      <section className="settings-card">
-        <h2>Lecture</h2>
-        <div className="setting">
-          <div className="grow">Source de recherche par défaut</div>
-          <select className="select" value={s.defaultSource} onChange={(e) => s.set({ defaultSource: e.target.value })}>
-            {['all', 'youtube', 'ytmusic', 'soundcloud', 'dailymotion'].map((k) => <option key={k} value={k}>{SOURCE_LABELS[k]}</option>)}
-          </select>
-        </div>
-        <Toggle checked={s.shareActivity} onChange={(v) => s.set({ shareActivity: v })} label="Partager mon activité d’écoute" hint="Vos amis voient ce que vous écoutez et peuvent créer un Mélange avec vous" />
-        <Toggle checked={s.autoplay} onChange={(v) => s.set({ autoplay: v })} label="Lecture automatique" hint="Quand la file est terminée, enchaîne sur des titres similaires (radio)" />
-        <Toggle checked={s.eqEnabled} onChange={(v) => s.set({ eqEnabled: v })} label="Égaliseur activé" hint={`Préréglage : ${s.eqPreset}`} />
-        <div className="setting">
-          <div className="grow">Fondu enchaîné<div className="muted small">{s.crossfade ? `Le titre suivant démarre ${s.crossfade} s avant la fin` : 'Désactivé'}{s.eqEnabled && s.eqGains.some((g) => g !== 0) || s.visualizer ? ' · sans effet tant que l’égaliseur ou le visualiseur est actif' : ''}</div></div>
-          <input type="range" className="slider" min={0} max={12} step={1} value={s.crossfade} style={{ ['--pct' as string]: `${(s.crossfade / 12) * 100}%` }} aria-label="Durée du fondu enchaîné" onChange={(e) => s.set({ crossfade: Number(e.target.value) })} />
-        </div>
-        <Toggle checked={s.gapless} onChange={(v) => s.set({ gapless: v })} label="Enchaînement sans blanc" hint="Démarre le titre suivant juste avant la fin, sans silence entre les deux" />
-        <Toggle checked={s.normalize} onChange={(v) => s.set({ normalize: v })} label="Volume harmonisé" hint="Baisse les titres trop forts pour que tous sonnent au même niveau" />
-        <div className="setting">
-          <div className="grow">Qualité du flux<div className="muted small">Élevée ≈ 160 kbit/s · Normale ≈ 128 kbit/s · Basse ≈ 50 kbit/s</div></div>
-          <select className="select" value={s.quality} onChange={(e) => s.set({ quality: e.target.value as typeof s.quality })}>
-            <option value="high">Élevée</option><option value="normal">Normale</option><option value="low">Basse</option>
-          </select>
-        </div>
-        <div className="setting">
-          <div className="grow">Économie de données<div className="muted small">Qualité basse et pas de préchargement du titre suivant</div></div>
-          <select className="select" value={s.dataSaver} onChange={(e) => s.set({ dataSaver: e.target.value as typeof s.dataSaver })}>
-            <option value="auto">Sur données mobiles</option><option value="on">Toujours</option><option value="off">Jamais</option>
-          </select>
-        </div>
-      </section>
-
-      {health?.user?.role === 'admin' && <AdminCard />}
-      <DesktopServer />
-      <MobileServer />
-      <DiscordLinkCard />
-      <HiddenCard />
-      <DownloadApps />
-
-      <section className="settings-card">
-        <h2>Serveur</h2>
-        {health ? (
-          <>
-            <div className="setting"><div className="grow">Forge Audio</div><span className="muted">v{health.version}</span></div>
-            <div className="setting">
-              <div className="grow">yt-dlp</div>
-              {health.ytdlp ? <span className="ok"><CheckCircle2 size={16} /> {health.ytdlp}</span> : <span className="bad"><XCircle size={16} /> introuvable</span>}
-            </div>
-          </>
-        ) : <p className={healthError ? 'bad' : 'muted'}>{healthError || 'Vérification…'}</p>}
-        <p className="muted small">Sources prises en charge : YouTube, YouTube Music, SoundCloud, Dailymotion, Bandcamp, Vimeo, Twitch et plus de 1 000 sites via les liens (yt-dlp).</p>
-      </section>
-
-      <section className="settings-card">
-        <h2>Données</h2>
-        <p className="muted">{counts.p} playlists · {counts.l} titres likés · {counts.h} écoutes dans l'historique. Tout est sauvegardé automatiquement sur le serveur et retrouvé à chaque connexion, sur tous vos appareils. Les fichiers audio locaux sont lus depuis votre appareil et ne sont jamais envoyés.</p>
-        <button className="btn btn-ghost danger" onClick={() => {
-          if (confirm('Vider le cache de cet appareil ? Votre bibliothèque sauvegardée sur le serveur sera rechargée.')) {
-            ['forge.library', 'forge.player', 'forge.settings', 'forge.position', 'forge.recentSearches'].forEach((k) => localStorage.removeItem(k));
-            location.reload();
-          }
-        }}>Vider le cache de cet appareil</button>
-      </section>
-
-      <section className="settings-card">
-        <h2>Raccourcis clavier</h2>
-        <div className="shortcuts">
-          {SHORTCUTS.map(([k, d]) => <div key={k} className="shortcut"><kbd>{k}</kbd><span>{d}</span></div>)}
-        </div>
-      </section>
-
-      <section className="settings-card">
-        <h2>À propos</h2>
-        <p className="muted">Forge Audio est un lecteur libre et sans publicité. Le contenu appartient à ses auteurs : soutenez les artistes que vous aimez.</p>
-        <a className="btn btn-ghost" href="https://github.com/Heiphaistos/Forge-audio-" target="_blank" rel="noreferrer"><Github size={16} /> Code source</a>
-      </section>
+      </div>
     </div>
   );
 }

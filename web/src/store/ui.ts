@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { lazyStorage } from '../lib/storage';
 import type { Track } from '../lib/types';
+import type { LayoutId } from '../lib/layouts';
 import { EQ_PRESETS } from '../audio/engine';
 
 export type ViewName = 'home' | 'search' | 'library' | 'playlist' | 'shared' | 'liked' | 'history' | 'settings' | 'artist' | 'album' | 'mix' | 'stats' | 'blend' | 'genre' | 'friends' | 'messages' | 'profile' | 'radio' | 'artists' | 'offline';
@@ -127,6 +128,8 @@ export const ACCENTS: Record<string, string> = {
 
 interface SettingsState {
   accent: string;
+  /** Screen layout (lib/layouts.ts), wide screens only. */
+  layout: LayoutId;
   defaultSource: string;
   visualizer: boolean;
   dynamicColors: boolean;
@@ -159,6 +162,7 @@ export const useSettings = create<SettingsState>()(
   persist(
     (set) => ({
       accent: 'Braise',
+      layout: 'classique',
       defaultSource: 'all',
       visualizer: false,
       dynamicColors: true,

@@ -96,7 +96,7 @@ export function Sidebar() {
   const socialLabel = [requests && plural(requests, 'demande d’ami', 'demandes d’ami'), unread && plural(unread, 'message non lu', 'messages non lus')].filter(Boolean).join(', ');
 
   const item = (v: View, icon: ReactNode, label: string) => (
-    <button className={`nav-item ${view.name === v.name && view.id === v.id ? 'active' : ''}`} onClick={() => navigate(v)}>
+    <button title={label} className={`nav-item ${view.name === v.name && view.id === v.id ? 'active' : ''}`} onClick={() => navigate(v)}>
       {icon}<span>{label}</span>
     </button>
   );
@@ -151,7 +151,7 @@ export function Sidebar() {
         )}
         <Section title={`Playlists (${sharedLists.length + playlists.length})`} {...fold('playlists')} className="side-pl">
           {sharedLists.map((p) => (
-            <button key={`s-${p.id}`} className={`nav-pl ${view.name === 'shared' && view.id === p.id ? 'active' : ''}`} onClick={() => navigate({ name: 'shared', id: p.id })}>
+            <button key={`s-${p.id}`} title={p.name} className={`nav-pl ${view.name === 'shared' && view.id === p.id ? 'active' : ''}`} onClick={() => navigate({ name: 'shared', id: p.id })}>
               <Mosaic covers={p.cover ? [p.cover] : p.tracks.map((t) => t.thumbnail)} size={36} radius={4} />
               <span className="ellipsis grow">{p.name}</span>
               <Users size={13} className="muted" aria-label="Partagée" />
@@ -160,7 +160,7 @@ export function Sidebar() {
           ))}
           {groupPlaylists(playlists).map(([folder, list]) => {
             const rows = list.map((p) => (
-              <button key={p.id} className={`nav-pl ${view.name === 'playlist' && view.id === p.id ? 'active' : ''}`} onClick={() => navigate({ name: 'playlist', id: p.id })}>
+              <button key={p.id} title={p.name} className={`nav-pl ${view.name === 'playlist' && view.id === p.id ? 'active' : ''}`} onClick={() => navigate({ name: 'playlist', id: p.id })}>
                 <Mosaic covers={p.cover ? [p.cover] : p.tracks.map((t) => t.thumbnail)} size={36} radius={4} />
                 <span className="ellipsis grow">{p.name}</span>
                 {p.pinned && <Pin size={12} className="muted" aria-label="Épinglée" />}

@@ -1,6 +1,6 @@
 import { ChevronLeft, ChevronRight, Menu, Search as SearchIcon, Loader2, Lock, Eye, EyeOff, User as UserIcon } from 'lucide-react';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import { useUi } from './store/ui';
+import { useSettings, useUi } from './store/ui';
 import { usePlayer } from './store/player';
 import { Sidebar, Logo, LegalLinks } from './components/Sidebar';
 import { Register } from './components/Register';
@@ -79,7 +79,7 @@ function TopBar() {
   }, []);
   return (
     <div className={`topbar ${scrolled ? 'scrolled' : ''}`}>
-      <button className="icon-btn only-mobile" onClick={() => setSidebarOpen(true)} aria-label="Menu"><Menu size={22} /></button>
+      <button className="icon-btn only-mobile menu-btn" onClick={() => setSidebarOpen(true)} aria-label="Menu"><Menu size={22} /></button>
       <button className="icon-btn round hide-mobile" disabled={!back.length} onClick={goBack} aria-label="Précédent"><ChevronLeft size={20} /></button>
       <button className="icon-btn round hide-mobile" disabled={!forward.length} onClick={goForward} aria-label="Suivant"><ChevronRight size={20} /></button>
       <div className="grow only-mobile center"><Logo /></div>
@@ -160,6 +160,7 @@ export function App() {
   const [auth, setAuth] = useState<'checking' | 'ok' | 'required'>('checking');
   const panel = useUi((s) => s.panel);
   const hasTrack = usePlayer((s) => s.index >= 0 && s.queue.length > 0);
+  const layout = useSettings((s) => s.layout);
   const online = useOffline((s) => s.online);
   /** Started without a server: sign-in check, sync and social start once it is back. */
   const pending = useRef(false);
@@ -211,7 +212,7 @@ export function App() {
   if (auth === 'required') return <Login onDone={(user) => { setAuth('checking'); enter(user, true); }} />;
 
   return (
-    <div className={`app ${panel ? 'with-panel' : ''} ${hasTrack ? 'has-track' : ''}`}>
+    <div className={`app ${panel ? 'with-panel' : ''} ${hasTrack ? 'has-track' : ''}`} data-layout={layout}>
       <Sidebar />
       <main className="main">
         <div className="main-tint" />
