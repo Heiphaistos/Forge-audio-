@@ -422,6 +422,14 @@ export function bindEngine() {
     const track = engine.currentTrack;
     if (!track || !engine.hasSource) return;
     const at = engine.currentTime;
+    if (!navigator.onLine) {
+      // Network gone (computer waking from sleep, Wi-Fi switching): resume this track when it is back, don't skip it.
+      usePlayer.setState({ buffering: true });
+      window.addEventListener('online', () => {
+        if (engine.currentTrack?.url === track.url) engine.load(track, { autoplay: true, startAt: at }).catch(() => {});
+      }, { once: true });
+      return;
+    }
     if (retriedUrl !== track.url) {
       // Signed media URLs expire: resolve again and resume where we were.
       retriedUrl = track.url;

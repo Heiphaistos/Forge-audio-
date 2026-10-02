@@ -1,6 +1,6 @@
 {
   "name": "forge-audio",
-  "version": "0.22.2",
+  "version": "0.22.3",
   "private": true,
   "description": "Forge Audio — lecteur musical libre et sans pub (web + bureau) propulsé par yt-dlp",
   "workspaces": [

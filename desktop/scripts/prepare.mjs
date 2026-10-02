@@ -18,3 +18,12 @@ fs.cpSync(path.join(root, 'server/src'), path.join(out, 'server'), { recursive: 
 fs.cpSync(web, path.join(out, 'web'), { recursive: true });
 fs.writeFileSync(path.join(out, 'server/package.json'), JSON.stringify({ type: 'module' }));
 console.log('app/ prêt : serveur + interface web copiés.');
+
+// The packaged app only ships desktop/package.json dependencies: a server dependency missing there crashes local mode.
+const need = Object.keys(JSON.parse(fs.readFileSync(path.join(root, 'server/package.json'), 'utf8')).dependencies || {});
+const have = JSON.parse(fs.readFileSync(path.resolve(here, '../package.json'), 'utf8')).dependencies || {};
+const missing = need.filter((d) => !have[d]);
+if (missing.length) {
+  console.error(`Dépendances du serveur absentes de desktop/package.json : ${missing.join(', ')}`);
+  process.exit(1);
+}

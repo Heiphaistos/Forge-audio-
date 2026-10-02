@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, Menu, dialog, ipcMain, Tray, nativeImage, Notification } from 'electron';
+import { app, BrowserWindow, shell, Menu, dialog, ipcMain, Tray, nativeImage, Notification, powerSaveBlocker } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
@@ -149,6 +149,18 @@ if (!app.requestSingleInstanceLock()) {
     });
     win.loadURL(splash('Préparation du lecteur…'));
 
+    // Keep the computer awake while music plays (locked screen, idle): without it macOS goes to sleep and the stream
+    // stops. Closing a laptop lid still sleeps: no app can prevent that.
+    let awake = null;
+    const release = () => { if (awake !== null) powerSaveBlocker.stop(awake); awake = null; };
+    win.webContents.on('media-started-playing', () => { if (awake === null) awake = powerSaveBlocker.start('prevent-app-suspension'); });
+    // Fired per media element: the crossfade pauses the old track while the new one plays, so ask the player.
+    win.webContents.on('media-paused', () => {
+      win?.webContents.executeJavaScript('window.__forgeNowPlaying?.()?.playing === true')
+        .then((playing) => { if (!playing) release(); }, release);
+    });
+    win.on('closed', release);
+
     // Links to YouTube, GitHub… open in the default browser, not inside the app.
     win.webContents.setWindowOpenHandler(({ url }) => {
       if (/^https?:/.test(url)) shell.openExternal(url);
@@ -177,7 +189,13 @@ if (!app.requestSingleInstanceLock()) {
     const remote = serverOf(readConfig());
     if (remote) {
       win.loadURL(splash(`Connexion à ${remote}…`));
-      if (await reachable(remote)) {
+      // Just after waking from sleep the network takes a few seconds to come back: try for ~30 s before asking.
+      let ok = await reachable(remote);
+      for (let i = 0; !ok && i < 4; i += 1) {
+        await new Promise((r) => setTimeout(r, 2000));
+        ok = await reachable(remote);
+      }
+      if (ok) {
         await win.loadURL(`${remote}/`);
         return;
       }
