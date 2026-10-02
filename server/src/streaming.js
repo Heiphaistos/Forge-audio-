@@ -34,6 +34,7 @@ export function detectService(input) {
     const p = parts[0]?.startsWith('intl-') ? parts.slice(1) : parts; // /intl-fr/track/…
     const i = p.findIndex((x) => ['track', 'album', 'playlist', 'artist'].includes(x));
     if (i >= 0 && p[i + 1]) return { service: 'spotify', kind: p[i], id: p[i + 1], url: `https://open.spotify.com/${p[i]}/${p[i + 1]}` };
+    if (p[0] === 'collection') return { service: 'spotify', kind: 'collection', id: null, url: u.href }; // « Titres likés », private
   }
   if (host === 'spotify.link' || host === 'spotify.app.link') return { service: 'spotify', kind: 'short', id: null, url: u.href };
   if (host.endsWith('deezer.com')) {
@@ -175,6 +176,7 @@ export async function resolveStreamingLink(input, { maxEntries = 200 } = {}) {
   let ref = detectService(input);
   if (!ref) return null;
   if (ref.kind === 'short') ref = await expandShortLink(ref.url);
+  if (ref.kind === 'collection') throw new HttpError('Les titres likés Spotify sont privés : exportez « Liked Songs » en CSV sur exportify.app, puis Bibliothèque > Importer');
   if (ref.service === 'unsupported') throw new HttpError('Amazon Music et Tidal n\'ont pas d\'accès public : cherchez le titre, ou collez un lien Spotify, Deezer, Apple Music ou YouTube');
   const res = ref.service === 'spotify' ? await resolveSpotify(ref) : ref.service === 'deezer' ? await resolveDeezer(ref, maxEntries) : await resolveApple(ref, maxEntries);
   const tracks = res.tracks.filter(Boolean).slice(0, maxEntries);

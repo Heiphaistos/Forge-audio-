@@ -111,6 +111,7 @@ test('detectService recognizes streaming links', () => {
   const apple = detectService('https://music.apple.com/fr/album/discovery/697194953?i=697195787');
   assert.deepEqual([apple.service, apple.kind, apple.id], ['apple', 'song', '697195787']);
   assert.equal(detectService('https://spotify.link/abc').kind, 'short');
+  assert.equal(detectService('https://open.spotify.com/collection/tracks').kind, 'collection');
   assert.equal(detectService('https://tidal.com/browse/track/1').service, 'unsupported');
   assert.equal(detectService('https://www.youtube.com/watch?v=abc'), null);
   assert.equal(detectService('pas un lien'), null);

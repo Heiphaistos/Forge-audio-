@@ -1,6 +1,7 @@
 import { Plus, Upload, Download, FolderOpen, Heart, Play, Shuffle, Trash2, Pencil, Copy, RefreshCw, ListEnd, Loader2, ArrowDownUp, Search as SearchIcon, Check, Users, GitMerge, Pin, PinOff, ImagePlus, Folder, ListPlus } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
-import { useLibrary } from '../store/library';
+import { repairSpotifyCovers, useLibrary } from '../store/library';
+import { parseSpotifyLiked } from '../lib/spotifyLiked';
 import { usePlayer } from '../store/player';
 import { useUi } from '../store/ui';
 import { PlaylistCard } from '../components/Cards';
@@ -76,13 +77,21 @@ export function Library() {
         <LocalFilesButton />
         <button className="btn btn-ghost" onClick={() => setMerging(true)}><GitMerge size={16} /> Fusionner</button>
         <button className="btn btn-ghost" onClick={() => downloadText(`forge-audio-${new Date().toISOString().slice(0, 10)}.json`, exportData())}><Download size={16} /> Exporter</button>
-        <button className="btn btn-ghost" onClick={() => fileInput.current?.click()}><Upload size={16} /> Importer</button>
-        <input ref={fileInput} type="file" accept="application/json,.json" hidden onChange={async (e) => {
+        <button className="btn btn-ghost" title="Sauvegarde Forge Audio (.json), ou titres likés Spotify : CSV « Liked Songs » d’exportify.app, ou YourLibrary.json de l’export de données Spotify" onClick={() => fileInput.current?.click()}><Upload size={16} /> Importer</button>
+        <input ref={fileInput} type="file" accept="application/json,.json,text/csv,.csv" hidden onChange={async (e) => {
           const f = e.target.files?.[0];
           if (!f) return;
           try {
-            const r = importData(await f.text());
-            toast(`${r.playlists} playlist(s) et ${r.liked} titre(s) liké(s) importés`, 'success');
+            const text = await f.text();
+            const spotify = parseSpotifyLiked(text);
+            if (spotify) {
+              const n = useLibrary.getState().likeTracks(spotify);
+              toast(`${n} titre(s) liké(s) Spotify importé(s) sur ${spotify.length}`, 'success');
+              repairSpotifyCovers().catch(() => {});
+            } else {
+              const r = importData(text);
+              toast(`${r.playlists} playlist(s) et ${r.liked} titre(s) liké(s) importés`, 'success');
+            }
           } catch (err) {
             toast(`Import impossible : ${(err as Error).message}`, 'error');
           }
@@ -90,6 +99,7 @@ export function Library() {
         }} />
       </div>
       <ImportBox />
+      <p className="muted">Titres likés Spotify : exportez « Liked Songs » en CSV sur <a className="link" style={{ textDecoration: 'underline' }} href="https://exportify.app" target="_blank" rel="noreferrer">exportify.app</a>, puis Importer.</p>
       <div className="row gap shelf-head">
         <h2 className="grow">Playlists</h2>
         <ArrowDownUp size={16} className="muted" />
