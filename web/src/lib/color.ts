@@ -1,4 +1,5 @@
 import { api } from './api';
+import { useOffline } from '../store/offline';
 
 const cache = new Map<string, string>();
 
@@ -7,7 +8,11 @@ export async function dominantColor(thumb: string | null | undefined): Promise<s
   if (!thumb) return null;
   if (cache.has(thumb)) return cache.get(thumb)!;
   // Same-origin images (blob:, data:, our own /api/… such as radio logos) need no proxy.
-  const src = thumb.startsWith('blob:') || thumb.startsWith('data:') || thumb.startsWith('/') ? thumb : api.imageUrl(thumb);
+  // Downloaded title: its saved cover. No server: nothing to fetch.
+  const { covers, online } = useOffline.getState();
+  const own = thumb.startsWith('blob:') || thumb.startsWith('data:') || thumb.startsWith('/');
+  if (!covers[thumb] && !own && !online) return null;
+  const src = covers[thumb] || (own ? thumb : api.imageUrl(thumb));
   try {
     const img = new Image();
     img.crossOrigin = 'anonymous';
