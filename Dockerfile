@@ -1,5 +1,5 @@
 # Forge Audio — web version (server + interface)
-FROM node:22-bookworm-slim AS build
+FROM node:22-trixie-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY server/package.json server/
@@ -10,7 +10,7 @@ COPY server server
 COPY web web
 RUN npm run build && npm prune --omit=dev --omit=optional
 
-FROM node:22-bookworm-slim
+FROM node:22-trixie-slim
 # Standalone yt-dlp build: bundles curl_cffi (impersonation, required by Dailymotion).
 # Owned by node so `docker exec forge-audio yt-dlp -U` can update it without a rebuild.
 RUN apt-get update \
@@ -29,5 +29,9 @@ RUN mkdir -p /app/data && chown node:node /app/data
 VOLUME /app/data
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=8787 FFMPEG_PATH=/usr/bin/ffmpeg DATA_DIR=/app/data
 EXPOSE 8787
+# Le runtime lance `node` seul : npm/corepack retires avec les CVE qu'ils embarquent
+# (brace-expansion, sigstore, pacote, picomatch... scan Trivy 2026-10-01).
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+    /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
 USER node
 CMD ["node", "server/src/index.js"]
