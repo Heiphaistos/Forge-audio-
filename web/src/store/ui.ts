@@ -170,7 +170,7 @@ export const useSettings = create<SettingsState>()(
       gapless: true,
       normalize: true,
       quality: 'high',
-      dataSaver: 'auto',
+      dataSaver: 'off',
       shareActivity: true,
       clipLyrics: false,
       lyricsTranslate: false,
@@ -181,10 +181,17 @@ export const useSettings = create<SettingsState>()(
     }),
     {
       name: 'forge.settings',
-      version: 2,
+      version: 3,
       storage: lazyStorage,
       // v2: the visualizer needs the Web Audio chain (source of hiss/stutter on some outputs), so it is now opt-in.
-      migrate: (state, version) => (version < 2 ? { ...(state as object), visualizer: false } : state) as SettingsState,
+      // v3: data saver « auto » dropped phones on mobile data to ~50 kbit/s Opus, heard as a hiss behind the music:
+      // now opt-in too (an explicit « on » is kept).
+      migrate: (state, version) => {
+        let s = state as SettingsState;
+        if (version < 2) s = { ...s, visualizer: false };
+        if (version < 3 && s.dataSaver === 'auto') s = { ...s, dataSaver: 'off' };
+        return s;
+      },
     },
   ),
 );
