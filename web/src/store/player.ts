@@ -116,7 +116,7 @@ export const usePlayer = create<PlayerState>()(
         shuffle: false,
         unshuffled: null,
         repeat: 'off',
-        volume: 0.8,
+        volume: 1,
         muted: false,
         rate: 1,
         playing: false,
@@ -349,8 +349,14 @@ export const usePlayer = create<PlayerState>()(
     },
     {
       name: 'forge.player',
-      version: 1,
+      version: 2,
       storage: lazyStorage,
+      // v2: the default volume was 0.8, i.e. -4 dB on the squared curve, and phones hide the slider (system volume
+      // only): plugged into a car it could never be loud. The untouched default goes to full.
+      migrate: (state, version) => {
+        const s = state as { volume?: number };
+        return (version < 2 && s.volume === 0.8 ? { ...s, volume: 1 } : s) as never;
+      },
       partialize: (s) => ({ queue: s.queue, index: s.index, shuffle: s.shuffle, unshuffled: s.unshuffled, repeat: s.repeat, volume: s.volume, muted: s.muted, rate: s.rate }),
     },
   ),

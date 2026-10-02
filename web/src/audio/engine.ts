@@ -21,7 +21,9 @@ type MediaEventName = keyof HTMLMediaElementEventMap;
 
 const FADE_MS = 140;
 /** « Volume harmonisé » target, like YouTube / Spotify « normal ». Quieter tracks are never boosted (no clipping). */
-const TARGET_LUFS = -14;
+// « Volume harmonisé » only turns loud tracks down to this level: -11 LUFS (Spotify's « Fort »), as -14 left the
+// whole app clearly quieter than other players in a car.
+const TARGET_LUFS = -11;
 export type Quality = 'high' | 'normal' | 'low';
 export interface Mix { crossfade: number; gapless: boolean; normalize: boolean; quality: Quality; saver: boolean }
 

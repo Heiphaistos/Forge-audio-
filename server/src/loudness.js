@@ -5,7 +5,7 @@ import { playableUrl } from './streaming.js';
 /**
  * « Volume harmonisé »: integrated loudness (EBU R128, LUFS) of a track, measured once by ffmpeg on
  * its first 90 s (low-bitrate stream: the loudness does not depend on the bitrate). The client turns
- * loud tracks down to the target (-14 LUFS, like YouTube); nothing is re-encoded, playback stays direct.
+ * loud tracks down to the target (-11 LUFS, web/src/audio/engine.ts); nothing is re-encoded, playback stays direct.
  */
 const cache = new TtlCache({ ttlMs: 30 * 86400000, max: 20000 });
 let chain = Promise.resolve();
