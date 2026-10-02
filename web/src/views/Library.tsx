@@ -12,6 +12,7 @@ import { MergeDialog } from '../components/MergeDialog';
 import { shared, useShared, useJam, nameOf } from '../store/social';
 import { Cover } from '../components/Cover';
 import { ImportBox } from './Home';
+import { DownloadAll } from '../components/DownloadAll';
 import { api } from '../lib/api';
 import { formatTotal, timeAgo, uid } from '../lib/format';
 import type { Track } from '../lib/types';
@@ -244,6 +245,7 @@ export function PlaylistView() {
           const data = JSON.parse(exportData());
           downloadText(`${pl.name}.json`, JSON.stringify({ ...data, playlists: [pl], liked: [] }, null, 2));
         }}><Download size={16} /> Exporter</button>
+        <DownloadAll name={pl.name} tracks={pl.tracks} />
         {pl.sourceUrl && (
           <button className="btn btn-ghost" disabled={syncing} onClick={async () => {
             setSyncing(true);
@@ -324,6 +326,7 @@ export function Liked() {
         <button className="btn btn-ghost" disabled={!shown.length} onClick={() => useUi.getState().openPicker(shown)} title="Nouvelle playlist (ou une existante) avec ces titres ; vos likes ne bougent pas">
           <ListPlus size={16} /> {filter ? `Créer une playlist avec ces ${shown.length} titres` : `Créer une playlist avec les ${shown.length} titres`}
         </button>
+        <DownloadAll name="Titres likés" tracks={liked} />
       </div>
       <p className="muted small">Astuce : pour n'en prendre que certains, touchez <b>Sélectionner</b> (ou Ctrl/Maj + clic, appui long sur téléphone), puis « Ajouter à une playlist… ».</p>
       {liked.length > 0 && (

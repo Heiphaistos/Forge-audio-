@@ -22,6 +22,7 @@ import { registerCatalog } from './catalog.js';
 import { registerLoudness } from './loudness.js';
 import { registerRadio } from './radio.js';
 import { registerTranslate } from './translate.js';
+import { registerBatchDownload } from './download-batch.js';
 
 export const VERSION = '0.21.2';
 
@@ -54,8 +55,9 @@ function readCookie(header, name) {
  * @param {object} [opts.mailer] outgoing mail (mail.js; default: SMTP_* environment variables)
  * @param {object} [opts.radio] test hooks of the radio module (radio.js)
  * @param {object} [opts.translate] test hooks of the lyrics translation (translate.js)
+ * @param {number|null} [opts.zipLimit] test hook: size cap of playlist zips (default: just under 4 GiB)
  */
-export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null, dataDir = null, accountsFile = null, logger = true, mailer = createMailer(), radio = {}, translate = {} } = {}) {
+export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null, dataDir = null, accountsFile = null, logger = true, mailer = createMailer(), radio = {}, translate = {}, zipLimit = null } = {}) {
   const app = Fastify({ logger, trustProxy: 'loopback,uniquelocal', disableRequestLogging: true, bodyLimit: 10 * 1024 * 1024 });
   const accounts = new Accounts(accountsFile);
   const sessions = new Sessions(dataDir ? path.join(dataDir, 'sessions.json') : null);
@@ -306,6 +308,7 @@ export function createApp({ ytdlp = 'yt-dlp', ffmpeg = 'ffmpeg', webRoot = null,
     const url = await playableUrl(ytdlp, requirePublicUrl(request.query.url));
     return withDrmFallback(ytdlp, url, (u) => media.download(request, reply, u, format));
   });
+  registerBatchDownload(app, { media, ytdlp, zipLimit: zipLimit ?? undefined });
 
   app.get('/api/lyrics', async (request) => {
     const { title, author } = request.query;

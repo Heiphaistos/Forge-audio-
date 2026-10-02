@@ -9,6 +9,7 @@ import { useUi } from '../store/ui';
 import { useLibrary, useIsFollowed } from '../store/library';
 import { findMix, useReco } from '../store/reco';
 import { TrackList } from '../components/TrackList';
+import { DownloadAll } from '../components/DownloadAll';
 import { Cover } from '../components/Cover';
 
 const fans = (n: number | null) => (n == null ? '' : n >= 1e6 ? `${(n / 1e6).toFixed(1).replace('.0', '')} M d'abonnés` : n >= 1e3 ? `${Math.round(n / 1e3)} k abonnés` : `${n} abonnés`);
@@ -211,6 +212,7 @@ export function AlbumView() {
         <button className="btn btn-ghost" onClick={() => enqueue(tracks)}><ListEnd size={16} /> File d'attente</button>
         <button className="btn btn-ghost" onClick={() => useUi.getState().openPicker(tracks)}><ListPlus size={16} /> Ajouter à une playlist…</button>
         <button className="btn btn-ghost" onClick={() => { const n = useLibrary.getState().likeTracks(tracks); toast(n ? `${n} titre(s) ajouté(s) aux titres likés` : 'Tout l\'album est déjà liké', 'success'); }}><Heart size={16} /> Tout liker</button>
+        <DownloadAll name={[album.artist?.name, album.title].filter(Boolean).join(' - ')} tracks={tracks} />
       </div>
       <TrackList tracks={tracks} listKey={`album:${album.id}`} />
     </div>

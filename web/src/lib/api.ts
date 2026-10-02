@@ -190,6 +190,10 @@ export const api = {
   /** Lines translated by the server (server/src/translate.js); `same` = already in that language. */
   translateLyrics: (lines: string[], to: string) => send<{ lang: string | null; same: boolean; lines: string[] }>('POST', '/api/lyrics/translate', { lines, to }),
   downloadUrl: (url: string, format: 'mp3' | 'audio' | 'video') => `/api/download?${new URLSearchParams({ url, format })}`,
+  /** A whole list as one zip: register it, then open downloadBatchUrl(id) as a plain link (single use, 10 min). */
+  downloadBatch: (name: string, format: 'mp3' | 'audio', tracks: Track[]) =>
+    send<{ id: string; count: number }>('POST', '/api/download/batch', { name, format, tracks: tracks.map((t) => ({ url: t.url, title: t.title, author: t.author })) }),
+  downloadBatchUrl: (id: string) => `/api/download/batch/${encodeURIComponent(id)}`,
   imageUrl: (url: string) => `/api/image?${new URLSearchParams({ url })}`,
   // Between accounts (server/src/social.js)
   users: () => get<{ users: User[] }>('/api/users'),

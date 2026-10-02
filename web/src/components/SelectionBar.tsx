@@ -5,6 +5,7 @@ import { usePlayer } from '../store/player';
 import { useLibrary } from '../store/library';
 import { useUi } from '../store/ui';
 import { shared } from '../store/social';
+import { DownloadAll } from './DownloadAll';
 
 /** Actions on the selected tracks (see store/selection.ts). */
 export function SelectionBar() {
@@ -48,6 +49,7 @@ export function SelectionBar() {
               if (pl) { useLibrary.setState({ playlists: lib.playlists.map((p) => (p.id === pl.id ? { ...p, tracks: p.tracks.filter((x) => !urls.has(x.url)), updatedAt: Date.now() } : p)) }); toast(`${t.length} titre(s) retiré(s) de « ${pl.name} »`); }
             })}>{key === 'liked' ? <><HeartOff size={15} /> Retirer des likes</> : <><Trash2 size={15} /> Retirer</>}</button>
           )}
+          <DownloadAll small label="Télécharger" name={key === 'liked' ? 'Titres likés (sélection)' : `${lib.playlists.find((p) => p.id === playlistId)?.name || 'Forge Audio'} (sélection)`} tracks={pickedTracks()} />
           <button className="btn btn-ghost btn-sm" onClick={run((t) => { for (const x of t) lib.setHidden('track', x.url, `${x.title}${x.author ? ` · ${x.author}` : ''}`, true); toast(`${t.length} titre(s) masqué(s) de la radio et des recommandations`); })}><EyeOff size={15} /> Masquer</button>
         </>
       )}
