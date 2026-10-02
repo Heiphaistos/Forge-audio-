@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { engine } from './audio/engine';
+import type { Track } from './lib/types';
 import { usePlayer } from './store/player';
 import { useLibrary } from './store/library';
 import { useUi, useSettings, ACCENTS } from './store/ui';
@@ -24,6 +25,8 @@ declare global {
     __forgeNowPlaying?: () => { title: string; author: string; thumbnail: string | null; playing: boolean; position: number; duration: number | null; liked: boolean } | null;
     /** Mobile apps' share target: plays or imports the first link found in the shared text. */
     __forgeOpenLink?: (text: string) => void;
+    /** Android Auto: plays a list chosen in the car (tracks from /api/me/data) from `start`. */
+    __forgePlayTracks?: (tracks: Track[], start: number) => void;
     /** Android Back button: closes the topmost overlay or goes back one view. Returns false when there is nothing left to close. */
     __forgeBack?: () => boolean;
   }
@@ -71,7 +74,11 @@ export function useRemoteControl() {
       toast('Ouverture du lien partagé…');
       openLink(url).catch((err) => toast((err as Error).message, 'error'));
     };
-    return () => { delete window.__forgeRemote; delete window.__forgeNowPlaying; delete window.__forgeBack; delete window.__forgeOpenLink; };
+    window.__forgePlayTracks = (tracks, start) => {
+      const list = (Array.isArray(tracks) ? tracks : []).filter((t) => t && typeof t.url === 'string');
+      if (list.length) usePlayer.getState().playList(list, Math.min(Math.max(0, Math.trunc(start) || 0), list.length - 1));
+    };
+    return () => { delete window.__forgeRemote; delete window.__forgeNowPlaying; delete window.__forgeBack; delete window.__forgeOpenLink; delete window.__forgePlayTracks; };
   }, []);
 }
 
