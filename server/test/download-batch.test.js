@@ -130,7 +130,30 @@ test('batch download: one zip, numbered names, failures listed, single use, owne
   assert.match(report, /Vide \(aucune donnée reçue\)/);
   assert.match(report, /Coupé \(incomplet\)/);
   pythonCheck(zipRes.rawPayload);
-  assert.equal((await app.inject({ url: `/api/download/batch/${id}`, headers: { cookie: evan } })).statusCode, 404, 'usage unique');
+  assert.equal((await app.inject({ url: `/api/download/batch/${id}`, headers: { cookie: evan } })).statusCode, 404, 'retiré une fois complet');
+});
+
+test('batch download: same link asked again (Android WebView then DownloadManager) restarts it', async () => {
+  const { app, evan } = await setup();
+  await app.listen({ port: 0, host: '127.0.0.1' });
+  try {
+    const { id } = (await post(app, evan, { name: 'lent', format: 'mp3', tracks: [T('slow', 'Lent')] })).json();
+    const { port } = app.server.address();
+    const first = await new Promise((resolve) => {
+      const req = http.get({ port, host: '127.0.0.1', path: `/api/download/batch/${id}`, headers: { cookie: evan } }, (res) => res.once('data', () => resolve({ req, res })));
+      req.on('error', () => {});
+    });
+    first.res.on('error', () => {});
+    assert.equal(first.res.statusCode, 200);
+    killed.length = 0;
+    const second = await app.inject({ url: `/api/download/batch/${id}`, headers: { cookie: evan } });
+    assert.equal(second.statusCode, 200);
+    assert.ok(killed.includes('slow'), 'premier flux arrêté');
+    assert.equal(readZip(second.rawPayload)[0].name, '01 - Artiste - Lent.mp3');
+    first.req.destroy();
+  } finally {
+    await app.close();
+  }
 });
 
 test('batch download: refusals (format, size, private URL, expiry)', async (t) => {

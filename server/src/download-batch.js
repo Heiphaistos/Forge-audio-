@@ -10,6 +10,9 @@ import { ZipWriter, ZIP32_LIMIT } from './zip.js';
  * Whole-playlist download as ONE zip, streamed track by track (zip.js): POST /api/download/batch registers
  * the list and answers an id, GET /api/download/batch/:id streams the archive, so a plain link works
  * (browser, Electron, Android WebView). Audio only: 200 videos would blow the 4 GiB ZIP32 limit.
+ * The id stays valid until the archive is complete or 10 min have passed, and a new GET of the same id
+ * replaces the stream in progress: the Android WebView opens the link, then hands it to DownloadManager,
+ * which requests it again (a single-use id answered 404 to that second request).
  */
 export const MAX_TRACKS = 200;
 const TTL = 10 * 60 * 1000;
@@ -44,7 +47,7 @@ function parseBatch(body) {
 
 export function registerBatchDownload(app, { media, ytdlp, zipLimit = ZIP32_LIMIT }) {
   const jobs = new Map(); // id -> { username, expires, name, format, tracks }
-  const running = new Set(); // usernames with a zip being streamed
+  const running = new Map(); // username -> { id, abort } of the zip being streamed
   const limiter = new LoginLimiter({ max: 20, windowMs: 60 * 60 * 1000 });
 
   app.post('/api/download/batch', async (request) => {
@@ -65,15 +68,18 @@ export function registerBatchDownload(app, { media, ytdlp, zipLimit = ZIP32_LIMI
     const job = jobs.get(request.params.id);
     // Unknown, expired and someone else's id look the same.
     if (!job || job.expires < Date.now() || job.username !== request.user.username) throw new HttpError('Lien de téléchargement expiré ou inconnu', 404, 'NOT_FOUND');
-    if (running.has(job.username)) throw new HttpError('Un téléchargement de playlist est déjà en cours', 409, 'BUSY');
-    jobs.delete(request.params.id); // single use
-    running.add(job.username);
+    const previous = running.get(job.username);
+    if (previous && previous.id !== request.params.id) throw new HttpError('Un téléchargement de playlist est déjà en cours', 409, 'BUSY');
+    previous?.abort.abort(); // same link asked again: the newest request wins
 
     const abort = new AbortController();
+    const self = { id: request.params.id, abort };
+    running.set(job.username, self);
     const zip = new ZipWriter({ limit: zipLimit, signal: abort.signal });
     zip.stream.on('error', () => {}); // destroyed when the client leaves
     let current = null;
-    reply.raw.on('close', () => { abort.abort(); current?.kill(); });
+    abort.signal.addEventListener('abort', () => current?.kill());
+    reply.raw.on('close', () => abort.abort());
     const filename = `${safeFilename(job.name)}.zip`;
     reply.header('content-type', 'application/zip');
     reply.header('content-disposition', `attachment; filename="${filename.replace(/[^\x20-\x7e]|"/g, '_')}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
@@ -108,12 +114,13 @@ export function registerBatchDownload(app, { media, ytdlp, zipLimit = ZIP32_LIMI
         await zip.add('titres-non-telecharges.txt', [Buffer.from(text, 'utf8')], { capped: false });
       }
       await zip.finish();
+      jobs.delete(request.params.id);
     })().catch((err) => {
       if (!abort.signal.aborted) request.log.error({ err }, 'Archive de playlist interrompue');
       current?.kill();
       zip.stream.destroy(err);
     }).finally(() => {
-      running.delete(job.username);
+      if (running.get(job.username) === self) running.delete(job.username);
       if (abort.signal.aborted) zip.stream.destroy();
     });
 
