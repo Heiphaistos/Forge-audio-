@@ -66,7 +66,8 @@ export function startUpdates(getWindow) {
         macReady = { staged, relaunch: false };
         ready(version, () => { macReady.relaunch = true; app.quit(); });
       })
-      .catch(() => notice(version))
+      // Release still being published (this Mac's zip not uploaded yet): try again at the next check.
+      .catch((err) => { if (!/introuvable/.test(err.message)) notice(version); })
       .finally(() => { macStaging = null; });
   };
 
