@@ -152,11 +152,12 @@ function focusSearch() {
   setTimeout(() => (document.getElementById('global-search') as HTMLInputElement | null)?.select(), 30);
 }
 
-/** Build the Web Audio chain only while the EQ (non-flat) or the visualizer is in use. */
+/** Build the Web Audio chain only while the EQ (non-flat), the visualizer or the karaoke voice cut is in use. */
 export function useAudioEffects() {
   const eqActive = useSettings((s) => s.eqEnabled && s.eqGains.some((g) => g !== 0));
   const visualizer = useSettings((s) => s.visualizer);
-  useEffect(() => { engine.setEffects(eqActive || visualizer); }, [eqActive, visualizer]);
+  const vocalCut = useSettings((s) => s.karaoke && s.vocalCut);
+  useEffect(() => { engine.setVocalCut(vocalCut); engine.setEffects(eqActive || visualizer || vocalCut); }, [eqActive, visualizer, vocalCut]);
 }
 
 type NetInfo = EventTarget & { type?: string; saveData?: boolean };

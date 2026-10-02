@@ -419,10 +419,25 @@ kbd {
 .lyric:hover { color: rgba(255, 255, 255, .75); }
 .lyric.past { color: rgba(255, 255, 255, .6); }
 .lyric.active { color: #fff; transform: scale(1.03); }
-.lyric { max-width: 97%; } /* room for the 3 % zoom of the current line (it overflowed the panel) */
+.lyric { max-width: 94%; } /* room for the 3 % zoom of the current line (it overflowed the panel) */
 .lyrics.big .lyric { font-size: clamp(22px, 2.4vw, 34px); letter-spacing: -0.02em; }
 .lyrics-plain { white-space: pre-wrap; font: 600 17px/1.6 Inter, sans-serif; color: rgba(255, 255, 255, .85); margin: 0; }
 .lyrics-credit { margin-top: 24px; }
+.lyrics-tools { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
+.lyrics-tools .chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; font-size: 12px; max-width: 100%; }
+.lyrics-tools select.chip { color: inherit; font: inherit; font-size: 12px; cursor: pointer; }
+.lyrics-tools select.chip option { color: #000; }
+.lyrics-note { display: flex; align-items: center; gap: 6px; margin: -6px 0 12px; }
+/* Translation under each line (smaller, not zoomed with the line). */
+.lyric-tr { display: block; font-size: .62em; font-weight: 500; letter-spacing: 0; color: rgba(255, 255, 255, .5); margin-top: 3px; }
+.lyric.active .lyric-tr { color: rgba(255, 255, 255, .8); }
+.lyric-plain-line { font: 600 17px/1.5 Inter, sans-serif; color: rgba(255, 255, 255, .85); margin: 0 0 6px; overflow-wrap: anywhere; }
+.lyric-plain-line .lyric-tr { font-size: .82em; }
+.lyric { overflow-wrap: anywhere; }
+/* Karaoke: other lines step back, the current one fills from left to right (--p set every frame). */
+.lyrics.karaoke .lyric:not(.active) { opacity: .55; }
+.lyrics.karaoke .lyric.active { transform: scale(1.06); }
+.lyrics.karaoke .lyric.active .lyric-text { color: transparent; background: linear-gradient(90deg, var(--accent) var(--p, 0%), rgba(255, 255, 255, .45) var(--p, 0%)); -webkit-background-clip: text; background-clip: text; }
 /* Clip + paroles: the clip on top, the lyrics scrolling on their own underneath. */
 .right-panel .media-switch { padding: 0 16px; margin: 0 0 8px; }
 .panel-body.clip-lyrics { display: flex; flex-direction: column; gap: 8px; overflow: hidden; }

@@ -187,6 +187,8 @@ export const api = {
     }, signal),
   loudness: (url: string) => get<{ lufs: number | null }>('/api/loudness', { url }),
   lyrics: (t: Track, signal?: AbortSignal) => get<LyricsResult>('/api/lyrics', { title: t.title, author: t.author, duration: t.duration }, signal),
+  /** Lines translated by the server (server/src/translate.js); `same` = already in that language. */
+  translateLyrics: (lines: string[], to: string) => send<{ lang: string | null; same: boolean; lines: string[] }>('POST', '/api/lyrics/translate', { lines, to }),
   downloadUrl: (url: string, format: 'mp3' | 'audio' | 'video') => `/api/download?${new URLSearchParams({ url, format })}`,
   imageUrl: (url: string) => `/api/image?${new URLSearchParams({ url })}`,
   // Between accounts (server/src/social.js)

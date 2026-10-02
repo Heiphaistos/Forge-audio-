@@ -146,6 +146,12 @@ interface SettingsState {
   shareActivity: boolean;
   /** Lyrics shown under the clip (right panel, full-screen player). Per device. */
   clipLyrics: boolean;
+  /** « Paroles traduites »: translation shown under each line, into `lyricsLang`. Per device. */
+  lyricsTranslate: boolean;
+  lyricsLang: string;
+  /** Karaoke: the current line fills as it is sung; `vocalCut` turns the centred voice down (Web Audio). */
+  karaoke: boolean;
+  vocalCut: boolean;
   set: (patch: Partial<Omit<SettingsState, 'set'>>) => void;
 }
 
@@ -167,6 +173,10 @@ export const useSettings = create<SettingsState>()(
       dataSaver: 'auto',
       shareActivity: true,
       clipLyrics: false,
+      lyricsTranslate: false,
+      lyricsLang: 'fr',
+      karaoke: false,
+      vocalCut: false,
       set: (patch) => set(patch),
     }),
     {

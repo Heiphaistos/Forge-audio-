@@ -50,6 +50,10 @@ class AudioEngine {
   private wantEffects = false;
   private eq: number[] = EQ_PRESETS.Plat;
   private eqEnabled = true;
+  /** Karaoke « voix atténuée »: dry (normal) and wet (voice removed) paths into the EQ. */
+  private dry: GainNode | null = null;
+  private wet: GainNode | null = null;
+  private vocalCut = false;
   private offset = 0;
   /** Resume point waiting for the media metadata (the element reads 0 until then). */
   private pendingStart: number | null = null;
@@ -132,6 +136,32 @@ class AudioEngine {
     try {
       const ctx = new AudioContext({ latencyHint: 'playback' });
       const source = ctx.createMediaElementSource(this.el);
+      // The voice usually sits in the centre (same in both channels): left − right removes it. The bass,
+      // centred too, is put back from a low-passed mono mix. Mono tracks keep their voice.
+      const split = ctx.createChannelSplitter(2);
+      const side = ctx.createGain();
+      const invert = ctx.createGain();
+      invert.gain.value = -1;
+      const mid = ctx.createGain();
+      mid.gain.value = 0.5;
+      const bass = ctx.createBiquadFilter();
+      bass.type = 'lowpass';
+      bass.frequency.value = 160;
+      source.connect(split);
+      split.connect(side, 0);
+      split.connect(invert, 1);
+      invert.connect(side);
+      split.connect(mid, 0);
+      split.connect(mid, 1);
+      mid.connect(bass);
+      this.dry = ctx.createGain();
+      this.wet = ctx.createGain();
+      source.connect(this.dry);
+      side.connect(this.wet);
+      bass.connect(this.wet);
+      const input = ctx.createGain();
+      this.dry.connect(input);
+      this.wet.connect(input);
       this.filters = EQ_BANDS.map((freq, i) => {
         const f = ctx.createBiquadFilter();
         f.type = i === 0 ? 'lowshelf' : i === EQ_BANDS.length - 1 ? 'highshelf' : 'peaking';
@@ -143,7 +173,7 @@ class AudioEngine {
       this.analyser = ctx.createAnalyser();
       this.analyser.fftSize = 256;
       this.analyser.smoothingTimeConstant = 0.8;
-      let node: AudioNode = source;
+      let node: AudioNode = input;
       for (const f of this.filters) { node.connect(f); node = f; }
       node.connect(this.gain);
       this.gain.connect(this.analyser);
@@ -170,6 +200,8 @@ class AudioEngine {
     this.filters = [];
     this.gain = null;
     this.analyser = null;
+    this.dry = null;
+    this.wet = null;
     for (const [name, fn] of this.mediaListeners) old.removeEventListener(name, fn);
     old.pause();
     old.removeAttribute('src');
@@ -194,6 +226,13 @@ class AudioEngine {
     // Keep headroom when boosting to avoid clipping.
     const maxBoost = this.eqEnabled ? Math.max(0, ...this.eq) : 0;
     if (this.gain) set(this.gain.gain, Math.pow(10, -maxBoost / 20));
+    if (this.dry && this.wet) { set(this.dry.gain, this.vocalCut ? 0 : 1); set(this.wet.gain, this.vocalCut ? 1 : 0); }
+  }
+
+  /** Karaoke: turn the centred voice down (needs the effects chain: see setEffects). */
+  setVocalCut(on: boolean) {
+    this.vocalCut = on;
+    this.applyEq();
   }
 
   setEq(gains: number[], enabled = true) {

@@ -1,5 +1,5 @@
 import { FriendsPanel } from './Friends';
-import { X, Trash2, Loader2, Maximize, Minimize, Maximize2, Radio, GripVertical, GripHorizontal, PictureInPicture2, AppWindow } from 'lucide-react';
+import { X, Trash2, Loader2, Languages, MicVocal, MicOff, Maximize, Minimize, Maximize2, Radio, GripVertical, GripHorizontal, PictureInPicture2, AppWindow } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { usePlayer, useCurrentTrack } from '../store/player';
 import { useUi, useSettings } from '../store/ui';
@@ -85,11 +85,19 @@ export function QueuePanel() {
   );
 }
 
+/** Target languages of « Paroles traduites » (server/src/translate.js LANGS). */
+const LYRICS_LANGS: [string, string][] = [
+  ['fr', 'Français'], ['en', 'Anglais'], ['es', 'Espagnol'], ['de', 'Allemand'], ['it', 'Italien'], ['pt', 'Portugais'], ['nl', 'Néerlandais'],
+  ['pl', 'Polonais'], ['tr', 'Turc'], ['ru', 'Russe'], ['ar', 'Arabe'], ['ja', 'Japonais'], ['ko', 'Coréen'], ['zh', 'Chinois'],
+];
+
 export function LyricsView({ big = false }: { big?: boolean }) {
   const track = useCurrentTrack();
   const position = usePlayer((s) => s.position);
   const seek = usePlayer((s) => s.seek);
+  const { lyricsTranslate, lyricsLang, karaoke, vocalCut, set } = useSettings();
   const [state, setState] = useState<{ url: string; loading: boolean; data: LyricsResult | null }>({ url: '', loading: false, data: null });
+  const [tr, setTr] = useState<{ key: string; loading: boolean; lines: string[] | null; note: string }>({ key: '', loading: false, lines: null, note: '' });
   const box = useRef<HTMLDivElement>(null);
   const userScroll = useRef(0);
 
@@ -103,9 +111,24 @@ export function LyricsView({ big = false }: { big?: boolean }) {
     return () => ctrl.abort();
   }, [track?.url]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const synced = state.data?.synced;
+  const d = state.data;
+  const synced = d?.synced;
+  const source = d?.found && !d.instrumental ? (synced ? synced.map((l) => l.text) : (d.plain || '').split(/\r?\n/)) : null;
+  const trKey = lyricsTranslate && source ? `${state.url}|${lyricsLang}` : '';
+
+  useEffect(() => {
+    if (!trKey || !source) return;
+    let live = true;
+    setTr({ key: trKey, loading: true, lines: null, note: '' });
+    api.translateLyrics(source, lyricsLang)
+      .then((r) => { if (live) setTr({ key: trKey, loading: false, lines: r.same ? null : r.lines, note: r.same ? 'Paroles déjà dans cette langue.' : '' }); })
+      .catch((e: Error) => { if (live) setTr({ key: trKey, loading: false, lines: null, note: e.message || 'Traduction indisponible.' }); });
+    return () => { live = false; };
+  }, [trKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
   let active = -1;
   if (synced) for (let i = 0; i < synced.length; i += 1) { if (synced[i].time <= position + 0.2) active = i; else break; }
+  const kara = karaoke && !!synced;
 
   useEffect(() => {
     if (active < 0 || Date.now() - userScroll.current < 4000) return;
@@ -113,19 +136,49 @@ export function LyricsView({ big = false }: { big?: boolean }) {
     if (line) centerInScroller(line);
   }, [active]);
 
+  // Karaoke: the current line fills as it is sung (LRC gives line times only: progress inside the line).
+  useEffect(() => {
+    if (!kara || active < 0 || !synced) return;
+    const el = box.current?.querySelector<HTMLElement>(`[data-line="${active}"] .lyric-text`);
+    if (!el) return;
+    const start = synced[active].time;
+    const span = Math.max(0.5, (synced[active + 1]?.time ?? start + 5) - start - 0.3);
+    let raf = 0;
+    const tick = () => {
+      el.style.setProperty('--p', `${Math.min(100, Math.max(0, ((engine.currentTime + 0.2 - start) / span) * 100))}%`);
+      raf = requestAnimationFrame(tick);
+    };
+    tick();
+    return () => { cancelAnimationFrame(raf); el.style.removeProperty('--p'); };
+  }, [kara, active, synced]);
+
   if (!track) return <div className="empty">Aucun titre en cours</div>;
   if (track.source === 'radio') return <div className="empty">Pas de paroles pour une radio en direct.</div>;
   if (state.loading) return <div className="empty"><Loader2 className="spin" /> Recherche des paroles…</div>;
-  const d = state.data;
   if (!d?.found) return <div className="empty">Paroles introuvables pour ce titre.<span className="muted small">Source : LRCLIB</span></div>;
   if (d.instrumental) return <div className="empty">♪ Morceau instrumental ♪</div>;
 
+  const lines = tr.key === trKey ? tr.lines : null;
+  const trOf = (i: number) => (lines?.[i] && lines[i] !== source?.[i] ? <span className="lyric-tr">{lines[i]}</span> : null);
   return (
-    <div className={`lyrics ${big ? 'big' : ''}`} ref={box} onWheel={() => { userScroll.current = Date.now(); }} onTouchMove={() => { userScroll.current = Date.now(); }}>
+    <div className={`lyrics ${big ? 'big' : ''} ${kara ? 'karaoke' : ''}`} ref={box} onWheel={() => { userScroll.current = Date.now(); }} onTouchMove={() => { userScroll.current = Date.now(); }}>
+      <div className="lyrics-tools">
+        <button className={`chip ${lyricsTranslate ? 'active' : ''}`} aria-pressed={lyricsTranslate} onClick={() => set({ lyricsTranslate: !lyricsTranslate })}><Languages size={13} /> Traduire</button>
+        {lyricsTranslate && (
+          <select className="chip" aria-label="Langue de traduction" value={lyricsLang} onChange={(e) => set({ lyricsLang: e.target.value })}>
+            {LYRICS_LANGS.map(([code, name]) => <option key={code} value={code}>{name}</option>)}
+          </select>
+        )}
+        {synced && <button className={`chip ${karaoke ? 'active' : ''}`} aria-pressed={karaoke} onClick={() => set({ karaoke: !karaoke })}><MicVocal size={13} /> Karaoké</button>}
+        {kara && <button className={`chip ${vocalCut ? 'active' : ''}`} aria-pressed={vocalCut} title="Retire ce qui est au centre du mixage stéréo (approximatif). Le fondu enchaîné est suspendu tant qu’elle est active." onClick={() => set({ vocalCut: !vocalCut })}><MicOff size={13} /> Voix atténuée</button>}
+      </div>
+      {lyricsTranslate && (tr.loading || tr.note) && <p className="muted small lyrics-note">{tr.loading ? <><Loader2 size={12} className="spin" /> Traduction…</> : tr.note}</p>}
       {synced ? synced.map((l, i) => (
-        <p key={i} data-line={i} className={`lyric ${i === active ? 'active' : i < active ? 'past' : ''}`} onClick={() => seek(l.time)}>{l.text || '♪'}</p>
+        <p key={i} data-line={i} className={`lyric ${i === active ? 'active' : i < active ? 'past' : ''}`} onClick={() => seek(l.time)}><span className="lyric-text">{l.text || '♪'}</span>{trOf(i)}</p>
+      )) : lines ? source!.map((l, i) => (
+        <p key={i} className="lyric-plain-line">{l || '\u00a0'}{trOf(i)}</p>
       )) : <pre className="lyrics-plain">{d.plain}</pre>}
-      <p className="muted small lyrics-credit">Paroles : LRCLIB{d.artist ? ` · ${d.artist} — ${d.title}` : ''}</p>
+      <p className="muted small lyrics-credit">Paroles : LRCLIB{d.artist ? ` · ${d.artist} — ${d.title}` : ''}{lines ? ' · traduction automatique' : ''}</p>
     </div>
   );
 }
