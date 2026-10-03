@@ -155,10 +155,12 @@ if (!app.requestSingleInstanceLock()) {
     const release = () => { if (awake !== null) powerSaveBlocker.stop(awake); awake = null; };
     win.webContents.on('media-started-playing', () => { if (awake === null) awake = powerSaveBlocker.start('prevent-app-suspension'); });
     // Fired per media element: the crossfade pauses the old track while the new one plays, so ask the player.
-    win.webContents.on('media-paused', () => {
-      win?.webContents.executeJavaScript('window.__forgeNowPlaying?.()?.playing === true')
+    // Wait 30 s first: a failed track pauses ~1 s before the next one, and a locked Mac idle for long fell asleep in that gap.
+    win.webContents.on('media-paused', () => setTimeout(() => {
+      if (!win || win.isDestroyed()) return release();
+      win.webContents.executeJavaScript('window.__forgeNowPlaying?.()?.playing === true')
         .then((playing) => { if (!playing) release(); }, release);
-    });
+    }, 30_000));
     win.on('closed', release);
 
     // Links to YouTube, GitHub… open in the default browser, not inside the app.
