@@ -349,13 +349,15 @@ export const usePlayer = create<PlayerState>()(
     },
     {
       name: 'forge.player',
-      version: 2,
+      version: 3,
       storage: lazyStorage,
       // v2: the default volume was 0.8, i.e. -4 dB on the squared curve, and phones hide the slider (system volume
       // only): plugged into a car it could never be loud. The untouched default goes to full.
+      // v3: the volume was synced from other devices; phones got stuck with a computer's low setting -> full again.
       migrate: (state, version) => {
         const s = state as { volume?: number };
-        return (version < 2 && s.volume === 0.8 ? { ...s, volume: 1 } : s) as never;
+        const phone = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+        return ((version < 2 && s.volume === 0.8) || (version < 3 && phone) ? { ...s, volume: 1 } : s) as never;
       },
       partialize: (s) => ({ queue: s.queue, index: s.index, shuffle: s.shuffle, unshuffled: s.unshuffled, repeat: s.repeat, volume: s.volume, muted: s.muted, rate: s.rate }),
     },

@@ -106,8 +106,8 @@ function apply(data: SyncData) {
       const cur = usePlayer.getState();
       // Same queue as here: keep its order from before shuffling (not saved on the server).
       const same = cur.queue.length === p.queue.length && cur.queue.every((t, i) => t.url === p.queue[i]?.url);
+      // Volume stays per device: a computer at 40 % made phones (slider hidden, squared curve) play at -16 dB.
       usePlayer.setState({ queue: p.queue, index: p.index, shuffle: p.shuffle, unshuffled: same ? cur.unshuffled : null, repeat: p.repeat, rate: p.rate });
-      usePlayer.getState().setVolume(p.volume);
       // Resume point: the server's when it is about another track or newer (played on another device).
       const track = p.queue[p.index];
       const local = readResume();
